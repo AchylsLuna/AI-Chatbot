@@ -5,6 +5,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Manrope', 'ui-sans-serif', 'system-ui'],
+        display: ['Space Grotesk', 'Manrope', 'ui-sans-serif', 'system-ui'],
       },
       colors: {
         navy: '#0f2c52',
@@ -22,4 +23,3 @@ export default {
   },
   plugins: [],
 }
-

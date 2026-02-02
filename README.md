@@ -1,43 +1,90 @@
-# React + TypeScript + Vite
+# AI Healthcare Triage Chatbot
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A reservation-based outpatient triage concept that separates AI guidance from human confirmation. The chatbot provides advice-only guidance and routes users into a nurse-reviewed reservation flow.
 
-Currently, two official plugins are available:
+## Product Overview
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The system prioritizes clear separation between intelligent triage and administrative confirmation.
 
-## React Compiler
+### User Flow
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Advice-only interaction: guided inquiry to reduce self-diagnosis errors
+- Reservation model: users request a time slot; no appointment is finalized yet
+- Nurse/admin intervention: dashboard review of the AI triage summary with Accept or Decline
+- Status tracking: real-time status for the user (Pending -> Approved or Declined)
 
-## Expanding the ESLint configuration
+## System Architecture (Layered)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- Presentation layer (Frontend): React web UI for registration and guided chat
+- Application layer (Business Logic): Node.js + Python services orchestrating data flow
+- AI processing layer: NLP-based symptom routing to the correct department
+- Blockchain layer (CODEX integration): Ethereum smart contracts for accepted appointments
+- Data layer: MongoDB for non-sensitive operational data
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    # AI Healthcare Landing Page
+## Development Roadmap
 
-    Single-page React + TypeScript + Vite implementation of the provided healthcare hero design using Tailwind CSS and a reusable navigation component.
+### Sprint 1: AI and Core Logic
 
-    ## Scripts
+- Build the NLP-driven chatbot for department routing
+- Create the Reservation schema in MongoDB
+- Implement the nurse/admin review dashboard
 
-    - npm install – install dependencies
-    - npm run dev – start the dev server
-    - npm run build – create a production build
-    - npm run preview – preview the production build locally
+### Sprint 2: Blockchain and Security
 
-    ## Tech
+- Deploy smart contracts to log finalized appointments
+- Add cryptographic hashing for patient records and transaction history
+- Test recommendation accuracy and data immutability
 
-    - Tailwind CSS 3 for styling (utilities, custom tokens in tailwind.config.js)
-    - Reusable components: NavBar, LogoMark, PrimaryButton, GhostButton
-    - Vite + TypeScript
+## Technical Constraints
 
-    ## Notes
+- AI limit: guidance is based on doctor-approved guidelines and is not a diagnosis
+- Security: salted password hashing and RBAC with least privilege
+- Availability: outpatient triage only; assumes stable internet for real-time updates
 
-    - Global styles and Tailwind directives live in src/index.css.
-    - Design tokens (colors, font, shadows, gradient) are set in tailwind.config.js.
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+## Tech Stack (3 Platforms)
+
+- AI Platform: NLP triage engine, advice-only guidance logic
+- Web Platform: React, TypeScript, Tailwind CSS, Node.js, Express.js, REST API, MongoDB
+- Blockchain Platform: Ethereum smart contracts for immutable appointment records
+
+## Scripts
+
+- npm install
+- npm run dev
+- npm run dev:api
+- npm run build
+- npm run preview
+
+## Local API (RBAC + MongoDB + Blockchain)
+
+The demo API uses MongoDB, JWT-based RBAC, and an optional Ethereum contract call for accepted reservations.
+
+### Required services
+
+- MongoDB running locally (`mongodb://127.0.0.1:27017`)
+
+### Environment variables (server)
+
+```
+PORT=5174
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DB=pulse-ledger
+JWT_SECRET=change-me
+JWT_EXPIRES_IN=12h
+CORS_ORIGIN=http://localhost:5173
+ADMIN_USER=admin
+ADMIN_PASS=admin123
+NURSE_USER=nurse
+NURSE_PASS=nurse123
+WEB3_RPC_URL=
+CONTRACT_ADDRESS=
+CONTRACT_PRIVATE_KEY=
+CONTRACT_FUNCTION=recordAppointment
+CONTRACT_ABI=
+```
+
+If the Ethereum variables are not provided, blockchain writes are marked as skipped and a local hash is stored.
+
+### Demo RBAC credentials
+
+The API seeds `ADMIN_USER` and `NURSE_USER` on startup. Update these in the environment for real deployments.

@@ -1,470 +1,428 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react'
+import type { CSSProperties } from 'react'
+import type { AuthSession, LedgerEntry, Reservation, ReservationStatus } from '../types/triage'
 
-type Message = {
-  id: string;
-  text: string;
-  sender: 'ai' | 'user';
-  timestamp: string;
-};
+type DashboardProps = {
+  reservations: Reservation[]
+  ledgerEntries: LedgerEntry[]
+  onUpdateStatus: (reservationId: string, status: ReservationStatus) => void
+  authUser: AuthSession['user'] | null
+  authError: string | null
+  isAuthLoading: boolean
+  onLogin: (username: string, password: string) => void
+  onLogout: () => void
+  apiReady: boolean
+}
 
-const Dashboard = () => {
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: "Hello! I'm your AI healthcare assistant. I can help you with patient diagnostics, blockchain verification, network insights, and predictive analytics. How can I assist you today?",
-      sender: 'ai',
-      timestamp: '09:51 PM'
+const statusStyles: Record<ReservationStatus, string> = {
+  Pending: 'border border-amber-400/30 bg-amber-400/15 text-amber-200',
+  Approved: 'border border-emerald-400/30 bg-emerald-400/15 text-emerald-200',
+  Declined: 'border border-rose-400/30 bg-rose-400/15 text-rose-200',
+}
+
+const Dashboard = ({
+  reservations,
+  ledgerEntries,
+  onUpdateStatus,
+  authUser,
+  authError,
+  isAuthLoading,
+  onLogin,
+  onLogout,
+  apiReady,
+}: DashboardProps) => {
+  const [selectedId, setSelectedId] = useState(reservations[0]?.id || '')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+
+  const canReview = authUser?.role === 'nurse' || authUser?.role === 'admin'
+
+  const activeReservation = useMemo(() => {
+    return reservations.find((reservation) => reservation.id === selectedId) ?? reservations[0]
+  }, [reservations, selectedId])
+
+  useEffect(() => {
+    if (!reservations.length) return
+    if (!reservations.some((reservation) => reservation.id === selectedId)) {
+      setSelectedId(reservations[0].id)
     }
-  ]);
+  }, [reservations, selectedId])
 
-  const handleSendMessage = () => {
-    if (!chatInput.trim()) return;
-
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      text: chatInput,
-      sender: 'user',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    setMessages([...messages, newMessage]);
-    setChatInput('');
-
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "I understand your inquiry. Let me analyze that for you. This is a simulated response for demonstration purposes.",
-        sender: 'ai',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages(prev => [...prev, aiResponse]);
-    }, 1000);
-  };
+  const metrics = useMemo(() => {
+    const pending = reservations.filter((r) => r.status === 'Pending').length
+    const approved = reservations.filter((r) => r.status === 'Approved').length
+    const declined = reservations.filter((r) => r.status === 'Declined').length
+    return { pending, approved, declined, total: reservations.length }
+  }, [reservations])
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Main Content */}
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        {/* Title Section */}
-        <div className="mb-8 flex items-start justify-between">
+    <div className="min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-6xl px-6 py-10">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4" data-reveal>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-1">Smart Health Dashboard</h2>
-            <p className="text-gray-500">Real-time healthcare intelligence powered by AI and blockchain</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
+              Administrative confirmation layer
+            </p>
+            <h1 className="text-3xl font-display font-semibold text-white">Nurse dashboard</h1>
+            <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+              Review AI triage summaries and accept or decline reservations before blockchain
+              logging.
+            </p>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-full">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-sm font-medium">All Systems Operational</span>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* Total Patients */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Total Patients</p>
-                <p className="text-3xl font-bold text-gray-900">1,247</p>
-              </div>
-              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 text-sm">
-              <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-              <span className="text-green-600 font-medium">+12%</span>
-            </div>
-          </div>
-
-          {/* Active Beds */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Active Beds</p>
-                <p className="text-3xl font-bold text-gray-900">89%</p>
-              </div>
-              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 text-sm">
-              <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-              <span className="text-green-600 font-medium">+5%</span>
-            </div>
-          </div>
-
-          {/* Critical Cases */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Critical Cases</p>
-                <p className="text-3xl font-bold text-gray-900">12</p>
-              </div>
-              <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 text-sm">
-              <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-              <span className="text-red-600 font-medium">-3</span>
-            </div>
-          </div>
-
-          {/* Efficiency */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Efficiency</p>
-                <p className="text-3xl font-bold text-gray-900">94%</p>
-              </div>
-              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 text-sm">
-              <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-              <span className="text-green-600 font-medium">+2%</span>
-            </div>
+          <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/70">
+            RBAC enabled
           </div>
         </div>
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* AI Diagnostics - Takes 2 columns */}
-          <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-start justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                  </svg>
-                </div>
+        <div className="mb-8 rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40" data-reveal>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                Access control
+              </p>
+              <h2 className="text-lg font-semibold text-white">
+                {authUser ? `Signed in as ${authUser.username}` : 'Nurse/admin sign-in'}
+              </h2>
+              <p className="text-sm text-[color:var(--agent-muted)]">
+                {authUser
+                  ? `Role: ${authUser.role}. Status updates require nurse or admin access.`
+                  : 'Log in to review reservations and write approved records to the blockchain.'}
+              </p>
+            </div>
+            <div className="text-xs font-semibold text-white/60">
+              API status: {apiReady ? 'Connected' : 'Offline'}
+            </div>
+          </div>
+
+          {authUser ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                onClick={onLogout}
+                className="rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <form
+              className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]"
+              onSubmit={(event) => {
+                event.preventDefault()
+                onLogin(username, password)
+              }}
+            >
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="Username"
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Password"
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={isAuthLoading}
+                className="rounded-xl bg-[color:var(--agent-accent)] px-4 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-emerald-200"
+              >
+                {isAuthLoading ? 'Signing in...' : 'Sign in'}
+              </button>
+            </form>
+          )}
+          {authError && (
+            <p className="mt-3 text-xs font-semibold text-rose-300">{authError}</p>
+          )}
+          {!authUser && (
+            <p className="mt-3 text-xs text-white/50">
+              Demo accounts are configured in the API server environment variables.
+            </p>
+          )}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-4">
+          <div className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface)] p-4 shadow-xl shadow-black/30" data-reveal>
+            <p className="text-xs text-white/60">Total reservations</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{metrics.total}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface)] p-4 shadow-xl shadow-black/30" data-reveal style={{ '--reveal-delay': '80ms' } as CSSProperties}>
+            <p className="text-xs text-white/60">Pending review</p>
+            <p className="mt-2 text-2xl font-semibold text-amber-200">{metrics.pending}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface)] p-4 shadow-xl shadow-black/30" data-reveal style={{ '--reveal-delay': '160ms' } as CSSProperties}>
+            <p className="text-xs text-white/60">Approved</p>
+            <p className="mt-2 text-2xl font-semibold text-emerald-200">{metrics.approved}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface)] p-4 shadow-xl shadow-black/30" data-reveal style={{ '--reveal-delay': '240ms' } as CSSProperties}>
+            <p className="text-xs text-white/60">Declined</p>
+            <p className="mt-2 text-2xl font-semibold text-rose-200">{metrics.declined}</p>
+          </div>
+        </div>
+
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+          <div className="space-y-6">
+            <div
+              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              data-reveal
+            >
+              <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">AI Diagnostics</h3>
-                  <p className="text-sm text-gray-500">Real-time anomaly detection</p>
+                  <h2 className="text-lg font-semibold text-white">Incoming reservations</h2>
+                  <p className="text-xs text-white/60">AI summaries require human confirmation</p>
                 </div>
+                <span className="text-xs font-semibold text-white/60">
+                  {metrics.pending} awaiting review
+                </span>
               </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-full">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm font-medium">Normal Range</span>
-              </div>
-            </div>
 
-            {/* Vitals */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-xs text-gray-500 mb-1">Heart Rate</p>
-                <p className="text-2xl font-bold text-gray-900 mb-0.5">73</p>
-                <p className="text-xs text-gray-500">bpm</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-xs text-gray-500 mb-1">O₂ Saturation</p>
-                <p className="text-2xl font-bold text-gray-900 mb-0.5">99.4</p>
-                <p className="text-xs text-gray-500">%</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-xs text-gray-500 mb-1">BP Systolic</p>
-                <p className="text-2xl font-bold text-gray-900 mb-0.5">122</p>
-                <p className="text-xs text-gray-500">mmHg</p>
-              </div>
-            </div>
-
-            {/* Chart Area */}
-            <div className="bg-gradient-to-b from-blue-50 to-transparent rounded-lg p-6 mb-4" style={{ height: '200px' }}>
-              <svg className="w-full h-full" viewBox="0 0 800 150" preserveAspectRatio="none">
-                <path
-                  d="M 0,75 Q 100,85 200,80 T 400,65 T 600,70 T 800,75"
-                  fill="rgba(59, 130, 246, 0.1)"
-                  stroke="rgba(59, 130, 246, 0.8)"
-                  strokeWidth="2"
-                />
-              </svg>
-            </div>
-
-            {/* AI Analysis */}
-            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-              <div className="flex items-start gap-2">
-                <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-sm text-gray-700">
-                  <span className="font-semibold">AI Analysis:</span> All vitals within normal parameters. Heart rate variability indicates good cardiovascular health. Continue monitoring.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Blockchain Ledger */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Blockchain Ledger</h3>
-                <p className="text-sm text-gray-500">Immutable medical records</p>
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div className="flex items-center justify-between pb-3 border-b">
-                <span className="text-sm text-gray-600">Network Status</span>
-                <span className="text-sm font-semibold text-green-600">⚫ Synced</span>
-              </div>
-              <div className="flex items-center justify-between pb-3 border-b">
-                <span className="text-sm text-gray-600">Block Height</span>
-                <span className="text-sm font-semibold text-gray-900">2,947,639</span>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <h4 className="text-sm font-semibold text-gray-900">Medication Administered</h4>
-                  <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+              {reservations.length === 0 ? (
+                <div className="mt-6 rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-white/60">
+                  No reservations yet. Submit a reservation from the guided intake page.
                 </div>
-                <p className="text-xs text-gray-500 mb-2">⏰ 21:52:15</p>
-                <p className="text-xs text-gray-600 mb-2 font-mono bg-white p-2 rounded">0xovpewm8jquikv1nv15bv</p>
-                <div className="flex items-center gap-1 text-xs text-green-600">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Verified on chain
+              ) : (
+                <div className="mt-6 space-y-4">
+                  {reservations.map((reservation) => (
+                    <div
+                      key={reservation.id}
+                      className={`rounded-2xl border p-4 transition ${
+                        reservation.id === activeReservation?.id
+                          ? 'border-white/30 bg-white/10'
+                          : 'border-white/10 bg-[color:var(--agent-surface-strong)]'
+                      }`}
+                      data-reveal
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {reservation.patientName}
+                          </p>
+                          <p className="text-xs text-white/60">
+                            {reservation.department} - Requested {reservation.requestedTime}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              statusStyles[reservation.status]
+                            }`}
+                          >
+                            {reservation.status}
+                          </span>
+                          <button
+                            onClick={() => setSelectedId(reservation.id)}
+                            className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
+                          >
+                            View
+                          </button>
+                        </div>
+                      </div>
+                      <p className="mt-3 text-sm text-[color:var(--agent-muted)]">{reservation.summary}</p>
+                      {reservation.status === 'Pending' && canReview && (
+                        <div className="mt-4 flex flex-wrap gap-3">
+                          <button
+                            onClick={() => onUpdateStatus(reservation.id, 'Approved')}
+                            className="rounded-xl bg-emerald-400/90 px-4 py-2 text-xs font-semibold text-emerald-950 transition hover:bg-emerald-300"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => onUpdateStatus(reservation.id, 'Declined')}
+                            className="rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-300/60"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      )}
+                      {reservation.status === 'Pending' && !canReview && (
+                        <p className="mt-4 text-xs text-white/50">
+                          Sign in with nurse/admin credentials to approve or decline.
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <h4 className="text-sm font-semibold text-gray-900">Lab Sample Collected</h4>
-                  <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <p className="text-xs text-gray-500 mb-2">⏰ 21:52:07</p>
-                <p className="text-xs text-gray-600 mb-2 font-mono bg-white p-2 rounded">0xuxker2stowlumha1e4esg</p>
-                <div className="flex items-center gap-1 text-xs text-green-600">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Verified on chain
-                </div>
-              </div>
+              )}
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-4 pt-4 border-t">
-              <div className="text-center">
-                <p className="text-sm text-gray-500 mb-1">Total Txns</p>
-                <p className="text-xl font-bold text-gray-900">7</p>
-              </div>
-              <div className="text-center">
-                <p className="text-sm text-gray-500 mb-1">Avg Time</p>
-                <p className="text-xl font-bold text-gray-900">2.3s</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Predictive Workload Analysis */}
-        <div className="bg-white rounded-lg shadow-sm border p-6">
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Predictive Workload Analysis</h3>
-                <p className="text-sm text-gray-500">AI-powered ER occupancy forecast</p>
-              </div>
-            </div>
-            <span className="px-3 py-1 bg-orange-100 text-orange-700 text-sm font-semibold rounded-full">High Load</span>
-          </div>
-
-          {/* Bar Chart */}
-          <div className="mb-6" style={{ height: '200px' }}>
-            <div className="flex items-end justify-between h-full gap-4">
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-full bg-blue-900 rounded-t-lg" style={{ height: '70%' }}></div>
-                <span className="text-xs text-gray-500 mt-2">Now</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-full bg-blue-600 rounded-t-lg" style={{ height: '80%' }}></div>
-                <span className="text-xs text-gray-500 mt-2">+1h</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-full bg-blue-900 rounded-t-lg" style={{ height: '78%' }}></div>
-                <span className="text-xs text-gray-500 mt-2">+2h</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-full bg-blue-600 rounded-t-lg" style={{ height: '76%' }}></div>
-                <span className="text-xs text-gray-500 mt-2">+3h</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-full bg-blue-900 rounded-t-lg" style={{ height: '72%' }}></div>
-                <span className="text-xs text-gray-500 mt-2">+4h</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm text-gray-500 mb-1">Current ER Occupancy</p>
-              <p className="text-3xl font-bold text-gray-900">72<span className="text-lg">%</span></p>
-              <p className="text-xs text-gray-500 mt-1">50 beds</p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm text-gray-500 mb-1">Predicted Peak</p>
-              <p className="text-3xl font-bold text-gray-900">82<span className="text-lg">%</span></p>
-              <p className="text-xs text-gray-500 mt-1">Expected at +1h</p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <svg className="w-5 h-5 text-blue-600 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+            <div
+              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              data-reveal
+            >
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-gray-700 mb-1">AI Recommendation</p>
-                  <p className="text-xs text-gray-600">Schedule additional staff for peak hours</p>
+                  <h2 className="text-lg font-semibold text-white">Blockchain secure layer</h2>
+                  <p className="text-xs text-white/60">Immutable record after acceptance</p>
                 </div>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/60">
+                  Ethereum log
+                </span>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                {ledgerEntries.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-white/60">
+                    Approved reservations will appear here with blockchain hashes.
+                  </div>
+                ) : (
+                  ledgerEntries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface-strong)] p-4"
+                      data-reveal
+                    >
+                      <div className="flex items-center justify-between text-xs text-white/60">
+                        <span>{entry.department}</span>
+                        <span>{entry.timestamp}</span>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-white">
+                        {entry.patientName} - {entry.reservationId}
+                      </p>
+                      <p className="mt-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/70">
+                        {entry.hash}
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/60">
+                        <span className="rounded-full border border-white/10 px-2 py-1">
+                          Chain: {entry.chainId ?? 'local'}
+                        </span>
+                        <span className="rounded-full border border-white/10 px-2 py-1">
+                          Tx: {entry.txStatus ?? 'pending'}
+                        </span>
+                        {entry.txHash && (
+                          <span className="rounded-full border border-white/10 px-2 py-1">
+                            {entry.txHash}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
 
-          {/* Department Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="border rounded-lg p-4">
-              <p className="text-sm text-gray-500 mb-2">Cardiology</p>
-              <p className="text-2xl font-bold text-gray-900 mb-1">23</p>
-              <p className="text-xs text-green-600">↓ 2 from avg</p>
+          <div className="space-y-6">
+            <div
+              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              data-reveal
+            >
+              <h2 className="text-lg font-semibold text-white">Reservation details</h2>
+              {activeReservation ? (
+                <div className="mt-4 space-y-4 text-sm text-[color:var(--agent-muted)]">
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-white/60">Patient</p>
+                    <p className="mt-1 font-semibold text-white">
+                      {activeReservation.patientName}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-white/60">Department</p>
+                    <p className="mt-1 font-semibold text-white">
+                      {activeReservation.department}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-white/60">Priority</p>
+                    <p className="mt-1 font-semibold text-white">
+                      {activeReservation.priority}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-white/60">AI confidence</p>
+                    <p className="mt-1 font-semibold text-white">
+                      {Math.round(activeReservation.confidence * 100)}%
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-white/60">Summary</p>
+                    <p className="mt-1">{activeReservation.summary}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-white/60">Status</p>
+                    <span
+                      className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        statusStyles[activeReservation.status]
+                      }`}
+                    >
+                      {activeReservation.status}
+                    </span>
+                  </div>
+                  {activeReservation.status === 'Pending' && canReview && (
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => onUpdateStatus(activeReservation.id, 'Approved')}
+                        className="flex-1 rounded-xl bg-emerald-400/90 px-4 py-2 text-xs font-semibold text-emerald-950 transition hover:bg-emerald-300"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => onUpdateStatus(activeReservation.id, 'Declined')}
+                        className="flex-1 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-300/60"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  )}
+                  {activeReservation.status === 'Pending' && !canReview && (
+                    <p className="text-xs text-white/50">
+                      Nurse/admin access required to approve or decline.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-white/60">Select a reservation to view details.</p>
+              )}
             </div>
-            <div className="border rounded-lg p-4">
-              <p className="text-sm text-gray-500 mb-2">Trauma</p>
-              <p className="text-2xl font-bold text-gray-900 mb-1">18</p>
-              <p className="text-xs text-red-600">↑ 5 from avg</p>
+
+            <div
+              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              data-reveal
+            >
+              <h2 className="text-lg font-semibold text-white">HITL audit logic</h2>
+              <ul className="mt-4 space-y-3 text-sm text-[color:var(--agent-muted)]">
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-[color:var(--agent-accent)]" />
+                  AI guidance is advisory only.
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-[color:var(--agent-accent)]" />
+                  Nurses approve or decline before any blockchain write.
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-[color:var(--agent-accent)]" />
+                  Approved records are immutable and tamper-proof.
+                </li>
+              </ul>
             </div>
-            <div className="border rounded-lg p-4">
-              <p className="text-sm text-gray-500 mb-2">Pediatrics</p>
-              <p className="text-2xl font-bold text-gray-900 mb-1">12</p>
-              <p className="text-xs text-green-600">↓ 1 from avg</p>
-            </div>
-            <div className="border rounded-lg p-4">
-              <p className="text-sm text-gray-500 mb-2">General</p>
-              <p className="text-2xl font-bold text-gray-900 mb-1">32</p>
-              <p className="text-xs text-gray-500">→ avg</p>
+
+            <div
+              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              data-reveal
+            >
+              <h2 className="text-lg font-semibold text-white">Tech stack</h2>
+              <p className="mt-2 text-xs text-white/60">
+                Shared stack across AI, web, and blockchain platforms.
+              </p>
+              <ul className="mt-4 space-y-2 text-sm text-[color:var(--agent-muted)]">
+                {[
+                  'AI Platform: NLP triage engine and advice-only logic',
+                  'Web Platform: React, TypeScript, Tailwind CSS, Node.js, Express.js, REST API, MongoDB',
+                  'Blockchain Platform: Ethereum smart contracts and immutable ledger',
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <span className="mt-1 h-2 w-2 rounded-full bg-[color:var(--agent-accent)]" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Floating Chat Button */}
-      <button
-        onClick={() => setIsChatOpen(!isChatOpen)}
-        className="fixed bottom-8 right-8 w-14 h-14 bg-blue-900 hover:bg-blue-800 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 z-50"
-      >
-        {isChatOpen ? (
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-        )}
-      </button>
-
-      {/* Chat Widget */}
-      {isChatOpen && (
-        <div className="fixed bottom-28 right-8 w-96 bg-white rounded-lg shadow-2xl border z-50 flex flex-col" style={{ height: '500px' }}>
-          {/* Chat Header */}
-          <div className="bg-gradient-to-r from-blue-900 to-blue-800 text-white p-4 rounded-t-lg flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-bold">AI Health Assistant</h3>
-                <p className="text-xs text-blue-100">Medical AI Support</p>
-              </div>
-            </div>
-            <button onClick={() => setIsChatOpen(false)} className="text-white/80 hover:text-white">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-lg p-3 ${
-                  msg.sender === 'user' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-white text-gray-900 border'
-                }`}>
-                  <p className="text-sm">{msg.text}</p>
-                  <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-blue-100' : 'text-gray-500'}`}>
-                    {msg.timestamp}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Chat Input */}
-          <div className="p-4 border-t bg-white rounded-b-lg">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Ask about diagnostics, blockchain, or analytics..."
-                className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              />
-              <button
-                onClick={handleSendMessage}
-                className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </button>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">AI responses are simulated for demonstration</p>
-          </div>
-        </div>
-      )}
     </div>
-  );
-};
+  )
+}
 
-export default Dashboard;
+export default Dashboard
