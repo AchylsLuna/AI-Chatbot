@@ -131,135 +131,55 @@ const LandingPage = ({ onNavigate }: LandingPageProps) => {
     <div className="min-h-screen">
       <section className="relative overflow-hidden">
         <div className="mx-auto w-full max-w-6xl px-6 pb-24 pt-20">
-            <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="space-y-6" data-reveal>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
-                  Advice only triage
-                </div>
-                <h1 className="text-4xl font-display font-semibold leading-tight text-white sm:text-5xl lg:text-6xl">
-                  AI triage that ends in <span className="text-[color:var(--agent-accent)]">human confirmation</span>.
-                </h1>
-                <p className="max-w-xl text-lg text-[color:var(--agent-muted)]">
-                  Guide patients through structured inquiries, generate AI summaries, and route every
-                  reservation to a nurse for approval. Intelligent triage without bypassing clinical
-                  oversight.
-                </p>
-                <div className="flex flex-wrap gap-4">
-                  <button
-                    className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-[color:var(--agent-on-light)] shadow-lg transition hover:-translate-y-0.5"
-                    onClick={() => onNavigate?.('triage')}
-                  >
-                    Start guided intake
-                  </button>
-                  <a
-                    className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-white/80 transition hover:border-white/40"
-                    href="#workflow"
-                  >
-                    View workflow
-                  </a>
-                </div>
-                <div className="grid gap-4 pt-4 sm:grid-cols-3">
-                  {stats.map((item) => (
-                    <div
-                      key={item.label}
-                      className="rounded-2xl border border-white/10 bg-white/5 p-4"
-                    >
-                      <p className="text-xs uppercase tracking-wider text-[color:var(--agent-muted)]">
-                        {item.label}
-                      </p>
-                      <p className="mt-2 text-lg font-semibold text-white">{item.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-5" data-reveal="slide-left">
-                <div className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-wider text-[color:var(--agent-muted)]">
-                        AI triage summary
-                      </p>
-                      <h3 className="text-lg font-semibold text-white">Cardiology routing</h3>
-                    </div>
-                    <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-200">
-                      Routine
-                    </span>
-                  </div>
-                  <div className="mt-4 space-y-3 text-sm text-[color:var(--agent-muted)]">
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                      Patient reports shortness of breath after activity lasting 2 weeks.
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                      No fever or injury. Suggested follow-up within 7 days.
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between text-xs text-[color:var(--agent-muted)]">
-                    <span>Confidence</span>
-                    <span className="text-white">0.78</span>
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface-strong)] p-6 shadow-xl">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-wider text-[color:var(--agent-muted)]">
-                        Reservation status
-                      </p>
-                      <h3 className="text-lg font-semibold text-white">Pending review</h3>
-                    </div>
-                    <span className="rounded-full bg-amber-400/20 px-3 py-1 text-xs font-semibold text-amber-200">
-                      Pending
-                    </span>
-                  </div>
-                  <div className="mt-4 grid gap-3 text-xs text-[color:var(--agent-muted)] sm:grid-cols-3">
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                      <p className="text-white">Requested slot</p>
-                      <p className="mt-1">2:30 PM</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                      <p className="text-white">Nurse queue</p>
-                      <p className="mt-1">4 ahead</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                      <p className="text-white">Status</p>
-                      <p className="mt-1">Awaiting approval</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center gap-2 text-xs text-emerald-200">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                    Live updates enabled
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-wider text-[color:var(--agent-muted)]">
-                        Nurse console
-                      </p>
-                      <h3 className="text-lg font-semibold text-white">Accept or decline</h3>
-                    </div>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/70">
-                      RBAC
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm text-[color:var(--agent-muted)]">
-                    AI summary, recommended department, and risk factors presented before a human
-                    confirms the reservation.
-                  </p>
-                  <div className="mt-4 flex gap-3">
-                    <button className="flex-1 rounded-xl bg-emerald-500/90 px-4 py-2 text-xs font-semibold text-emerald-950">
-                      Accept
-                    </button>
-                    <button className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/80">
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              </div>
+          <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 text-center" data-reveal>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
+              Pulse Ledger
+            </div>
+            <h1 className="text-4xl font-display font-semibold leading-tight text-white sm:text-5xl lg:text-6xl">
+              AI triage clarity.
+              <span className="block text-[color:var(--agent-accent)]">Human approval always.</span>
+            </h1>
+            <p className="max-w-2xl text-lg text-[color:var(--agent-muted)]">
+              Replace chaotic intake with a guided, auditable flow. Patients get answers fast, nurses
+              get structured summaries, and every approval is tracked end-to-end.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <button
+                className="group inline-flex items-center gap-3 rounded-full bg-white px-6 py-3 text-sm font-semibold text-[color:var(--agent-on-light)] shadow-lg transition hover:-translate-y-0.5"
+                onClick={() => onNavigate?.('contact')}
+              >
+                Book a strategy call
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)] transition group-hover:translate-x-0.5">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14m-6-6 6 6-6 6" />
+                  </svg>
+                </span>
+              </button>
+              <a
+                className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-white/80 transition hover:border-white/40"
+                href="#workflow"
+              >
+                View workflow
+              </a>
             </div>
           </div>
+
+          <div className="mx-auto mt-12 grid gap-4 sm:grid-cols-3">
+            {stats.map((item, index) => (
+              <div
+                key={item.label}
+                className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center"
+                data-reveal
+                style={revealDelay(index)}
+              >
+                <p className="text-xs uppercase tracking-wider text-[color:var(--agent-muted)]">
+                  {item.label}
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section id="features" className="py-20">
