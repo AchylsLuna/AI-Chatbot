@@ -1,9 +1,10 @@
 import type {
   AuthSession,
+  AccessRequest,
+  AccessRequestDraft,
   LedgerEntry,
   Reservation,
   ReservationDraft,
-  ReservationStatus,
   TriageSummary,
 } from '../types/triage'
 
@@ -55,7 +56,9 @@ export const api = {
     )
     return data.ledger
   },
-  createReservation: async (draft: ReservationDraft): Promise<Reservation> => {
+  createReservation: async (
+    draft: ReservationDraft
+  ): Promise<{ reservation: Reservation; ledgerEntry: LedgerEntry }> => {
     const response = await fetch(`${API_BASE}/reservations`, withAuth({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -63,39 +66,39 @@ export const api = {
         patientName: draft.patientName,
         symptoms: draft.symptoms,
         requestedTime: draft.requestedTime,
-        summary: draft.summary.summary,
-        department: draft.summary.department,
-        priority: draft.summary.priority,
-        confidence: draft.summary.confidence,
+        summary: draft.summary,
       }),
     }))
 
-    const data = await handleResponse<{ reservation: Reservation }>(response)
-    return data.reservation
-  },
-  updateReservationStatus: async (
-    reservationId: string,
-    status: ReservationStatus
-  ): Promise<{ reservation: Reservation; ledgerEntry: LedgerEntry | null }> => {
-    const response = await fetch(`${API_BASE}/reservations/${reservationId}`, withAuth({
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    }))
-
-    return handleResponse<{ reservation: Reservation; ledgerEntry: LedgerEntry | null }>(response)
+    return handleResponse<{ reservation: Reservation; ledgerEntry: LedgerEntry }>(response)
   },
   generateTriageSummary: async (
     symptoms: string,
     signal?: AbortSignal
-  ): Promise<TriageSummary> => {
+  ): Promise<{ summary: TriageSummary; elapsedMs: number }> => {
     const response = await fetch(`${API_BASE}/triage/summary`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symptoms }),
       signal,
     })
-    const data = await handleResponse<{ summary: TriageSummary }>(response)
-    return data.summary
+    return handleResponse<{ summary: TriageSummary; elapsedMs: number }>(response)
+  },
+  createAccessRequest: async (
+    draft: AccessRequestDraft
+  ): Promise<AccessRequest> => {
+    const response = await fetch(`${API_BASE}/access-requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(draft),
+    })
+    const data = await handleResponse<{ request: AccessRequest }>(response)
+    return data.request
+  },
+  getAccessRequests: async (): Promise<AccessRequest[]> => {
+    const data = await handleResponse<{ requests: AccessRequest[] }>(
+      await fetch(`${API_BASE}/access-requests`, withAuth())
+    )
+    return data.requests
   },
 }

@@ -9,31 +9,32 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin'
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123'
 const NURSE_USER = process.env.NURSE_USER || 'nurse'
 const NURSE_PASS = process.env.NURSE_PASS || 'nurse123'
+const SYSADMIN_USER = process.env.SYSADMIN_USER || 'sysadmin'
+const SYSADMIN_PASS = process.env.SYSADMIN_PASS || 'sysadmin123'
+const USER_USER = process.env.USER_USER || 'user'
+const USER_PASS = process.env.USER_PASS || 'user123'
 
 const hashPassword = async (password) => bcrypt.hash(password, 12)
 
 export const seedUsers = async () => {
   const db = getDb()
   const users = db.collection('users')
-  const existing = await users.findOne({ username: ADMIN_USER })
-  if (!existing) {
-    await users.insertOne({
-      username: ADMIN_USER,
-      role: 'admin',
-      passwordHash: await hashPassword(ADMIN_PASS),
-      createdAt: new Date().toISOString(),
-    })
+  const seedUser = async (username, role, password) => {
+    const existing = await users.findOne({ username })
+    if (!existing) {
+      await users.insertOne({
+        username,
+        role,
+        passwordHash: await hashPassword(password),
+        createdAt: new Date().toISOString(),
+      })
+    }
   }
 
-  const nurseExisting = await users.findOne({ username: NURSE_USER })
-  if (!nurseExisting) {
-    await users.insertOne({
-      username: NURSE_USER,
-      role: 'nurse',
-      passwordHash: await hashPassword(NURSE_PASS),
-      createdAt: new Date().toISOString(),
-    })
-  }
+  await seedUser(ADMIN_USER, 'admin', ADMIN_PASS)
+  await seedUser(NURSE_USER, 'nurse', NURSE_PASS)
+  await seedUser(SYSADMIN_USER, 'system_admin', SYSADMIN_PASS)
+  await seedUser(USER_USER, 'user', USER_PASS)
 }
 
 export const login = async (username, password) => {

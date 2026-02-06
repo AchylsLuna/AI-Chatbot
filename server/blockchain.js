@@ -1,7 +1,7 @@
 import { ethers } from 'ethers'
 
 const DEFAULT_ABI = [
-  'function recordAppointment(string reservationId, string patientName, string department, string diagnosisRef) public returns (bytes32)',
+  'function recordAppointmentHash(string reservationId, bytes32 payloadHash) public returns (bytes32)',
 ]
 
 const loadAbi = () => {
@@ -17,10 +17,11 @@ const loadAbi = () => {
 
 export const recordAppointmentOnChain = async ({
   reservationId,
-  patientName,
-  department,
-  diagnosisRef,
+  payloadHash,
 }) => {
+  if (!payloadHash) {
+    throw new Error('payloadHash is required for blockchain logging')
+  }
   const rpcUrl = process.env.WEB3_RPC_URL
   const contractAddress = process.env.CONTRACT_ADDRESS
   const privateKey = process.env.CONTRACT_PRIVATE_KEY
@@ -30,7 +31,7 @@ export const recordAppointmentOnChain = async ({
   }
 
   const abi = loadAbi()
-  const functionName = process.env.CONTRACT_FUNCTION || 'recordAppointment'
+  const functionName = process.env.CONTRACT_FUNCTION || 'recordAppointmentHash'
 
   const provider = new ethers.JsonRpcProvider(rpcUrl)
   const wallet = new ethers.Wallet(privateKey, provider)
@@ -40,12 +41,7 @@ export const recordAppointmentOnChain = async ({
     throw new Error(`Contract function ${functionName} not found in ABI`)
   }
 
-  const tx = await contract[functionName](
-    reservationId,
-    patientName,
-    department,
-    diagnosisRef
-  )
+  const tx = await contract[functionName](reservationId, payloadHash)
   const receipt = await tx.wait()
   const network = await provider.getNetwork()
 

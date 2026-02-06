@@ -1,497 +1,338 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
+import type { AppPage } from '../types/navigation'
+import type { Reservation, ReservationDraft } from '../types/triage'
+import TriagePage from './TriagePage'
 
 type LandingPageProps = {
-  onNavigate?: (page: 'landing' | 'triage' | 'dashboard' | 'contact') => void;
-};
+  onNavigate?: (page: AppPage) => void
+  onCreateReservation: (draft: ReservationDraft) => void
+  latestReservation?: Reservation
+  theme: 'light' | 'dark'
+  onToggleTheme: () => void
+}
 
-const revealDelay = (index: number, base = 90): CSSProperties =>
+type NavTarget = 'home' | 'about' | 'workflow' | 'triage' | 'projects'
+
+const navItems: Array<{ label: string; target: NavTarget; active?: boolean }> = [
+  { label: 'Home', target: 'home', active: true },
+  { label: 'Platform', target: 'about' },
+  { label: 'Workflow', target: 'workflow' },
+  { label: 'Triage', target: 'triage' },
+  { label: 'Modules', target: 'projects' },
+]
+
+const revealDelay = (ms: number): CSSProperties =>
   ({
-    '--reveal-delay': `${index * base}ms`,
-  } as CSSProperties);
+    '--reveal-delay': `${ms}ms`,
+  } as CSSProperties)
 
-const stats = [
-  { label: 'Avg intake time', value: '2 min' },
-  { label: 'Routing accuracy', value: '92%' },
-  { label: 'Human confirmed', value: '100%' },
-];
+const LandingPage = ({
+  onNavigate,
+  onCreateReservation,
+  latestReservation,
+  theme,
+  onToggleTheme,
+}: LandingPageProps) => {
+  const [isNavHidden, setIsNavHidden] = useState(false)
 
-const features = [
-  {
-    title: 'Guided inquiry engine',
-    description:
-      'The AI assistant collects symptoms with guardrails and clarification prompts so patients do not self-diagnose.',
-  },
-  {
-    title: 'Reservation first model',
-    description:
-      'Every booking is a reservation request until a nurse confirms the AI triage summary.',
-  },
-  {
-    title: 'Realtime status tracking',
-    description:
-      'Users see status changes from Pending -> Approved/Declined with immediate updates.',
-  },
-];
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let lastY = window.scrollY
+    let ticking = false
 
-const workflowSteps = [
-  {
-    title: 'Patient guided inquiry',
-    description: 'Advice-only chat captures symptoms, duration, and urgency.',
-  },
-  {
-    title: 'AI triage summary',
-    description: 'NLP routes the case to the correct medical department.',
-  },
-  {
-    title: 'Nurse or admin review',
-    description: 'Human confirmation accepts or declines the reservation request.',
-  },
-  {
-    title: 'Reservation status update',
-    description: 'Patients receive Approved/Declined status and next steps.',
-  },
-];
+    const onScroll = () => {
+      const currentY = window.scrollY
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const isNearTop = currentY <= 8
+          if (isNearTop) {
+            setIsNavHidden(false)
+          } else if (currentY > lastY + 8) {
+            setIsNavHidden(true)
+          } else if (currentY < lastY - 8) {
+            setIsNavHidden(false)
+          }
+          lastY = currentY
+          ticking = false
+        })
+        ticking = true
+      }
+    }
 
-const techStack = [
-  {
-    title: 'AI Platform',
-    items: ['NLP triage engine', 'Advice-only guidance logic'],
-  },
-  {
-    title: 'Web Platform',
-    items: ['React', 'TypeScript', 'Tailwind CSS', 'Node.js', 'Express.js', 'REST API', 'MongoDB'],
-  },
-  {
-    title: 'Blockchain Platform',
-    items: ['Ethereum smart contracts', 'Immutable appointment ledger'],
-  },
-];
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
-const architectureLayers = [
-  {
-    title: 'Presentation layer',
-    description: 'React web UI for registration, chat, and status updates.',
-  },
-  {
-    title: 'Application layer',
-    description: 'Node.js and Express.js services coordinate user, AI, and blockchain data.',
-  },
-  {
-    title: 'AI processing layer',
-    description: 'NLP module maps symptoms to the correct department.',
-  },
-  {
-    title: 'Blockchain layer (CODEX)',
-    description: 'Ethereum smart contracts log accepted appointments and diagnoses.',
-  },
-  {
-    title: 'Data layer',
-    description: 'MongoDB stores non-sensitive profiles and reservation metadata.',
-  },
-];
+  const handleNav = (target: NavTarget) => {
+    if (typeof window === 'undefined') return
+    if (target === 'home') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+      return
+    }
+    const node = document.getElementById(target)
+    if (node) {
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
 
-const roadmap = [
-  {
-    title: 'Sprint 1: AI + core logic',
-    badge: 'Foundation',
-    items: [
-      'NLP-driven chatbot for routing',
-      'Reservation schema in MongoDB',
-      'Nurse dashboard for manual review',
-    ],
-  },
-  {
-    title: 'Sprint 2: Blockchain + security',
-    badge: 'Hardening',
-    items: [
-      'Smart contracts to log finalized appointments',
-      'Cryptographic hashing for patient records',
-      'Testing for accuracy and data immutability',
-    ],
-  },
-];
-
-const constraints = [
-  {
-    title: 'Advice only AI',
-    description: 'Guidance follows doctor-approved rules and is not a diagnosis.',
-  },
-  {
-    title: 'Security and RBAC',
-    description: 'Passwords are salted and hashed; access follows least privilege.',
-  },
-  {
-    title: 'Outpatient availability',
-    description: 'Optimized for outpatient triage with stable realtime connections.',
-  },
-];
-
-const LandingPage = ({ onNavigate }: LandingPageProps) => {
   return (
-    <div className="min-h-screen">
-      <section className="relative overflow-hidden">
-        <div className="mx-auto w-full max-w-6xl px-6 pb-24 pt-20">
-          <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 text-center" data-reveal>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
-              Pulse Ledger
+    <div className="relative min-h-screen overflow-hidden bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)]">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 agent-grid opacity-20" />
+        <div className="absolute -top-48 left-[15%] h-72 w-72 rounded-full bg-[radial-gradient(circle_at_center,_rgba(124,252,196,0.3),_transparent_65%)] blur-3xl" />
+        <div className="absolute top-1/3 right-[5%] h-80 w-80 rounded-full bg-[radial-gradient(circle_at_center,_rgba(90,215,255,0.28),_transparent_60%)] blur-3xl" />
+        <div className="absolute bottom-[-120px] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,_rgba(255,209,102,0.2),_transparent_65%)] blur-3xl" />
+      </div>
+
+      <header
+        className={`sticky top-0 z-40 border-b border-white/10 bg-[color:var(--agent-bg)] shadow-[0_6px_20px_rgba(0,0,0,0.35)] transition-transform duration-300 ${
+          isNavHidden ? '-translate-y-full' : 'translate-y-0'
+        }`}
+      >
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-6 pt-8">
+          <div className="flex items-center gap-3" data-reveal style={revealDelay(40)}>
+            <div className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+              <svg
+                className="h-5 w-5 text-white"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 12h4l2-3 3 6 2-3h3"
+                />
+              </svg>
             </div>
-            <h1 className="text-4xl font-display font-semibold leading-tight text-white sm:text-5xl lg:text-6xl">
-              AI triage clarity.
-              <span className="block text-[color:var(--agent-accent)]">Human approval always.</span>
-            </h1>
-            <p className="max-w-2xl text-lg text-[color:var(--agent-muted)]">
-              Replace chaotic intake with a guided, auditable flow. Patients get answers fast, nurses
-              get structured summaries, and every approval is tracked end-to-end.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-4">
+            <span className="text-lg font-semibold tracking-[0.2em] text-white">
+              PULSE LEDGER
+            </span>
+          </div>
+
+          <nav
+            className="order-3 flex w-full items-center justify-center gap-6 rounded-full border border-white/10 bg-white/5 px-6 py-3 text-sm text-white/60 md:order-none md:w-auto"
+            data-reveal
+            style={revealDelay(120)}
+          >
+            {navItems.map((item) => (
               <button
-                className="group inline-flex items-center gap-3 rounded-full bg-white px-6 py-3 text-sm font-semibold text-[color:var(--agent-on-light)] shadow-lg transition hover:-translate-y-0.5"
-                onClick={() => onNavigate?.('contact')}
-              >
-                Book a strategy call
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)] transition group-hover:translate-x-0.5">
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14m-6-6 6 6-6 6" />
-                  </svg>
-                </span>
-              </button>
-              <a
-                className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-white/80 transition hover:border-white/40"
-                href="#workflow"
-              >
-                View workflow
-              </a>
-            </div>
-          </div>
-
-          <div className="mx-auto mt-12 grid gap-4 sm:grid-cols-3">
-            {stats.map((item, index) => (
-              <div
                 key={item.label}
-                className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center"
-                data-reveal
-                style={revealDelay(index)}
+                className={`transition ${
+                  item.active ? 'text-white font-semibold' : 'text-white/60 hover:text-white'
+                }`}
+                onClick={() => handleNav(item.target)}
+                type="button"
               >
-                <p className="text-xs uppercase tracking-wider text-[color:var(--agent-muted)]">
-                  {item.label}
-                </p>
-                <p className="mt-2 text-lg font-semibold text-white">{item.value}</p>
-              </div>
+                {item.label}
+              </button>
             ))}
-          </div>
-        </div>
-      </section>
+          </nav>
 
-      <section id="features" className="py-20">
-        <div className="mx-auto w-full max-w-6xl px-6">
           <div
-            className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"
+            className="order-2 flex items-center gap-3 md:order-none"
             data-reveal
+            style={revealDelay(80)}
           >
-            <div className="max-w-2xl space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
-                System design and user flow
-              </p>
-              <h2 className="text-3xl font-display font-semibold text-white sm:text-4xl">
-                Clear separation between AI triage and administrative confirmation
-              </h2>
-              <p className="text-[color:var(--agent-muted)]">
-                The UI keeps the user informed while reserving final appointment decisions for
-                clinical staff.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wider text-white/60">
-              <span className="rounded-full border border-white/10 px-4 py-2">React UI</span>
-              <span className="rounded-full border border-white/10 px-4 py-2">Guided inquiry</span>
-              <span className="rounded-full border border-white/10 px-4 py-2">Human approval</span>
-            </div>
-          </div>
-
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            {features.map((feature, index) => (
-              <div
-                key={feature.title}
-                className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6"
-                data-reveal
-                style={revealDelay(index)}
-              >
-                <h3 className="text-lg font-semibold text-white">{feature.title}</h3>
-                <p className="mt-3 text-sm text-[color:var(--agent-muted)]">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="workflow" className="bg-[color:var(--agent-surface)]/40 py-20">
-        <div className="mx-auto w-full max-w-6xl px-6">
-          <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr]">
-            <div className="space-y-4" data-reveal>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
-                Guided workflow
-              </p>
-              <h2 className="text-3xl font-display font-semibold text-white sm:text-4xl">
-                Advice-only intake routed to the right department
-              </h2>
-              <p className="text-[color:var(--agent-muted)]">
-                Patients receive support and clarity without skipping clinical review. Every
-                decision is tracked and auditable.
-              </p>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-white/70">
-                Status updates flow instantly to patients and staff. Pending -{'>'} Approved/Declined
-                is visible at all times.
-              </div>
-            </div>
-
-            <div
-              className="relative rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-8"
-              data-reveal="slide-left"
+            <button
+              className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
+              onClick={onToggleTheme}
             >
-              <div className="absolute left-6 top-10 h-[calc(100%-80px)] w-px bg-white/10" />
-              <div className="space-y-6">
-                {workflowSteps.map((step, index) => (
-                  <div
-                    key={step.title}
-                    className="relative pl-10"
-                    data-reveal
-                    style={revealDelay(index)}
-                  >
-                    <div className="absolute left-2 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white">
-                      {index + 1}
-                    </div>
-                    <h3 className="text-base font-semibold text-white">{step.title}</h3>
-                    <p className="mt-2 text-sm text-[color:var(--agent-muted)]">{step.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            </button>
+            <button
+              className="rounded-full border border-white/10 px-5 py-2 text-xs font-semibold text-white/80 transition hover:border-white/30 hover:text-white"
+              onClick={() => onNavigate?.('access')}
+            >
+              Log in
+            </button>
+            <button
+              className="rounded-full bg-[color:var(--agent-accent)] px-5 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] shadow-lg transition hover:-translate-y-0.5"
+              onClick={() => onNavigate?.('access')}
+            >
+              Sign up
+            </button>
           </div>
         </div>
-      </section>
+      </header>
 
-      <section id="architecture" className="py-20">
-        <div className="mx-auto w-full max-w-6xl px-6">
-          <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="space-y-4" data-reveal>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
-                Layered architecture
-              </p>
-              <h2 className="text-3xl font-display font-semibold text-white sm:text-4xl">
-                Modular services for security, scale, and auditability
-              </h2>
-              <p className="text-[color:var(--agent-muted)]">
-                Each layer isolates sensitive operations while keeping data flowing across the
-                triage pipeline.
-              </p>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-white/70">
-                Accepted appointments are written to the blockchain for tamper-proof records.
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {architectureLayers.map((layer, index) => (
-                <div
-                  key={layer.title}
-                  className="flex items-start gap-4 rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-5"
-                  data-reveal="slide-left"
-                  style={revealDelay(index)}
-                >
-                  <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white">
-                    {index + 1}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                      {layer.title}
-                    </p>
-                    <p className="mt-2 text-sm text-[color:var(--agent-muted)]">{layer.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="stack" className="bg-[color:var(--agent-surface)]/40 py-20">
-        <div className="mx-auto w-full max-w-6xl px-6">
-          <div
-            className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"
+      <main className="relative z-10 pt-24">
+        <section className="mx-auto flex w-full max-w-4xl scroll-mt-24 flex-col items-center px-6 pb-16 pt-6 text-center">
+          <h1
+            className="text-balance font-display text-4xl font-semibold leading-[1.05] text-white sm:text-5xl md:text-6xl lg:text-7xl"
             data-reveal
+            style={revealDelay(200)}
           >
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
-                Technology stack
-              </p>
-              <h2 className="text-3xl font-display font-semibold text-white sm:text-4xl">
-                Tools chosen for speed, security, and delivery
-              </h2>
-              <p className="text-[color:var(--agent-muted)]">
-                A pragmatic stack across AI, web, and blockchain services with REST APIs and
-                MongoDB persistence.
-              </p>
-            </div>
-            <div className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white/60">
-              Production ready
-            </div>
-          </div>
+            Build a Healthcare Triage System
+            <span className="block text-white">Powered by AI Guidance</span>
+            <span className="block text-white/60">and an Immutable Ledger</span>
+          </h1>
+          <p
+            className="mt-6 text-sm uppercase tracking-[0.2em] text-[color:var(--agent-muted)] sm:text-base"
+            data-reveal
+            style={revealDelay(260)}
+          >
+            Advice-only AI routing for outpatient care teams
+          </p>
+          <button
+            className="mt-8 rounded-full bg-[color:var(--agent-accent)] px-7 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] shadow-lg transition hover:-translate-y-0.5"
+            onClick={() => handleNav('triage')}
+            data-reveal
+            style={revealDelay(320)}
+          >
+            Launch Triage Demo
+          </button>
 
-          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {techStack.map((stack, index) => (
+          <div
+            className="mt-8 text-[11px] uppercase tracking-[0.35em] text-white/50"
+            data-reveal
+            style={revealDelay(380)}
+          >
+            Created by COMSEC 01
+          </div>
+        </section>
+
+        <section className="mx-auto w-full max-w-5xl scroll-mt-24 px-6 pb-24">
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[
+              { label: 'Avg intake time', value: '2–4 min' },
+              { label: 'Routing confidence', value: '92%+' },
+              { label: 'Ledger record', value: 'Hash-only' },
+            ].map((stat, index) => (
               <div
-                key={stack.title}
-                className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6"
+                key={stat.label}
+                className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface)] p-5 text-left shadow-2xl shadow-black/30"
                 data-reveal
-                style={revealDelay(index)}
+                style={revealDelay(120 + index * 80)}
               >
-                <h3 className="text-lg font-semibold text-white">{stack.title}</h3>
-                <ul className="mt-4 space-y-2 text-sm text-[color:var(--agent-muted)]">
-                  {stack.items.map((item) => (
-                    <li key={item} className="flex items-center gap-2">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--agent-accent)]" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-xs uppercase tracking-[0.25em] text-white/60">
+                  {stat.label}
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-white">{stat.value}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="roadmap" className="bg-[color:var(--agent-surface)]/40 py-20">
-        <div className="mx-auto w-full max-w-6xl px-6">
-          <div
-            className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"
-            data-reveal
-          >
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
-                Development roadmap
-              </p>
-              <h2 className="text-3xl font-display font-semibold text-white sm:text-4xl">
-                Two sprints to validate AI before blockchain hardening
+        <section id="about" className="mx-auto w-full max-w-5xl scroll-mt-24 px-6 pb-24">
+          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+            <div data-reveal style={revealDelay(120)}>
+              <p className="text-xs uppercase tracking-[0.3em] text-white/60">Platform</p>
+              <h2 className="mt-4 text-3xl font-display font-semibold text-white sm:text-4xl">
+                AI triage with blockchain-grade auditability.
               </h2>
-              <p className="text-[color:var(--agent-muted)]">
-                The roadmap keeps AI routing solid before adding immutable recordkeeping.
+              <p className="mt-3 text-sm text-[color:var(--agent-muted)]">
+                Pulse Ledger guides patients to the right department, summarizes recommendations for
+                clinicians, and records each booking as a hash-only on-chain entry for immutable proof.
               </p>
+              <div className="mt-6 flex flex-wrap gap-3 text-xs uppercase tracking-[0.2em] text-white/60">
+                <span className="rounded-full border border-white/10 px-4 py-2">Advice-only AI</span>
+                <span className="rounded-full border border-white/10 px-4 py-2">RBAC-ready</span>
+                <span className="rounded-full border border-white/10 px-4 py-2">Hash ledger</span>
+              </div>
             </div>
-            <div className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white/60">
-              Sprint delivery
+            <div
+              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-8 shadow-2xl shadow-black/40"
+              data-reveal
+              style={revealDelay(180)}
+            >
+              <p className="text-xs uppercase tracking-[0.25em] text-white/60">Safety & Trust</p>
+              <ul className="mt-4 space-y-3 text-sm text-[color:var(--agent-muted)]">
+                <li>Decision-tree triage keeps guidance consistent.</li>
+                <li>Clinician summary with priority and confidence.</li>
+                <li>Blockchain logs store hashes only, never PHI.</li>
+              </ul>
             </div>
           </div>
+        </section>
 
-          <div className="mt-10 grid gap-6 md:grid-cols-2">
-            {roadmap.map((sprint, index) => (
+        <section id="workflow" className="mx-auto w-full max-w-6xl scroll-mt-24 px-6 pb-24">
+          <div className="text-center" data-reveal style={revealDelay(120)}>
+            <p className="text-xs uppercase tracking-[0.3em] text-white/60">Workflow</p>
+            <h2 className="mt-4 text-3xl font-display font-semibold text-white sm:text-4xl">
+              A guided path from intake to immutable record.
+            </h2>
+          </div>
+          <div className="mt-10 grid gap-6 md:grid-cols-4">
+            {[
+              { step: '01', title: 'Guided Intake', detail: 'Patients answer structured questions.' },
+              { step: '02', title: 'AI Recommendation', detail: 'Decision-tree routing + confidence.' },
+              { step: '03', title: 'Instant Booking', detail: 'Appointments confirmed in-system.' },
+              { step: '04', title: 'Ledger Record', detail: 'Hash logged on-chain for audit.' },
+            ].map((item, index) => (
               <div
-                key={sprint.title}
-                className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-8"
+                key={item.step}
+                className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 text-left shadow-2xl shadow-black/30"
                 data-reveal
-                style={revealDelay(index)}
+                style={revealDelay(160 + index * 80)}
               >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-white">{sprint.title}</h3>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/70">
-                    {sprint.badge}
-                  </span>
-                </div>
-                <ul className="mt-6 space-y-3 text-sm text-[color:var(--agent-muted)]">
-                  {sprint.items.map((item) => (
-                    <li key={item} className="flex items-start gap-3">
-                      <span className="mt-1 h-2 w-2 rounded-full bg-[color:var(--agent-accent)]" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-xs uppercase tracking-[0.25em] text-white/60">
+                  Step {item.step}
+                </p>
+                <h3 className="mt-3 text-lg font-semibold text-white">{item.title}</h3>
+                <p className="mt-2 text-sm text-[color:var(--agent-muted)]">{item.detail}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="constraints" className="py-20">
-        <div className="mx-auto w-full max-w-6xl px-6">
-          <div
-            className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"
-            data-reveal
-          >
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
-                Technical constraints
-              </p>
-              <h2 className="text-3xl font-display font-semibold text-white sm:text-4xl">
-                Guardrails keep the system safe and compliant
-              </h2>
-              <p className="text-[color:var(--agent-muted)]">
-                The AI supports decision-making while nurses remain the final authority.
-              </p>
-            </div>
-            <div className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white/60">
-              Governance first
-            </div>
+        <section id="triage" className="mx-auto w-full max-w-6xl scroll-mt-24 px-6 pb-24">
+          <div className="text-center" data-reveal style={revealDelay(120)}>
+            <p className="text-xs uppercase tracking-[0.3em] text-white/60">Live Triage</p>
+            <h2 className="mt-4 text-3xl font-display font-semibold text-white sm:text-4xl">
+              Try the intake experience in real time.
+            </h2>
+            <p className="mt-3 text-sm text-[color:var(--agent-muted)]">
+              This demo uses advice-only guidance. Every booking can be recorded as a hash on-chain.
+            </p>
           </div>
+          <div className="mt-10">
+            <TriagePage
+              onCreateReservation={onCreateReservation}
+              latestReservation={latestReservation}
+              variant="embedded"
+            />
+          </div>
+        </section>
 
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            {constraints.map((constraint, index) => (
+        <section id="projects" className="mx-auto w-full max-w-6xl scroll-mt-24 px-6 pb-24">
+          <div className="text-center" data-reveal style={revealDelay(120)}>
+            <p className="text-xs uppercase tracking-[0.3em] text-white/60">Modules</p>
+            <h2 className="mt-4 text-3xl font-display font-semibold text-white sm:text-4xl">
+              Core building blocks for care delivery.
+            </h2>
+          </div>
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              'AI Triage Engine',
+              'Secure Intake + RBAC',
+              'Immutable Ledger',
+            ].map((title, index) => (
               <div
-                key={constraint.title}
-                className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6"
+                key={title}
+                className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-8 text-left shadow-2xl shadow-black/30"
                 data-reveal
-                style={revealDelay(index)}
+                style={revealDelay(180 + index * 80)}
               >
-                <h3 className="text-lg font-semibold text-white">{constraint.title}</h3>
-                <p className="mt-3 text-sm text-[color:var(--agent-muted)]">
-                  {constraint.description}
+                <p className="text-xs uppercase tracking-[0.25em] text-white/60">Module</p>
+                <h3 className="mt-3 text-xl font-semibold text-white">{title}</h3>
+                <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+                  {title === 'AI Triage Engine' &&
+                    'Decision-tree + NLP intake with guidance guardrails.'}
+                  {title === 'Secure Intake + RBAC' &&
+                    'JWT-based access for patients, nurses, and admins.'}
+                  {title === 'Immutable Ledger' &&
+                    'Appointment hashes recorded on Ethereum for audit trails.'}
                 </p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      <section className="pb-24">
-        <div className="mx-auto w-full max-w-6xl px-6">
-          <div
-            className="rounded-3xl border border-white/10 bg-gradient-to-r from-white/10 via-white/5 to-transparent p-10"
-            data-reveal
-          >
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
-                  Ready for pilot
-                </p>
-                <h2 className="mt-3 text-3xl font-display font-semibold text-white sm:text-4xl">
-                  Build triage flows patients can trust.
-                </h2>
-                <p className="mt-3 max-w-xl text-sm text-[color:var(--agent-muted)]">
-                  Pair AI-guided intake with nurse confirmation, immutable records, and reservation
-                  based booking.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-4">
-                <button
-                  className="rounded-full bg-[color:var(--agent-accent)] px-6 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] shadow-lg transition hover:-translate-y-0.5"
-                  onClick={() => onNavigate?.('dashboard')}
-                >
-                  Open nurse console
-                </button>
-                <a
-                  className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-white/80 transition hover:border-white/40"
-                  href="#roadmap"
-                >
-                  View roadmap
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <footer className="mt-10 flex flex-wrap items-center justify-between gap-4 text-xs text-white/40">
-            <span>Pulse Ledger AI Triage Platform</span>
-            <span>Advice-only guidance. Not a medical diagnosis.</span>
-          </footer>
-        </div>
-      </section>
+        </section>
+      </main>
     </div>
-  );
-};
+  )
+}
 
-export default LandingPage;
+export default LandingPage

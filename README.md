@@ -1,24 +1,25 @@
 # AI Healthcare Triage Chatbot
 
-A reservation-based outpatient triage concept that separates AI guidance from human confirmation. The chatbot provides advice-only guidance and routes users into a nurse-reviewed reservation flow.
+A direct-booking outpatient triage concept that pairs AI guidance with immutable blockchain logging. The chatbot provides advice-only guidance, recommends a department, and books an appointment with a hash-only on-chain audit trail.
 
 ## Product Overview
 
-The system prioritizes clear separation between intelligent triage and administrative confirmation.
+The system prioritizes guidance-first booking with immutable auditability.
 
 ### User Flow
 
 - Advice-only interaction: guided inquiry to reduce self-diagnosis errors
-- Reservation model: users request a time slot; no appointment is finalized yet
-- Nurse/admin intervention: dashboard review of the AI triage summary with Accept or Decline
-- Status tracking: real-time status for the user (Pending -> Approved or Declined)
+- AI department recommendation with explicit non-diagnosis disclaimer
+- Direct booking: appointment is created immediately after recommendation
+- Blockchain logging: hash-only record written on-chain
+- Status tracking: real-time status for the user (Booked -> Recorded or Failed)
 
 ## System Architecture (Layered)
 
 - Presentation layer (Frontend): React web UI for registration and guided chat
-- Application layer (Business Logic): Node.js + Python services orchestrating data flow
+- Application layer (Business Logic): Node.js services orchestrating data flow
 - AI processing layer: NLP-based symptom routing to the correct department
-- Blockchain layer (CODEX integration): Ethereum smart contracts for accepted appointments
+- Blockchain layer (CODEX integration): Ethereum smart contracts for hashed appointment records
 - Data layer: MongoDB for non-sensitive operational data
 
 ## Development Roadmap
@@ -26,12 +27,12 @@ The system prioritizes clear separation between intelligent triage and administr
 ### Sprint 1: AI and Core Logic
 
 - Build the NLP-driven chatbot for department routing
-- Create the Reservation schema in MongoDB
-- Implement the nurse/admin review dashboard
+- Create the appointment schema in MongoDB
+- Implement the operations monitoring dashboard
 
 ### Sprint 2: Blockchain and Security
 
-- Deploy smart contracts to log finalized appointments
+- Deploy smart contracts to log appointment hashes
 - Add cryptographic hashing for patient records and transaction history
 - Test recommendation accuracy and data immutability
 
@@ -45,7 +46,7 @@ The system prioritizes clear separation between intelligent triage and administr
 
 - AI Platform: NLP triage engine, advice-only guidance logic
 - Web Platform: React, TypeScript, Tailwind CSS, Node.js, Express.js, REST API, MongoDB
-- Blockchain Platform: Ethereum smart contracts for immutable appointment records
+- Blockchain Platform: Ethereum smart contracts for immutable appointment hashes
 
 ## Scripts
 
@@ -57,7 +58,7 @@ The system prioritizes clear separation between intelligent triage and administr
 
 ## Local API (RBAC + MongoDB + Blockchain)
 
-The demo API uses MongoDB, JWT-based RBAC, and an optional Ethereum contract call for accepted reservations.
+The demo API uses MongoDB, JWT-based RBAC, and an optional Ethereum contract call for booked appointments.
 
 ### Required services
 
@@ -79,11 +80,39 @@ NURSE_PASS=nurse123
 WEB3_RPC_URL=
 CONTRACT_ADDRESS=
 CONTRACT_PRIVATE_KEY=
-CONTRACT_FUNCTION=recordAppointment
+CONTRACT_FUNCTION=recordAppointmentHash
 CONTRACT_ABI=
+CHAIN_STRICT=false
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_TIMEOUT_MS=4500
 ```
 
-If the Ethereum variables are not provided, blockchain writes are marked as skipped and a local hash is stored.
+If the Ethereum variables are not provided, blockchain writes are marked as skipped and the appointment is still stored locally with a hash entry.
+If `CHAIN_STRICT=true`, bookings will fail unless the blockchain write confirms.
+
+### Local blockchain (Hardhat or Ganache)
+
+1. Start a local chain (Hardhat example):
+
+```
+npx hardhat node
+```
+
+2. Deploy the contract:
+
+```
+npx hardhat run scripts/deploy.js --network localhost
+```
+
+3. Set environment variables:
+
+```
+WEB3_RPC_URL=http://127.0.0.1:8545
+CONTRACT_ADDRESS=0x...
+CONTRACT_PRIVATE_KEY=0x...
+```
 
 ### Demo RBAC credentials
 

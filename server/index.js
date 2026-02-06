@@ -5,7 +5,12 @@ import express from 'express'
 import { connectDb, getDb } from './db.js'
 import { login, requireAuth, requireRole, seedUsers } from './auth.js'
 import { recordAppointmentOnChain } from './blockchain.js'
-import { generateTriageSummary, getFallbackSummary } from './triage.js'
+import {
+  generateTriageSummary,
+  getFallbackSummary,
+  isValidSymptoms,
+  normalizeDepartment,
+} from './triage.js'
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173'
@@ -18,8 +23,10 @@ app.use(express.json({ limit: '1mb' }))
 const generateReservationId = () => `RES-${Math.floor(1000 + Math.random() * 9000)}`
 
 const buildHash = (payload) => {
-  return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex')
+  return `0x${crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex')}`
 }
+
+const CHAIN_STRICT = String(process.env.CHAIN_STRICT || 'false').toLowerCase() === 'true'
 
 const seedDemoData = async () => {
   const db = getDb()
@@ -38,8 +45,8 @@ const seedDemoData = async () => {
         confidence: 0.78,
         requestedTime: '2:30 PM',
         createdAt: new Date().toISOString(),
-        status: 'Pending',
-        summary: 'AI summary: Shortness of breath on exertion. Recommend Cardiology.',
+        status: 'Booked',
+        summary: 'Decision Tree summary: Shortness of breath on exertion. Recommend Cardiology.',
       },
       {
         id: 'RES-2038',
@@ -50,8 +57,8 @@ const seedDemoData = async () => {
         confidence: 0.74,
         requestedTime: '4:10 PM',
         createdAt: new Date().toISOString(),
-        status: 'Approved',
-        summary: 'AI summary: Persistent rash with mild itching. Recommend Dermatology.',
+        status: 'Recorded',
+        summary: 'Decision Tree summary: Persistent rash with mild itching. Recommend Dermatology.',
       },
     ]
     await reservations.insertMany(sampleReservations)
@@ -63,8 +70,12 @@ const seedDemoData = async () => {
       reservationId: 'RES-2038',
       patientName: 'Maya Patel',
       department: 'Dermatology',
-      summary: 'AI summary: Persistent rash with mild itching. Recommend Dermatology.',
-      status: 'Approved',
+      summary: 'Decision Tree summary: Persistent rash with mild itching. Recommend Dermatology.',
+      priority: 'Low',
+      confidence: 0.74,
+      requestedTime: '4:10 PM',
+      symptoms: 'Recurring rash with mild itching on arms.',
+      status: 'Recorded',
       createdAt: new Date().toISOString(),
     }
     await ledger.insertOne({
@@ -80,9 +91,9 @@ const seedDemoData = async () => {
       }),
       createdAt: new Date().toISOString(),
       hash: buildHash(ledgerPayload),
-      txStatus: 'skipped',
-      chainId: null,
-      txHash: null,
+      txStatus: 'confirmed',
+      chainId: '31337',
+      txHash: '0xdemo',
     })
   }
 }
@@ -94,19 +105,23 @@ app.get('/api/health', (_req, res) => {
 app.post('/api/triage/summary', async (req, res) => {
   const { symptoms } = req.body || {}
   if (!symptoms || typeof symptoms !== 'string') {
-    return res.status(400).json({ error: 'Missing symptoms' })
+    return res.status(400).json({ error: 'Please describe your symptoms so we can help.' })
   }
   const cleanedSymptoms = symptoms.trim()
-  if (!cleanedSymptoms) {
-    return res.status(400).json({ error: 'Missing symptoms' })
+  if (!isValidSymptoms(cleanedSymptoms)) {
+    return res.status(400).json({ error: 'Please enter clear symptoms so we can recommend a department.' })
   }
 
+  const start = Date.now()
   try {
     const summary = await generateTriageSummary(cleanedSymptoms)
-    return res.json({ summary })
+    const elapsedMs = Date.now() - start
+    return res.json({ summary, elapsedMs })
   } catch (error) {
     console.error('AI summary generation failed, using fallback.', error)
-    return res.json({ summary: getFallbackSummary(cleanedSymptoms) })
+    const summary = getFallbackSummary(cleanedSymptoms)
+    const elapsedMs = Date.now() - start
+    return res.json({ summary, elapsedMs })
   }
 })
 
@@ -126,117 +141,189 @@ app.get('/api/auth/session', requireAuth, (req, res) => {
   res.json({ username: req.user.username, role: req.user.role })
 })
 
-app.get('/api/reservations', requireAuth, requireRole(['nurse', 'admin']), async (_req, res) => {
-  const db = getDb()
-  const reservations = await db.collection('reservations').find().sort({ createdAt: -1 }).toArray()
-  res.json({ reservations })
-})
+app.post('/api/access-requests', async (req, res) => {
+  const { fullName, email, organization, roleRequested, notes } = req.body || {}
+  if (!fullName || !email || !roleRequested) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+  const allowedRoles = ['user', 'nurse', 'admin', 'system_admin']
+  if (!allowedRoles.includes(roleRequested)) {
+    return res.status(400).json({ error: 'Invalid role requested' })
+  }
 
-app.post('/api/reservations', async (req, res) => {
-  const { patientName, symptoms, requestedTime, department, priority, confidence, summary } = req.body || {}
-  if (!patientName || !symptoms) {
+  const cleanedName = String(fullName).trim()
+  const cleanedEmail = String(email).trim().toLowerCase()
+  if (!cleanedName || !cleanedEmail) {
     return res.status(400).json({ error: 'Missing required fields' })
   }
 
-  const db = getDb()
-  const reservation = {
-    id: generateReservationId(),
-    patientName,
-    symptoms,
-    department: department || 'General Medicine',
-    priority: priority || 'Routine',
-    confidence: confidence ?? 0.65,
-    requestedTime: requestedTime || 'TBD',
+  const request = {
+    id: `REQ-${Date.now()}`,
+    fullName: cleanedName,
+    email: cleanedEmail,
+    organization: typeof organization === 'string' ? organization.trim() : '',
+    roleRequested,
+    notes: typeof notes === 'string' ? notes.trim() : '',
+    status: 'pending',
     createdAt: new Date().toISOString(),
-    status: 'Pending',
-    summary: summary || 'AI summary pending.',
   }
 
-  await db.collection('reservations').insertOne(reservation)
-  res.status(201).json({ reservation })
+  const db = getDb()
+  await db.collection('access_requests').insertOne(request)
+  res.status(201).json({ request })
 })
 
-app.patch(
-  '/api/reservations/:id',
+app.get(
+  '/api/access-requests',
   requireAuth,
-  requireRole(['nurse', 'admin']),
-  async (req, res) => {
-    const { id } = req.params
-    const { status } = req.body || {}
-
-    if (!['Approved', 'Declined', 'Pending'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' })
-    }
-
+  requireRole(['admin', 'system_admin']),
+  async (_req, res) => {
     const db = getDb()
-    const reservations = db.collection('reservations')
-    const reservation = await reservations.findOne({ id })
-
-    if (!reservation) {
-      return res.status(404).json({ error: 'Reservation not found' })
-    }
-
-    await reservations.updateOne({ id }, { $set: { status } })
-    const updated = { ...reservation, status }
-
-    let ledgerEntry = null
-    if (status === 'Approved') {
-      const ledger = db.collection('ledger')
-      const exists = await ledger.findOne({ reservationId: id })
-      if (!exists) {
-        let chainMeta = { txHash: null, txStatus: 'skipped', chainId: null }
-        try {
-          chainMeta = await recordAppointmentOnChain({
-            reservationId: id,
-            patientName: reservation.patientName,
-            department: reservation.department,
-            diagnosisRef: reservation.summary,
-          })
-        } catch (error) {
-          console.error('Blockchain write failed', error)
-          chainMeta = { txHash: null, txStatus: 'failed', chainId: null }
-        }
-
-        const ledgerPayload = {
-          reservationId: id,
-          patientName: reservation.patientName,
-          department: reservation.department,
-          summary: reservation.summary,
-          status,
-          createdAt: new Date().toISOString(),
-        }
-
-        ledgerEntry = {
-          id: `LEDGER-${Date.now()}`,
-          reservationId: id,
-          patientName: reservation.patientName,
-          department: reservation.department,
-          timestamp: new Date().toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-          createdAt: new Date().toISOString(),
-          hash: buildHash(ledgerPayload),
-          txHash: chainMeta.txHash,
-          txStatus: chainMeta.txStatus,
-          chainId: chainMeta.chainId,
-        }
-
-        await ledger.insertOne(ledgerEntry)
-      }
-    }
-
-    res.json({ reservation: updated, ledgerEntry })
+    const requests = await db
+      .collection('access_requests')
+      .find()
+      .sort({ createdAt: -1 })
+      .toArray()
+    res.json({ requests })
   }
 )
 
-app.get('/api/ledger', requireAuth, requireRole(['nurse', 'admin']), async (_req, res) => {
+app.get(
+  '/api/reservations',
+  requireAuth,
+  requireRole(['nurse', 'admin', 'system_admin']),
+  async (_req, res) => {
+  const db = getDb()
+  const reservations = await db.collection('reservations').find().sort({ createdAt: -1 }).toArray()
+  res.json({ reservations })
+  }
+)
+
+app.post('/api/reservations', async (req, res) => {
+  const { patientName, symptoms, requestedTime, summary } = req.body || {}
+  if (
+    !patientName ||
+    !symptoms ||
+    !summary ||
+    typeof summary !== 'object' ||
+    Array.isArray(summary)
+  ) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+  const cleanedSymptoms = typeof symptoms === 'string' ? symptoms.trim() : ''
+  if (!isValidSymptoms(cleanedSymptoms)) {
+    return res.status(400).json({ error: 'Please enter clear symptoms so we can recommend a department.' })
+  }
+
+  const summaryText =
+    typeof summary.summary === 'string' && summary.summary.trim() ? summary.summary.trim() : null
+  const summarySymptoms =
+    typeof summary.symptoms === 'string' && summary.symptoms.trim()
+      ? summary.symptoms.trim()
+      : cleanedSymptoms
+  const summaryPriority =
+    typeof summary.priority === 'string' && summary.priority.trim() ? summary.priority.trim() : null
+  const summaryConfidence = typeof summary.confidence === 'number' ? summary.confidence : null
+  const normalizedDepartment = normalizeDepartment(summary.department, null)
+
+  if (!['Low', 'Routine', 'High'].includes(summaryPriority || '')) {
+    return res.status(400).json({ error: 'Missing or invalid triage summary' })
+  }
+  if (summaryConfidence === null || summaryConfidence < 0 || summaryConfidence > 1) {
+    return res.status(400).json({ error: 'Missing or invalid triage summary' })
+  }
+  if (!summaryText || normalizedDepartment === null) {
+    return res.status(400).json({ error: 'Missing or invalid triage summary' })
+  }
+
+  const db = getDb()
+  const reservationId = generateReservationId()
+  const createdAt = new Date().toISOString()
+
+  const payload = {
+    reservationId,
+    patientName,
+    department: normalizedDepartment,
+    priority: summaryPriority,
+    confidence: summaryConfidence,
+    requestedTime: requestedTime || 'TBD',
+    summary: summaryText,
+    symptoms: summarySymptoms,
+    createdAt,
+  }
+
+  const payloadHash = buildHash(payload)
+  let chainMeta = { txHash: null, txStatus: 'skipped', chainId: null }
+  try {
+    chainMeta = await recordAppointmentOnChain({
+      reservationId,
+      payloadHash,
+    })
+  } catch (error) {
+    console.error('Blockchain write failed', error)
+    chainMeta = { txHash: null, txStatus: 'failed', chainId: null }
+  }
+
+  if (CHAIN_STRICT && chainMeta.txStatus !== 'confirmed') {
+    return res
+      .status(502)
+      .json({ error: 'Blockchain write required but failed. Please try again later.' })
+  }
+
+  const status =
+    chainMeta.txStatus === 'confirmed'
+      ? 'Recorded'
+      : chainMeta.txStatus === 'failed'
+        ? 'Failed'
+        : 'Booked'
+
+  const reservation = {
+    id: reservationId,
+    patientName,
+    symptoms: summarySymptoms,
+    department: normalizedDepartment,
+    priority: summaryPriority,
+    confidence: summaryConfidence,
+    requestedTime: requestedTime || 'TBD',
+    createdAt,
+    status,
+    summary: summaryText,
+  }
+
+  await db.collection('reservations').insertOne(reservation)
+
+  const ledgerEntry = {
+    id: `LEDGER-${Date.now()}`,
+    reservationId,
+    patientName,
+    department: normalizedDepartment,
+    timestamp: new Date().toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    createdAt,
+    hash: payloadHash,
+    txHash: chainMeta.txHash,
+    txStatus: chainMeta.txStatus,
+    chainId: chainMeta.chainId,
+  }
+
+  await db.collection('ledger').insertOne(ledgerEntry)
+  res.status(201).json({ reservation, ledgerEntry })
+})
+
+app.get(
+  '/api/ledger',
+  requireAuth,
+  requireRole(['nurse', 'admin', 'system_admin']),
+  async (_req, res) => {
   const db = getDb()
   const ledger = await db.collection('ledger').find().sort({ createdAt: -1 }).toArray()
   res.json({ ledger })
-})
+  }
+)
 
 const start = async () => {
   await connectDb()

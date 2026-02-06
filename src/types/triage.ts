@@ -1,4 +1,4 @@
-export type ReservationStatus = 'Pending' | 'Approved' | 'Declined'
+export type ReservationStatus = 'Booked' | 'Recorded' | 'Failed'
 
 export type TriageSummary = {
   department: string
@@ -6,7 +6,8 @@ export type TriageSummary = {
   confidence: number
   summary: string
   symptoms: string
-  source?: 'ai' | 'rules'
+  disclaimer: string
+  source?: 'ai' | 'rules' | 'decision_tree'
 }
 
 export type Reservation = {
@@ -41,10 +42,27 @@ export type LedgerEntry = {
   chainId?: string
 }
 
+export type UserRole = 'user' | 'nurse' | 'admin' | 'system_admin'
+
 export type AuthSession = {
   token: string
   user: {
     username: string
-    role: 'admin' | 'nurse'
+    role: UserRole
   }
+}
+
+export type AccessRequestDraft = {
+  fullName: string
+  email: string
+  organization: string
+  roleRequested: UserRole
+  notes?: string
+}
+
+export type AccessRequest = AccessRequestDraft & {
+  id: string
+  status: 'pending' | 'approved' | 'rejected'
+  createdAt: string
+  reviewedAt?: string
 }

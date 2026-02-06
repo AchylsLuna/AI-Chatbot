@@ -1,20 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import AccessPage from './pages/AccessPage'
+import AdminDashboard from './pages/AdminDashboard'
 import ContactPage from './pages/ContactPage'
 import Dashboard from './pages/Dashboard'
 import LandingPage from './pages/LandingPage'
+import LoginPage from './pages/LoginPage'
 import PatientProfile from './pages/PatientProfile'
+import SignupPage from './pages/SignupPage'
 import TriagePage from './pages/TriagePage'
 import useScrollReveal from './hooks/useScrollReveal'
 import { api, setAuthToken } from './services/api'
-import type {
-  AuthSession,
-  LedgerEntry,
-  Reservation,
-  ReservationDraft,
-  ReservationStatus,
-} from './types/triage'
-
-type PageType = 'landing' | 'triage' | 'dashboard' | 'contact' | 'patient'
+import type { AppPage } from './types/navigation'
+import type { AuthSession, LedgerEntry, Reservation, ReservationDraft, UserRole } from './types/triage'
 
 const fallbackReservations: Reservation[] = [
   {
@@ -26,8 +23,8 @@ const fallbackReservations: Reservation[] = [
     confidence: 0.78,
     requestedTime: '2:30 PM',
     createdAt: new Date().toISOString(),
-    status: 'Pending',
-    summary: 'AI summary: Shortness of breath on exertion. Recommend Cardiology.',
+    status: 'Booked',
+    summary: 'Decision Tree summary: Shortness of breath on exertion. Recommend Cardiology.',
   },
   {
     id: 'RES-2038',
@@ -38,8 +35,8 @@ const fallbackReservations: Reservation[] = [
     confidence: 0.74,
     requestedTime: '4:10 PM',
     createdAt: new Date().toISOString(),
-    status: 'Approved',
-    summary: 'AI summary: Persistent rash with mild itching. Recommend Dermatology.',
+    status: 'Recorded',
+    summary: 'Decision Tree summary: Persistent rash with mild itching. Recommend Dermatology.',
   },
 ]
 
@@ -51,19 +48,78 @@ const fallbackLedger: LedgerEntry[] = [
     department: 'Dermatology',
     timestamp: 'Today - 09:12 AM',
     hash: '0x8fa4d21c9b7e4c3a',
+    txStatus: 'confirmed',
+    chainId: '31337',
   },
 ]
+
+const PAGE_ROUTES: Record<AppPage, string> = {
+  landing: '/',
+  access: '/access',
+  triage: '/triage',
+  dashboard: '/dashboard',
+  admin: '/admin',
+  login: '/login',
+  signup: '/signup',
+  patient: '/patient',
+  contact: '/contact',
+}
+
+const buildRoute = (page: AppPage) => {
+  const base = import.meta.env.BASE_URL || '/'
+  const baseTrimmed = base === '/' ? '' : base.replace(/\/$/, '')
+  const route = PAGE_ROUTES[page]
+  if (!baseTrimmed) return route
+  if (route === '/') return baseTrimmed || '/'
+  return `${baseTrimmed}${route}`
+}
+
+const normalizePath = (path: string) => {
+  const [pathname] = path.split('?')
+  let cleaned = pathname || '/'
+  const base = import.meta.env.BASE_URL || '/'
+  const baseTrimmed = base === '/' ? '' : base.replace(/\/$/, '')
+  if (
+    baseTrimmed &&
+    (cleaned === baseTrimmed || cleaned.startsWith(`${baseTrimmed}/`))
+  ) {
+    cleaned = cleaned.slice(baseTrimmed.length) || '/'
+  }
+  if (!cleaned.startsWith('/')) cleaned = `/${cleaned}`
+  if (cleaned.length > 1 && cleaned.endsWith('/')) {
+    cleaned = cleaned.slice(0, -1)
+  }
+  return cleaned
+}
+
+const resolvePageFromPath = (path: string): AppPage => {
+  const normalized = normalizePath(path)
+  const match = (Object.entries(PAGE_ROUTES) as Array<[AppPage, string]>).find(
+    ([, route]) => normalizePath(route) === normalized
+  )
+  return match?.[0] ?? 'landing'
+}
+
+const allRoles: UserRole[] = ['user', 'nurse', 'admin', 'system_admin']
+
+const requiresAuth: Partial<Record<AppPage, UserRole[]>> = {
+  triage: allRoles,
+  dashboard: ['nurse', 'admin', 'system_admin'],
+  admin: ['admin', 'system_admin'],
+}
 
 const getInitialTheme = () => {
   if (typeof window === 'undefined') return 'dark'
   const stored = window.localStorage.getItem('pulse-ledger-theme')
   if (stored === 'light' || stored === 'dark') return stored
-  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches
-  return prefersDark ? 'dark' : 'light'
+  return 'light'
 }
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<PageType>('landing')
+  const [currentPage, setCurrentPage] = useState<AppPage>(() => {
+    if (typeof window === 'undefined') return 'landing'
+    return resolvePageFromPath(window.location.pathname)
+  })
   const [theme, setTheme] = useState<'light' | 'dark'>(getInitialTheme)
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
@@ -73,13 +129,92 @@ function App() {
   const [authUser, setAuthUser] = useState<AuthSession['user'] | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const [isAuthLoading, setIsAuthLoading] = useState(false)
+  const [postLoginPage, setPostLoginPage] = useState<AppPage | null>(null)
+
+  const navigateToPage = useCallback(
+    (page: AppPage, options?: { replace?: boolean; scroll?: boolean }) => {
+      setCurrentPage(page)
+      if (typeof window === 'undefined') return
+      const target = buildRoute(page)
+      const nextPath = normalizePath(target)
+      const currentPath = normalizePath(window.location.pathname)
+      if (nextPath !== currentPath) {
+        if (options?.replace) {
+          window.history.replaceState({}, '', target)
+        } else {
+          window.history.pushState({}, '', target)
+        }
+      }
+      if (options?.scroll !== false) {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      }
+    },
+    []
+  )
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
+  }
+
+  const canAccessPage = (page: AppPage, role?: UserRole | null) => {
+    const allowedRoles = requiresAuth[page]
+    if (!allowedRoles) return true
+    if (!role) return false
+    return allowedRoles.includes(role)
+  }
 
   const isLanding = currentPage === 'landing'
   useScrollReveal(currentPage)
   useEffect(() => {
     if (typeof window === 'undefined') return
+    const root = document.documentElement
+    root.classList.remove('theme-dark', 'theme-light')
+    root.classList.add(theme === 'dark' ? 'theme-dark' : 'theme-light')
+    document.body.classList.remove('theme-dark', 'theme-light')
+    document.body.classList.add(theme === 'dark' ? 'theme-dark' : 'theme-light')
     window.localStorage.setItem('pulse-ledger-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handlePopState = () => {
+      const resolved = resolvePageFromPath(window.location.pathname)
+      setCurrentPage(resolved)
+      const normalized = normalizePath(window.location.pathname)
+      const known = Object.values(PAGE_ROUTES).some(
+        (route) => normalizePath(route) === normalized
+      )
+      if (!known) {
+        navigateToPage('landing', { replace: true })
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [navigateToPage])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const normalized = normalizePath(window.location.pathname)
+    const known = Object.values(PAGE_ROUTES).some(
+      (route) => normalizePath(route) === normalized
+    )
+    if (!known) {
+      navigateToPage('landing', { replace: true })
+    }
+  }, [navigateToPage])
+
+  useEffect(() => {
+    const needsAuth = Boolean(requiresAuth[currentPage])
+    if (!needsAuth) return
+    if (authUser) return
+    if (authToken && isAuthLoading) return
+    if (currentPage !== 'access') {
+      setPostLoginPage(currentPage)
+      navigateToPage('access', { replace: true })
+    }
+  }, [authToken, authUser, currentPage, isAuthLoading, navigateToPage])
   const latestReservation = latestReservationId
     ? reservations.find((reservation) => reservation.id === latestReservationId)
     : undefined
@@ -89,6 +224,7 @@ function App() {
     if (storedToken) {
       setAuthTokenState(storedToken)
       setAuthToken(storedToken)
+      setIsAuthLoading(true)
     }
   }, [])
 
@@ -110,6 +246,12 @@ function App() {
         setApiReady(true)
       } catch (error) {
         console.error('API unavailable or unauthorized, using fallback data.', error)
+        const message = error instanceof Error ? error.message : ''
+        if (message.match(/invalid|expired|missing authorization|forbidden/i)) {
+          setAuthTokenState(null)
+          setAuthToken(null)
+          localStorage.removeItem('pulse-ledger-token')
+        }
         if (isMounted) {
           setReservations(fallbackReservations)
           setLedgerEntries(fallbackLedger)
@@ -127,9 +269,10 @@ function App() {
 
   const handleCreateReservation = async (draft: ReservationDraft) => {
     try {
-      const reservation = await api.createReservation(draft)
+      const { reservation, ledgerEntry } = await api.createReservation(draft)
       setReservations((prev) => [reservation, ...prev])
       setLatestReservationId(reservation.id)
+      setLedgerEntries((prev) => [ledgerEntry, ...prev])
       setApiReady(true)
     } catch (error) {
       console.error('Failed to create reservation', error)
@@ -142,29 +285,11 @@ function App() {
         confidence: draft.summary.confidence,
         requestedTime: draft.requestedTime,
         createdAt: new Date().toISOString(),
-        status: 'Pending',
+        status: 'Booked',
         summary: draft.summary.summary,
       }
       setReservations((prev) => [fallback, ...prev])
       setLatestReservationId(fallback.id)
-    }
-  }
-
-  const handleUpdateStatus = async (reservationId: string, status: ReservationStatus) => {
-    try {
-      const { reservation, ledgerEntry } = await api.updateReservationStatus(reservationId, status)
-      setReservations((prev) =>
-        prev.map((item) => (item.id === reservation.id ? reservation : item))
-      )
-      if (ledgerEntry) {
-        setLedgerEntries((prev) => [ledgerEntry, ...prev])
-      }
-      setApiReady(true)
-    } catch (error) {
-      console.error('Failed to update reservation status', error)
-      setReservations((prev) =>
-        prev.map((item) => (item.id === reservationId ? { ...item, status } : item))
-      )
     }
   }
 
@@ -178,6 +303,9 @@ function App() {
       setAuthUser(session.user)
       localStorage.setItem('pulse-ledger-token', session.token)
       setApiReady(true)
+      const targetPage = postLoginPage ?? 'dashboard'
+      setPostLoginPage(null)
+      navigateToPage(targetPage)
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'Login failed')
     } finally {
@@ -194,149 +322,212 @@ function App() {
     setReservations([])
     setLedgerEntries([])
     setApiReady(false)
+    setPostLoginPage(null)
+    navigateToPage('landing')
   }
 
-  const navItems = [
-    {
-      label: 'Guided Intake',
-      page: 'triage',
-      icon: 'M9 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
-    },
-    {
-      label: 'Nurse Dashboard',
-      page: 'dashboard',
-      icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-    },
-    {
-      label: 'Patient Profile',
-      page: 'patient',
-      icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
-    },
-    {
-      label: 'Contact',
-      page: 'contact',
-      icon: 'M21 8V7a2 2 0 00-2-2H5a2 2 0 00-2 2v1m18 0l-9 6-9-6m18 0v9a2 2 0 01-2 2H5a2 2 0 01-2-2V8',
-    },
-  ] as const
+  const isCheckingSession = Boolean(authToken && isAuthLoading && !authUser)
+
+  const AuthLoadingCard = ({ label }: { label: string }) => (
+    <div className="min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-6xl px-6 py-10">
+        <div
+          className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 text-sm text-white/70 shadow-2xl shadow-black/40"
+          data-reveal
+        >
+          {label}
+        </div>
+      </div>
+    </div>
+  )
+
+  const AccessDenied = ({ title, detail }: { title: string; detail: string }) => (
+    <div className="min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-4xl px-6 py-14">
+        <div
+          className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-8 shadow-2xl shadow-black/40"
+          data-reveal
+        >
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
+            Access blocked
+          </p>
+          <h1 className="mt-2 text-2xl font-display font-semibold text-white">{title}</h1>
+          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">{detail}</p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              onClick={() => navigateToPage('access')}
+              className="rounded-xl bg-[color:var(--agent-accent)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5"
+            >
+              Switch account
+            </button>
+            <button
+              onClick={() => navigateToPage('landing')}
+              className="rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
+            >
+              Back to overview
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div
       className={`${theme === 'dark' ? 'theme-dark' : 'theme-light'} relative min-h-screen bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)]`}
     >
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 agent-grid opacity-20" />
-        <div className="absolute -top-48 left-[15%] h-72 w-72 rounded-full bg-[radial-gradient(circle_at_center,_rgba(124,252,196,0.3),_transparent_65%)] blur-3xl animate-drift-slow" />
-        <div className="absolute top-1/3 right-[5%] h-80 w-80 rounded-full bg-[radial-gradient(circle_at_center,_rgba(90,215,255,0.28),_transparent_60%)] blur-3xl animate-drift" />
-        <div className="absolute bottom-[-120px] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,_rgba(255,209,102,0.2),_transparent_65%)] blur-3xl animate-float-slow" />
-      </div>
+      {!isLanding && (
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0 agent-grid opacity-20" />
+          <div className="absolute -top-48 left-[15%] h-72 w-72 rounded-full bg-[radial-gradient(circle_at_center,_rgba(124,252,196,0.3),_transparent_65%)] blur-3xl animate-drift-slow" />
+          <div className="absolute top-1/3 right-[5%] h-80 w-80 rounded-full bg-[radial-gradient(circle_at_center,_rgba(90,215,255,0.28),_transparent_60%)] blur-3xl animate-drift" />
+          <div className="absolute bottom-[-120px] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,_rgba(255,209,102,0.2),_transparent_65%)] blur-3xl animate-float-slow" />
+        </div>
+      )}
 
       <div className="relative z-10">
-        <header className="sticky top-0 z-40 border-b border-white/5 bg-[color:var(--agent-bg)]/80 backdrop-blur">
-          <div className="mx-auto w-full max-w-6xl px-6 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <button
-                onClick={() => setCurrentPage('landing')}
-                className="flex items-center gap-3 text-left"
-              >
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/5 shadow-lg shadow-black/40">
-                  <svg
-                    className="h-6 w-6 text-[color:var(--agent-accent)]"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M4 12h4l2-3 3 6 2-3h5"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">Pulse Ledger</p>
-                  <p className="text-xs text-white/50">AI triage management</p>
-                </div>
-              </button>
-
-              <nav className="flex flex-wrap items-center gap-2">
-                {navItems.map((item) => (
-                  <button
-                    key={item.page}
-                    onClick={() => setCurrentPage(item.page)}
-                    className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition ${
-                      currentPage === item.page
-                        ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)] shadow-[0_12px_28px_rgba(124,252,196,0.28)]'
-                        : 'border border-white/10 text-white/70 hover:border-white/30 hover:text-white'
-                    }`}
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                    </svg>
-                    {item.label}
-                  </button>
-                ))}
-              </nav>
-
-              <div className="flex items-center gap-2">
+        {!isLanding && (
+          <header className="sticky top-0 z-40 border-b border-white/10 bg-[color:var(--agent-bg)] shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
+            <div className="mx-auto w-full max-w-6xl px-6 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <button
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  className="flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
-                  aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+                  onClick={() => navigateToPage('landing')}
+                  className="flex items-center gap-3 text-left"
                 >
-                  {theme === 'dark' ? (
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/5 shadow-lg shadow-black/40">
+                    <svg
+                      className="h-6 w-6 text-[color:var(--agent-accent)]"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364-6.364-1.414 1.414M8.05 15.95l-1.414 1.414M15.95 15.95l1.414 1.414M8.05 8.05 6.636 6.636M12 7a5 5 0 100 10 5 5 0 000-10z"
+                        d="M4 12h4l2-3 3 6 2-3h5"
                       />
                     </svg>
-                  ) : (
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z"
-                      />
-                    </svg>
-                  )}
-                  {theme === 'dark' ? 'Light' : 'Dark'}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Pulse Ledger</p>
+                    <p className="text-xs text-white/50">Decision Tree triage management</p>
+                  </div>
+                </button>
+
+              <nav className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={toggleTheme}
+                  className="rounded-full border border-white/10 px-5 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
+                >
+                  {theme === 'dark' ? 'Light mode' : 'Dark mode'}
                 </button>
                 <button
-                  onClick={() => setCurrentPage(isLanding ? 'triage' : 'dashboard')}
-                  className="rounded-full bg-white px-5 py-2 text-xs font-semibold text-[color:var(--agent-on-light)] shadow-lg transition hover:-translate-y-0.5"
+                  onClick={() => navigateToPage('triage')}
+                  className="rounded-full bg-[color:var(--agent-accent)] px-5 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] shadow-lg transition hover:-translate-y-0.5"
                 >
-                  {isLanding ? 'Start guided intake' : 'Launch nurse console'}
+                  Get Started
                 </button>
+                <button
+                  onClick={() => navigateToPage('access')}
+                  className="rounded-full border border-white/10 px-5 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
+                >
+                  Log in
+                </button>
+                </nav>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
+        )}
 
-        <main>
-          {currentPage === 'landing' && <LandingPage onNavigate={setCurrentPage} />}
+        <main className={isLanding ? '' : 'pt-20'}>
+          {currentPage === 'landing' && (
+            <LandingPage
+              onNavigate={navigateToPage}
+              onCreateReservation={handleCreateReservation}
+              latestReservation={latestReservation}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+            />
+          )}
+          {currentPage === 'access' && (
+            <AccessPage
+              isAuthLoading={isAuthLoading}
+              onLogin={handleLogin}
+            />
+          )}
           {currentPage === 'triage' && (
             <TriagePage
               onCreateReservation={handleCreateReservation}
               latestReservation={latestReservation}
             />
           )}
-          {currentPage === 'dashboard' && (
-            <Dashboard
-              reservations={reservations}
-              ledgerEntries={ledgerEntries}
-              onUpdateStatus={handleUpdateStatus}
-              authUser={authUser}
-              authError={authError}
-              isAuthLoading={isAuthLoading}
-              onLogin={handleLogin}
-              onLogout={handleLogout}
-              apiReady={apiReady}
-            />
-          )}
+          {currentPage === 'dashboard' &&
+            (isCheckingSession ? (
+              <AuthLoadingCard label="Checking dashboard access..." />
+            ) : !authUser ? (
+              <LoginPage
+                authUser={authUser}
+                authError={authError}
+                isAuthLoading={isAuthLoading}
+                onLogin={handleLogin}
+                onLogout={handleLogout}
+                apiReady={apiReady}
+                onNavigate={navigateToPage}
+              />
+            ) : !canAccessPage('dashboard', authUser.role) ? (
+              <AccessDenied
+                title="Dashboard access required"
+                detail="Your account does not have permission to view operational dashboards. Ask an Admin or System Admin to grant Nurse/Doctor or Admin access."
+              />
+            ) : (
+              <Dashboard
+                reservations={reservations}
+                ledgerEntries={ledgerEntries}
+                authUser={authUser}
+                authError={authError}
+                isAuthLoading={isAuthLoading}
+                onLogin={handleLogin}
+                onLogout={handleLogout}
+                apiReady={apiReady}
+              />
+            ))}
+          {currentPage === 'admin' &&
+            (isCheckingSession ? (
+              <AuthLoadingCard label="Checking admin access..." />
+            ) : !authUser ? (
+              <LoginPage
+                authUser={authUser}
+                authError={authError}
+                isAuthLoading={isAuthLoading}
+                onLogin={handleLogin}
+                onLogout={handleLogout}
+                apiReady={apiReady}
+                onNavigate={navigateToPage}
+              />
+            ) : !canAccessPage('admin', authUser.role) ? (
+              <AccessDenied
+                title="Admin access required"
+                detail="This section is limited to Admin and System Admin roles. Sign in with the correct role or request elevated access."
+              />
+            ) : (
+              <AdminDashboard authUser={authUser} />
+            ))}
+          {currentPage === 'login' &&
+            (isCheckingSession ? (
+              <AuthLoadingCard label="Checking session..." />
+            ) : (
+              <LoginPage
+                authUser={authUser}
+                authError={authError}
+                isAuthLoading={isAuthLoading}
+                onLogin={handleLogin}
+                onLogout={handleLogout}
+                apiReady={apiReady}
+                onNavigate={navigateToPage}
+              />
+            ))}
+          {currentPage === 'signup' && <SignupPage onNavigate={navigateToPage} />}
           {currentPage === 'contact' && <ContactPage />}
           {currentPage === 'patient' && <PatientProfile />}
         </main>

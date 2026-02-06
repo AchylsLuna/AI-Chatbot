@@ -34,6 +34,17 @@
     color-scheme: light;
   }
 
+  html,
+  body {
+    min-height: 100%;
+    background-color: var(--agent-bg);
+    color: var(--agent-ink);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   * {
     box-sizing: border-box;
   }
@@ -227,6 +238,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   [data-reveal] {
     opacity: 1;
     transform: none;
