@@ -2,8 +2,8 @@ import express from 'express'
 import * as authController from '../controllers/authController.js'
 import * as triageController from '../controllers/triageController.js'
 import * as reservationController from '../controllers/reservationController.js'
-import { requireAuth, requireRole } from '../src/middleware/auth.js'
-import { authLimiter } from '../src/middleware/rateLimit.js'
+import { requireAuth, requireRole } from '../middleware/auth.js'
+import { authLimiter } from '../middleware/rateLimit.js'
 
 const router = express.Router()
 

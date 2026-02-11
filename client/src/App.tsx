@@ -125,10 +125,10 @@ function App() {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
   const [latestReservationId, setLatestReservationId] = useState<string | null>(null)
   const [apiReady, setApiReady] = useState(false)
-  const [authToken, setAuthTokenState] = useState<string | null>(null)
+  const [authToken, setAuthTokenState] = useState<string | null>(() => localStorage.getItem('pulse-ledger-token'));
   const [authUser, setAuthUser] = useState<AuthSession['user'] | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
-  const [isAuthLoading, setIsAuthLoading] = useState(false)
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(() => Boolean(localStorage.getItem('pulse-ledger-token')));
   const [postLoginPage, setPostLoginPage] = useState<AppPage | null>(null)
 
   const navigateToPage = useCallback(
@@ -218,15 +218,6 @@ function App() {
   const latestReservation = latestReservationId
     ? reservations.find((reservation) => reservation.id === latestReservationId)
     : undefined
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem('pulse-ledger-token')
-    if (storedToken) {
-      setAuthTokenState(storedToken)
-      setAuthToken(storedToken)
-      setIsAuthLoading(true)
-    }
-  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -395,7 +386,7 @@ function App() {
       )}
 
       <div className="relative z-10">
-        {!isLanding && !authUser && (
+        {!isLanding && (
           <header className="sticky top-0 z-40 border-b border-white/10 bg-[color:var(--agent-bg)] shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
             <div className="mx-auto w-full max-w-6xl px-6 py-4">
               <div className="flex flex-wrap items-center justify-between gap-4">

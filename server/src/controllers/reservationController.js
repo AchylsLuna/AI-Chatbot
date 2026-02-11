@@ -1,6 +1,6 @@
-import * as reservationService from '../src/services/reservationService.js'
-import { normalizeDepartment } from '../src/services/triageService.js'
-import { getDb } from '../src/config/db.js'
+import * as reservationService from '../services/reservationService.js'
+import { normalizeDepartment } from '../services/triageService.js'
+import { getDb } from '../config/db.js'
 
 export const getReservations = async (_req, res) => {
   const db = getDb()

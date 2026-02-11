@@ -1,5 +1,5 @@
-import * as authService from '../src/services/authService.js'
-import { getDb } from '../src/config/db.js'
+import * as authService from '../services/authService.js'
+import { getDb } from '../config/db.js'
 
 export const login = async (req, res) => {
   const { username, password } = req.body || {}

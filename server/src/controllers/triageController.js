@@ -1,4 +1,4 @@
-import * as triageService from '../src/services/triageService.js'
+import * as triageService from '../services/triageService.js'
 
 export const getSummary = async (req, res) => {
   const { symptoms } = req.body || {}
