@@ -3,7 +3,7 @@ import cors from 'cors'
 import crypto from 'node:crypto'
 import express from 'express'
 import { connectDb, getDb } from './db.js'
-import { login, requireAuth, requireRole, seedUsers } from './auth.js'
+import { login, registerUser, requireAuth, requireRole, seedUsers } from './auth.js'
 import { recordAppointmentOnChain } from './blockchain.js'
 import {
   generateTriageSummary,
@@ -17,6 +17,8 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173'
 
 const app = express()
 
+app.set('trust proxy', 1)
+
 app.use(cors({ origin: CORS_ORIGIN }))
 app.use(express.json({ limit: '1mb' }))
 
@@ -27,6 +29,27 @@ const buildHash = (payload) => {
 }
 
 const CHAIN_STRICT = String(process.env.CHAIN_STRICT || 'false').toLowerCase() === 'true'
+
+const createRateLimiter = ({ windowMs, max }) => {
+  const hits = new Map()
+  return (req, res, next) => {
+    const key = `${req.ip}:${req.path}`
+    const now = Date.now()
+    const record = hits.get(key)
+    if (!record || now > record.resetAt) {
+      hits.set(key, { count: 1, resetAt: now + windowMs })
+      return next()
+    }
+    if (record.count >= max) {
+      return res.status(429).json({ error: 'Too many requests. Try again later.' })
+    }
+    record.count += 1
+    hits.set(key, record)
+    return next()
+  }
+}
+
+const authLimiter = createRateLimiter({ windowMs: 10 * 60 * 1000, max: 20 })
 
 const seedDemoData = async () => {
   const db = getDb()
@@ -102,7 +125,7 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
 })
 
-app.post('/api/triage/summary', async (req, res) => {
+app.post('/api/triage/summary', requireAuth, async (req, res) => {
   const { symptoms } = req.body || {}
   if (!symptoms || typeof symptoms !== 'string') {
     return res.status(400).json({ error: 'Please describe your symptoms so we can help.' })
@@ -125,16 +148,61 @@ app.post('/api/triage/summary', async (req, res) => {
   }
 })
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { username, password } = req.body || {}
   if (!username || !password) {
     return res.status(400).json({ error: 'Missing username or password' })
   }
-  const session = await login(username, password)
-  if (!session) {
-    return res.status(401).json({ error: 'Invalid credentials' })
+  try {
+    const session = await login(username, password, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || 'unknown',
+    })
+    return res.json(session)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Invalid credentials'
+    const status = message.toLowerCase().includes('locked') ? 423 : 401
+    return res.status(status).json({ error: message })
   }
-  return res.json(session)
+})
+
+app.post('/api/auth/signup', authLimiter, async (req, res) => {
+  const { username, password, role, fullName, email, organization } = req.body || {}
+  try {
+    const result = await registerUser({
+      username,
+      password,
+      role,
+      fullName,
+      email,
+      organization,
+    })
+    return res.status(201).json(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Signup failed'
+    const status = message.includes('exists') ? 409 : 400
+    return res.status(status).json({ error: message })
+  }
+})
+
+
+app.post('/api/auth/signup', async (req, res) => {
+  const { username, password, role, fullName, email, organization } = req.body || {}
+  try {
+    const session = await registerUser({
+      username,
+      password,
+      role,
+      fullName,
+      email,
+      organization,
+    })
+    return res.status(201).json(session)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Signup failed'
+    const status = message.includes('exists') ? 409 : 400
+    return res.status(status).json({ error: message })
+  }
 })
 
 app.get('/api/auth/session', requireAuth, (req, res) => {
