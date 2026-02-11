@@ -12,6 +12,7 @@ export const connectDb = async () => {
   await client.connect()
   database = client.db(DB_NAME)
 
+  // Ensure Indexes
   await Promise.all([
     database.collection('reservations').createIndex({ id: 1 }, { unique: true }),
     database.collection('ledger').createIndex({ reservationId: 1 }, { unique: true }),
@@ -22,16 +23,12 @@ export const connectDb = async () => {
 }
 
 export const getDb = () => {
-  if (!database) {
-    throw new Error('Database not initialized')
-  }
+  if (!database) throw new Error('Database not initialized')
   return database
 }
 
 export const closeDb = async () => {
-  if (client) {
-    await client.close()
-  }
+  if (client) await client.close()
   client = null
   database = null
 }
