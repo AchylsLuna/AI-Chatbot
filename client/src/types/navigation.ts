@@ -7,5 +7,3 @@ export type AppPage =
   | 'login'
   | 'forgot_password'
   | 'signup'
-  | 'patient'
-  | 'contact'

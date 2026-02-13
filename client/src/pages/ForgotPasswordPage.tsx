@@ -5,9 +5,10 @@ import type { AppPage } from '../types/navigation'
 
 type ForgotPasswordPageProps = {
   onNavigate?: (page: AppPage) => void
+  onGoBack?: () => void
 }
 
-const ForgotPasswordPage = ({ onNavigate }: ForgotPasswordPageProps) => {
+const ForgotPasswordPage = ({ onNavigate, onGoBack }: ForgotPasswordPageProps) => {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,7 +36,7 @@ const ForgotPasswordPage = ({ onNavigate }: ForgotPasswordPageProps) => {
     <AuthSplitLayout>
       <button
         type="button"
-        onClick={() => onNavigate?.('login')}
+        onClick={() => (onGoBack ? onGoBack() : onNavigate?.('login'))}
         className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-white/60 transition hover:text-white"
       >
         <svg

@@ -3,6 +3,8 @@ import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
 import type { AuthSession } from '../types/triage'
 
+const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
+
 type LoginPageProps = {
   authUser: AuthSession['user'] | null
   authError: string | null
@@ -10,6 +12,7 @@ type LoginPageProps = {
   onLogin: (username: string, password: string) => void
   onLogout: () => void
   onNavigate?: (page: AppPage) => void
+  onGoBack?: () => void
 }
 
 const LoginPage = ({
@@ -19,17 +22,22 @@ const LoginPage = ({
   onLogin,
   onLogout,
   onNavigate,
+  onGoBack,
 }: LoginPageProps) => {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const isBasicUser = authUser?.role === 'user'
+  const homePage: AppPage = isBasicUser ? 'triage' : 'dashboard'
+  const homeLabel = isBasicUser ? 'Go to triage' : 'Go to dashboard'
 
   return (
     <AuthSplitLayout>
       <div>
         <button
           type="button"
-          onClick={() => onNavigate?.('landing')}
+          onClick={() => (onGoBack ? onGoBack() : onNavigate?.('landing'))}
           className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-white/60 transition hover:text-white"
         >
           <svg
@@ -59,8 +67,8 @@ const LoginPage = ({
             <button onClick={onLogout} className="agent-button-ghost">
               Sign out
             </button>
-            <button onClick={() => onNavigate?.('dashboard')} className="agent-button">
-              Go to dashboard
+            <button onClick={() => onNavigate?.(homePage)} className="agent-button">
+              {homeLabel}
             </button>
           </div>
         </div>
@@ -69,7 +77,12 @@ const LoginPage = ({
           className="mt-6 space-y-4"
           onSubmit={(event) => {
             event.preventDefault()
-            onLogin(username, password)
+            const email = username.trim().toLowerCase()
+            if (!COM_EMAIL_PATTERN.test(email)) {
+              setFormError('Use a valid .com email address before signing in.')
+              return
+            }
+            onLogin(email, password)
           }}
         >
           <div className="relative">
@@ -89,8 +102,12 @@ const LoginPage = ({
               </svg>
             </span>
             <input
+              type="email"
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={(event) => {
+                setUsername(event.target.value)
+                if (formError) setFormError(null)
+              }}
               placeholder="Email address"
               className="agent-input agent-input-icon"
             />
@@ -114,7 +131,10 @@ const LoginPage = ({
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) => {
+                setPassword(event.target.value)
+                if (formError) setFormError(null)
+              }}
               placeholder="Password"
               className="agent-input agent-input-icon agent-input-icon-right"
             />
@@ -170,7 +190,9 @@ const LoginPage = ({
             {isAuthLoading ? 'Signing in...' : 'Sign In'}
           </button>
 
-          {authError && <p className="text-xs font-semibold text-rose-300">{authError}</p>}
+          {(formError || authError) && (
+            <p className="text-xs font-semibold text-rose-300">{formError ?? authError}</p>
+          )}
 
           <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-white/60">
             <span>Don't have an account?</span>

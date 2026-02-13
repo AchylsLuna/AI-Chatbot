@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { buildRoute } from '../config/routing'
 import type { AppPage } from '../types/navigation'
 import type { Reservation, ReservationDraft } from '../types/triage'
 import TriagePage from './TriagePage'
@@ -84,7 +83,6 @@ const LandingPage = ({
 }: LandingPageProps) => {
   const [isNavHidden, setIsNavHidden] = useState(false)
   const [activeTarget, setActiveTarget] = useState<NavTarget>('home')
-  const adminDashboardRoute = buildRoute('admin_login')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -417,19 +415,6 @@ const LandingPage = ({
             ))}
           </div>
 
-          <div className="mt-10 text-center" data-reveal style={revealDelay(260)}>
-            <a
-              href={adminDashboardRoute}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-semibold text-[color:var(--agent-accent)] transition hover:text-[color:var(--agent-accent-strong)]"
-            >
-              Admin Dashboard
-            </a>
-            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-white/50">
-              BSIT3 - COMSEC - 01
-            </p>
-          </div>
         </section>
       </main>
     </div>

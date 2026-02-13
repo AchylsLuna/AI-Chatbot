@@ -128,7 +128,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       setAuthUser(session.user)
       localStorage.setItem('pulse-ledger-token', session.token)
       setApiReady(true)
-      const resolvedTargetPage = targetPage ?? postLoginPage ?? 'dashboard'
+      const defaultPageByRole: AppPage =
+        session.user.role === 'user' ? 'triage' : 'dashboard'
+      const resolvedTargetPage = targetPage ?? postLoginPage ?? defaultPageByRole
       setPostLoginPage(null)
       const isAdminTarget = resolvedTargetPage === 'admin'
       const hasAdminRole =
@@ -154,7 +156,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setAuthError(null)
     localStorage.setItem('pulse-ledger-token', session.token)
     setApiReady(true)
-    navigateToPage('dashboard')
+    navigateToPage(session.user.role === 'user' ? 'triage' : 'dashboard')
   }
 
   const handleLogout = () => {

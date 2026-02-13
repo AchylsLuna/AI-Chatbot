@@ -78,11 +78,17 @@ MONGODB_URI=mongodb://127.0.0.1:27017
 MONGODB_DB=pulse-ledger
 JWT_SECRET=change-me
 JWT_EXPIRES_IN=12h
-CORS_ORIGIN=http://localhost:5173
-ADMIN_USER=admin
+CORS_ORIGIN=http://localhost:5173,http://localhost:5174
+SEED_USERS=true
+SEED_DEMO=true
+ADMIN_USER=admin@aihealthcare.com
 ADMIN_PASS=admin123
-NURSE_USER=nurse
+NURSE_USER=nurse@aihealthcare.com
 NURSE_PASS=nurse123
+SYSADMIN_USER=sysadmin@aihealthcare.com
+SYSADMIN_PASS=sysadmin123
+USER_USER=user@aihealthcare.com
+USER_PASS=user123
 WEB3_RPC_URL=
 CONTRACT_ADDRESS=
 CONTRACT_PRIVATE_KEY=
@@ -112,4 +118,14 @@ CONTRACT_PRIVATE_KEY=0x...
 
 ### Demo RBAC credentials
 
-The API seeds `ADMIN_USER` and `NURSE_USER` on startup. Update these in the environment for real deployments.
+The API seeds accounts on startup (`SEED_USERS=true`):
+
+- User: `user@aihealthcare.com` / `user123`
+- Nurse: `nurse@aihealthcare.com` / `nurse123`
+- Admin: `admin@aihealthcare.com` / `admin123`
+- System Admin: `sysadmin@aihealthcare.com` / `sysadmin123`
+
+Access paths:
+
+- User side: sign in at `/login` (User defaults to triage view after login)
+- Admin side: sign in at `/admin-login`, then continue to Admin Dashboard

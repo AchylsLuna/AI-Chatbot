@@ -8,24 +8,21 @@ import useScrollReveal from './hooks/useScrollReveal'
 import useAppTheme from './hooks/useAppTheme'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminLoginPage from './pages/AdminLoginPage'
-import ContactPage from './pages/ContactPage'
 import Dashboard from './pages/Dashboard'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
-import PatientProfile from './pages/PatientProfile'
 import SignupPage from './pages/SignupPage'
 import TriagePage from './pages/TriagePage'
 
 type ProtectedPage = 'dashboard'
 
 function App() {
-  const { currentPage, navigateToPage, isLanding, isAuthPage } = useAppRouting()
+  const { currentPage, navigateToPage, navigateBack, isLanding, isAuthPage } = useAppRouting()
   const { theme, toggleTheme } = useAppTheme()
 
   const {
     apiReady,
-    authToken,
     authUser,
     authError,
     isAuthLoading,
@@ -51,6 +48,7 @@ function App() {
       onLogin={handleLogin}
       onLogout={handleLogout}
       onNavigate={navigateToPage}
+      onGoBack={() => navigateBack('landing')}
     />
   )
 
@@ -64,6 +62,7 @@ function App() {
       onLogin={handleLogin}
       onLogout={handleLogout}
       onNavigate={navigateToPage}
+      onGoBack={() => navigateBack('landing')}
     />
   )
 
@@ -174,20 +173,18 @@ function App() {
 
     case 'signup':
       pageContent = (
-        <SignupPage onNavigate={navigateToPage} onSignupSuccess={handleSignupSuccess} />
+        <SignupPage
+          onNavigate={navigateToPage}
+          onSignupSuccess={handleSignupSuccess}
+          onGoBack={() => navigateBack('login')}
+        />
       )
       break
 
     case 'forgot_password':
-      pageContent = <ForgotPasswordPage onNavigate={navigateToPage} />
-      break
-
-    case 'contact':
-      pageContent = <ContactPage />
-      break
-
-    case 'patient':
-      pageContent = <PatientProfile />
+      pageContent = (
+        <ForgotPasswordPage onNavigate={navigateToPage} onGoBack={() => navigateBack('login')} />
+      )
       break
 
     default:
@@ -214,13 +211,6 @@ function App() {
 
         <main className={isLanding || isAuthPage ? '' : 'pt-20'}>{pageContent}</main>
 
-        {!isLanding && !isAuthPage && !apiReady && (
-          <div className="fixed bottom-6 right-6 rounded-2xl border border-amber-400/30 bg-amber-400/15 px-4 py-3 text-xs font-semibold text-amber-200 shadow-lg shadow-black/40">
-            {authToken
-              ? 'API offline - showing local fallback data.'
-              : 'Sign in to access live data.'}
-          </div>
-        )}
       </div>
     </div>
   )

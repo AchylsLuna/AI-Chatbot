@@ -10,6 +10,8 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5174/api'
 let authToken: string | null = null
+const NETWORK_ERROR_MESSAGE =
+  'Cannot reach API server. Start the backend and verify your API URL.'
 
 export const setAuthToken = (token: string | null) => {
   authToken = token
@@ -31,9 +33,17 @@ const withAuth = (init?: RequestInit): RequestInit => {
   return { ...init, headers }
 }
 
+const request = async (url: string, init?: RequestInit) => {
+  try {
+    return await fetch(url, init)
+  } catch {
+    throw new Error(NETWORK_ERROR_MESSAGE)
+  }
+}
+
 export const api = {
   login: async (username: string, password: string): Promise<AuthSession> => {
-    const response = await fetch(`${API_BASE}/auth/login`, {
+    const response = await request(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
@@ -41,7 +51,7 @@ export const api = {
     return handleResponse<AuthSession>(response)
   },
   signup: async (draft: SignupDraft): Promise<AuthSession> => {
-    const response = await fetch(`${API_BASE}/auth/signup`, {
+    const response = await request(`${API_BASE}/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(draft),
@@ -49,25 +59,25 @@ export const api = {
     return handleResponse<AuthSession>(response)
   },
   getSession: async (): Promise<AuthSession['user']> => {
-    const response = await fetch(`${API_BASE}/auth/session`, withAuth())
+    const response = await request(`${API_BASE}/auth/session`, withAuth())
     return handleResponse<AuthSession['user']>(response)
   },
   getReservations: async (): Promise<Reservation[]> => {
     const data = await handleResponse<{ reservations: Reservation[] }>(
-      await fetch(`${API_BASE}/reservations`, withAuth())
+      await request(`${API_BASE}/reservations`, withAuth())
     )
     return data.reservations
   },
   getLedger: async (): Promise<LedgerEntry[]> => {
     const data = await handleResponse<{ ledger: LedgerEntry[] }>(
-      await fetch(`${API_BASE}/ledger`, withAuth())
+      await request(`${API_BASE}/ledger`, withAuth())
     )
     return data.ledger
   },
   createReservation: async (
     draft: ReservationDraft
   ): Promise<{ reservation: Reservation; ledgerEntry: LedgerEntry }> => {
-    const response = await fetch(`${API_BASE}/reservations`, withAuth({
+    const response = await request(`${API_BASE}/reservations`, withAuth({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -84,7 +94,7 @@ export const api = {
     symptoms: string,
     signal?: AbortSignal
   ): Promise<{ summary: TriageSummary; elapsedMs: number }> => {
-    const response = await fetch(`${API_BASE}/triage/summary`, {
+    const response = await request(`${API_BASE}/triage/summary`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symptoms }),
@@ -94,7 +104,7 @@ export const api = {
   },
   getAccessRequests: async (): Promise<AccessRequest[]> => {
     const data = await handleResponse<{ requests: AccessRequest[] }>(
-      await fetch(`${API_BASE}/access-requests`, withAuth())
+      await request(`${API_BASE}/access-requests`, withAuth())
     )
     return data.requests
   },

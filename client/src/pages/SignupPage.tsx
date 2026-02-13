@@ -7,9 +7,10 @@ import type { AuthSession, SignupDraft } from '../types/triage'
 type SignupPageProps = {
   onNavigate?: (page: AppPage) => void
   onSignupSuccess?: (session: AuthSession) => void
+  onGoBack?: () => void
 }
 
-const SignupPage = ({ onNavigate, onSignupSuccess }: SignupPageProps) => {
+const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) => {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -49,7 +50,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess }: SignupPageProps) => {
         <div>
           <button
             type="button"
-            onClick={() => onNavigate?.('login')}
+            onClick={() => (onGoBack ? onGoBack() : onNavigate?.('login'))}
             className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-white/60 transition hover:text-white"
           >
             <svg

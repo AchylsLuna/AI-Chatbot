@@ -9,12 +9,6 @@ export const PAGE_ROUTES: Record<AppPage, string> = {
   login: '/login',
   forgot_password: '/forgot-password',
   signup: '/signup',
-  patient: '/patient',
-  contact: '/contact',
-}
-
-const LEGACY_ROUTE_ALIASES: Record<string, AppPage> = {
-  '/access': 'admin_login',
 }
 
 const getBasePrefix = () => {
@@ -52,10 +46,9 @@ export const normalizePath = (path: string) => {
 
 export const hasKnownRoute = (path: string) => {
   const normalized = normalizePath(path)
-  const hasPageRoute = Object.values(PAGE_ROUTES).some(
+  return Object.values(PAGE_ROUTES).some(
     (route) => normalizePath(route) === normalized
   )
-  return hasPageRoute || Object.keys(LEGACY_ROUTE_ALIASES).includes(normalized)
 }
 
 export const resolvePageFromPath = (path: string): AppPage => {
@@ -63,6 +56,5 @@ export const resolvePageFromPath = (path: string): AppPage => {
   const match = (Object.entries(PAGE_ROUTES) as Array<[AppPage, string]>).find(
     ([, route]) => normalizePath(route) === normalized
   )
-  if (match) return match[0]
-  return LEGACY_ROUTE_ALIASES[normalized] ?? 'landing'
+  return match?.[0] ?? 'landing'
 }

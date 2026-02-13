@@ -33,7 +33,6 @@ const AuthShowcase = () => (
         advanced artificial intelligence.
       </p>
     </div>
-
   </div>
 )
 
@@ -48,8 +47,8 @@ const AuthSplitLayout = ({ children, layout = 'split' }: AuthSplitLayoutProps) =
           <div className="auth-vignette" />
         </div>
 
-        <div className="relative mx-auto flex min-h-screen w-full max-w-2xl items-center px-6 py-16">
-          <div className="w-full rounded-3xl agent-card p-8 backdrop-blur" data-reveal>
+        <div className="relative mx-auto flex min-h-screen w-full max-w-xl items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
+          <div className="w-full p-1 sm:p-2" data-reveal>
             {children}
           </div>
         </div>

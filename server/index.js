@@ -85,7 +85,12 @@ const trimAndLimit = (value, max) => {
 
 const isValidEmail = (value) => {
   if (!value) return false
-  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value)
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
+
+const isValidComEmail = (value) => {
+  if (!isValidEmail(value)) return false
+  return value.toLowerCase().endsWith('.com')
 }
 
 const safeAudit = async (event) => {
@@ -154,16 +159,10 @@ const maybeRequireAuth = (req, res, next) => {
 }
 
 const shouldSeedUsers = () => {
-  if (process.env.NODE_ENV === 'production') {
-    return String(process.env.SEED_USERS || 'false').toLowerCase() === 'true'
-  }
   return String(process.env.SEED_USERS || 'true').toLowerCase() === 'true'
 }
 
 const shouldSeedDemo = () => {
-  if (process.env.NODE_ENV === 'production') {
-    return String(process.env.SEED_DEMO || 'false').toLowerCase() === 'true'
-  }
   return String(process.env.SEED_DEMO || 'true').toLowerCase() === 'true'
 }
 
@@ -272,9 +271,13 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   if (!username || !password) {
     return res.status(400).json({ error: 'Missing username or password' })
   }
+  const normalizedUsername = String(username).trim().toLowerCase()
+  if (!isValidComEmail(normalizedUsername)) {
+    return res.status(400).json({ error: 'Use a valid .com email address to sign in.' })
+  }
   try {
     const ctx = buildRequestContext(req)
-    const session = await login(username, password, ctx)
+    const session = await login(normalizedUsername, password, ctx)
     return res.json(session)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid credentials'
@@ -288,12 +291,19 @@ app.post('/api/auth/signup', authLimiter, accessRequestLimiter, async (req, res)
   const roleRequested =
     typeof role === 'string' && role.trim() ? role.trim().toLowerCase() : 'user'
   const ctx = buildAuditContext(req)
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+  const normalizedUsername = typeof username === 'string' ? username.trim().toLowerCase() : ''
+  const loginEmail = normalizedUsername || normalizedEmail
   try {
+    if (!isValidComEmail(loginEmail)) {
+      return res.status(400).json({ error: 'Use a valid .com email address to sign up.' })
+    }
+
     if (roleRequested !== 'user') {
       await createAccessRequest(
         {
           fullName,
-          email,
+          email: normalizedEmail || loginEmail,
           organization,
           roleRequested,
           notes: 'Requested via signup.',
@@ -303,11 +313,11 @@ app.post('/api/auth/signup', authLimiter, accessRequestLimiter, async (req, res)
     }
 
     const result = await registerUser({
-      username,
+      username: loginEmail,
       password,
       role: 'user',
       fullName,
-      email,
+      email: normalizedEmail || loginEmail,
       organization,
       meta: ctx,
     })

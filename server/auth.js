@@ -8,14 +8,20 @@ const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET
 const TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h'
 const MIN_JWT_SECRET_LENGTH = 32
 
-const ADMIN_USER = process.env.ADMIN_USER || 'admin'
+const ADMIN_USER = process.env.ADMIN_USER || 'admin@aihealthcare.com'
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123'
-const NURSE_USER = process.env.NURSE_USER || 'nurse'
+const NURSE_USER = process.env.NURSE_USER || 'nurse@aihealthcare.com'
 const NURSE_PASS = process.env.NURSE_PASS || 'nurse123'
-const SYSADMIN_USER = process.env.SYSADMIN_USER || 'sysadmin'
+const SYSADMIN_USER = process.env.SYSADMIN_USER || 'sysadmin@aihealthcare.com'
 const SYSADMIN_PASS = process.env.SYSADMIN_PASS || 'sysadmin123'
-const USER_USER = process.env.USER_USER || 'user'
+const USER_USER = process.env.USER_USER || 'user@aihealthcare.com'
 const USER_PASS = process.env.USER_PASS || 'user123'
+const ROLE_DEFAULT_EMAILS = {
+  admin: 'admin@aihealthcare.com',
+  nurse: 'nurse@aihealthcare.com',
+  system_admin: 'sysadmin@aihealthcare.com',
+  user: 'user@aihealthcare.com',
+}
 
 const hashPassword = async (password) => bcrypt.hash(password, 12)
 const ALLOWED_ROLES = ['user', 'nurse', 'admin', 'system_admin']
@@ -60,8 +66,14 @@ const usernameMeetsPolicy = (username) => {
   const cleaned = username.trim()
   if (cleaned.length < USERNAME_MIN || cleaned.length > USERNAME_MAX) return false
   const simpleHandle = /^[a-zA-Z0-9._-]+$/.test(cleaned)
-  const emailLike = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(cleaned)
+  const emailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned)
   return simpleHandle || emailLike
+}
+
+const isComEmail = (value) => {
+  if (typeof value !== 'string') return false
+  const cleaned = value.trim().toLowerCase()
+  return /^[^\s@]+@[^\s@]+\.com$/.test(cleaned)
 }
 
 export const validateAuthConfig = () => {
@@ -97,6 +109,20 @@ export const seedUsers = async () => {
   await seedUser(NURSE_USER, 'nurse', NURSE_PASS)
   await seedUser(SYSADMIN_USER, 'system_admin', SYSADMIN_PASS)
   await seedUser(USER_USER, 'user', USER_PASS)
+
+  // Keep .com email logins available even if local env still defines legacy usernames.
+  if (!isComEmail(ADMIN_USER)) {
+    await seedUser(ROLE_DEFAULT_EMAILS.admin, 'admin', ADMIN_PASS)
+  }
+  if (!isComEmail(NURSE_USER)) {
+    await seedUser(ROLE_DEFAULT_EMAILS.nurse, 'nurse', NURSE_PASS)
+  }
+  if (!isComEmail(SYSADMIN_USER)) {
+    await seedUser(ROLE_DEFAULT_EMAILS.system_admin, 'system_admin', SYSADMIN_PASS)
+  }
+  if (!isComEmail(USER_USER)) {
+    await seedUser(ROLE_DEFAULT_EMAILS.user, 'user', USER_PASS)
+  }
 }
 
 export const login = async (username, password, meta = {}) => {

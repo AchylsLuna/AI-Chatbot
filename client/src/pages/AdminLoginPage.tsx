@@ -4,6 +4,8 @@ import type { AppPage } from '../types/navigation'
 import type { AuthSession } from '../types/triage'
 import { formatRoleLabel } from '../utils/roles'
 
+const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
+
 type AdminLoginPageProps = {
   authUser: AuthSession['user'] | null
   authError: string | null
@@ -11,6 +13,7 @@ type AdminLoginPageProps = {
   onLogin: (username: string, password: string, targetPage?: AppPage) => void
   onLogout: () => void
   onNavigate?: (page: AppPage) => void
+  onGoBack?: () => void
 }
 
 const AdminLoginPage = ({
@@ -20,21 +23,24 @@ const AdminLoginPage = ({
   onLogin,
   onLogout,
   onNavigate,
+  onGoBack,
 }: AdminLoginPageProps) => {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+
   const hasAdminAccess = authUser
     ? authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
 
   return (
     <AuthSplitLayout layout="center">
-      <div className="mx-auto w-full max-w-lg">
-        <div className="mb-6 flex items-center justify-between gap-3">
+      <div className="mx-auto w-full max-w-md rounded-3xl agent-card p-6 sm:p-8">
+        <div className="mb-6 flex justify-start">
           <button
             type="button"
-            onClick={() => onNavigate?.('landing')}
+            onClick={() => (onGoBack ? onGoBack() : onNavigate?.('landing'))}
             className="inline-flex items-center gap-2 text-xs font-semibold text-white/60 transition hover:text-white"
           >
             <svg
@@ -48,13 +54,12 @@ const AdminLoginPage = ({
             >
               <path d="M15 18l-6-6 6-6" />
             </svg>
-            Back
+            Back to home
           </button>
-          <div className="agent-chip">Restricted</div>
         </div>
 
-        <div className="mb-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-[color:var(--agent-accent)]">
+        <div className="text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center text-[color:var(--agent-accent)]">
             <svg
               viewBox="0 0 24 24"
               className="h-5 w-5"
@@ -68,17 +73,17 @@ const AdminLoginPage = ({
               <path d="M9 12l2 2 4-4" />
             </svg>
           </div>
-          <h2 className="mt-4 text-center text-2xl font-semibold text-white">Admin sign in</h2>
-          <p className="mt-2 text-center text-sm text-white/60">
-            Authenticate with an Admin or System Admin account before opening the Admin Dashboard.
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--agent-accent)]">
+            Restricted Access
           </p>
-          <p className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-accent)]">
-            Admin or System Admin only
+          <h2 className="mt-3 text-3xl font-semibold text-white">Admin Login</h2>
+          <p className="mt-2 text-sm text-white/60">
+            Use an Admin or System Admin account to continue to the Admin Dashboard.
           </p>
         </div>
 
         {authUser ? (
-          <div className="space-y-4">
+          <div className="mt-6 space-y-4 text-center">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
               Signed in as <span className="font-semibold text-white">{authUser.username}</span> (
               {formatRoleLabel(authUser.role)}).
@@ -108,8 +113,8 @@ const AdminLoginPage = ({
                   <button onClick={onLogout} className="agent-button-ghost w-full">
                     Sign out
                   </button>
-                  <button onClick={() => onNavigate?.('dashboard')} className="agent-button w-full">
-                    Dashboard
+                  <button onClick={() => onNavigate?.('login')} className="agent-button w-full">
+                    Staff login
                   </button>
                 </div>
               </div>
@@ -117,14 +122,22 @@ const AdminLoginPage = ({
           </div>
         ) : (
           <form
-            className="space-y-4"
+            className="mt-6 space-y-4 text-left"
             onSubmit={(event) => {
               event.preventDefault()
-              onLogin(username, password, 'admin')
+              const email = username.trim().toLowerCase()
+              if (!COM_EMAIL_PATTERN.test(email)) {
+                setFormError('Use a valid .com email address before signing in.')
+                return
+              }
+              onLogin(email, password, 'admin')
             }}
           >
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.1em] text-white/60">
+              <label
+                htmlFor="admin-login-username"
+                className="text-xs font-semibold uppercase tracking-[0.1em] text-white/60"
+              >
                 Admin email
               </label>
               <div className="relative">
@@ -144,8 +157,14 @@ const AdminLoginPage = ({
                   </svg>
                 </span>
                 <input
+                  id="admin-login-username"
+                  type="email"
+                  autoComplete="username"
                   value={username}
-                  onChange={(event) => setUsername(event.target.value)}
+                  onChange={(event) => {
+                    setUsername(event.target.value)
+                    if (formError) setFormError(null)
+                  }}
                   placeholder="Admin email address"
                   className="agent-input agent-input-icon"
                 />
@@ -153,7 +172,10 @@ const AdminLoginPage = ({
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.1em] text-white/60">
+              <label
+                htmlFor="admin-login-password"
+                className="text-xs font-semibold uppercase tracking-[0.1em] text-white/60"
+              >
                 Password
               </label>
               <div className="relative">
@@ -172,9 +194,14 @@ const AdminLoginPage = ({
                   </svg>
                 </span>
                 <input
+                  id="admin-login-password"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
                   value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  onChange={(event) => {
+                    setPassword(event.target.value)
+                    if (formError) setFormError(null)
+                  }}
                   placeholder="Password"
                   className="agent-input agent-input-icon agent-input-icon-right"
                 />
@@ -217,15 +244,19 @@ const AdminLoginPage = ({
               </div>
             </div>
 
-            <button type="submit" disabled={isAuthLoading} className="agent-button w-full disabled:cursor-not-allowed">
-              {isAuthLoading ? 'Verifying...' : 'Sign In to Admin Dashboard'}
-            </button>
-
-            {authError && (
+            {(formError || authError) && (
               <p className="rounded-xl border border-rose-300/30 bg-rose-300/10 px-3 py-2 text-xs font-semibold text-rose-300">
-                {authError}
+                {formError ?? authError}
               </p>
             )}
+
+            <button
+              type="submit"
+              disabled={isAuthLoading}
+              className="agent-button w-full disabled:cursor-not-allowed"
+            >
+              {isAuthLoading ? 'Verifying...' : 'Sign In to Admin Dashboard'}
+            </button>
           </form>
         )}
       </div>
