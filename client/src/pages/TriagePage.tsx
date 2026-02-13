@@ -9,12 +9,6 @@ const quickPrompts = [
   'Thanks. I will summarize this for your booking.',
 ]
 
-const techStack = [
-  'Decision Tree Platform: MedQuad-informed triage model',
-  'Web Platform: React, TypeScript, Tailwind CSS, Node.js, Express.js, REST API, MongoDB',
-  'Blockchain Platform: Ethereum smart contracts and immutable ledger',
-]
-
 type Message = {
   id: string
   sender: 'ai' | 'user'
@@ -168,33 +162,24 @@ const TriagePage = ({
   }
 
   return (
-    <div className={isEmbedded ? '' : 'min-h-screen'}>
-      <div className={`w-full ${isEmbedded ? '' : 'mx-auto max-w-6xl px-6 py-10'}`}>
+    <div className={isEmbedded ? '' : 'page-shell'}>
+      <div className={`w-full ${isEmbedded ? '' : 'page-wrap'}`}>
         {!isEmbedded && (
-          <div className="mb-8 flex flex-wrap items-center justify-between gap-4" data-reveal>
+          <div className="page-header" data-reveal>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                Decision Tree guidance layer
-              </p>
-              <h1 className="text-3xl font-display font-semibold text-white">
-                Guided triage intake
-              </h1>
-              <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+              <p className="page-eyebrow">Decision Tree guidance layer</p>
+              <h1 className="page-title">Guided triage intake</h1>
+              <p className="page-copy">
                 Advice-only guidance with free-text symptom input. Book appointments only after a
                 recommendation is generated.
               </p>
             </div>
-            <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/70">
-              Direct booking
-            </div>
+            <div className="agent-chip">Direct booking</div>
           </div>
         )}
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div
-            className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
-            data-reveal
-          >
+          <div className="rounded-3xl agent-card p-6" data-reveal>
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-white">Guided inquiry</h2>
@@ -205,7 +190,7 @@ const TriagePage = ({
               </span>
             </div>
 
-            <div className="mt-4 h-[360px] space-y-3 overflow-y-auto rounded-2xl border border-white/10 bg-[color:var(--agent-surface-strong)] p-4">
+            <div className="mt-4 h-[360px] space-y-3 overflow-y-auto rounded-2xl agent-card-soft p-4">
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -229,11 +214,11 @@ const TriagePage = ({
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 placeholder="Enter free-text symptoms, duration, and context"
-                className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
+                className="agent-input flex-1"
               />
               <button
                 onClick={handleSend}
-                className="rounded-2xl bg-[color:var(--agent-accent)] px-4 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5"
+                className="agent-button"
               >
                 Send
               </button>
@@ -244,15 +229,12 @@ const TriagePage = ({
           </div>
 
           <div className="space-y-6">
-            <div
-              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
-              data-reveal
-            >
+            <div className="rounded-3xl agent-card p-6" data-reveal>
               <h3 className="text-lg font-semibold text-white">Decision Tree triage summary</h3>
               <p className="mt-2 text-xs text-white/60">
                 Generated from the guided inquiry using a MedQuad-informed decision tree.
               </p>
-              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="mt-4 rounded-2xl agent-card-soft p-4">
                 {isInputInvalid ? (
                   <p className="text-sm text-white/60">
                     Enter clear symptoms to receive a department recommendation.
@@ -308,10 +290,7 @@ const TriagePage = ({
               )}
             </div>
 
-            <div
-              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
-              data-reveal
-            >
+            <div className="rounded-3xl agent-card p-6" data-reveal>
               <h3 className="text-lg font-semibold text-white">Book appointment</h3>
               <p className="mt-2 text-xs text-white/60">
                 Appointments are booked after a recommendation is generated.
@@ -324,7 +303,7 @@ const TriagePage = ({
                   <input
                     value={patientName}
                     onChange={(event) => setPatientName(event.target.value)}
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
+                    className="agent-input mt-2"
                     placeholder="Jordan Lee"
                   />
                 </div>
@@ -335,19 +314,19 @@ const TriagePage = ({
                   <input
                     value={requestedTime}
                     onChange={(event) => setRequestedTime(event.target.value)}
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
+                    className="agent-input mt-2"
                     placeholder="2:30 PM"
                   />
                 </div>
                 <button
                   onClick={handleCreateReservation}
                   disabled={!canBook || !patientName.trim() || !requestedTime.trim()}
-                  className="w-full rounded-2xl bg-[color:var(--agent-accent)] px-4 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] transition enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
+                  className="agent-button w-full disabled:bg-white/10 disabled:text-white/40"
                 >
                   Book appointment
                 </button>
                 {latestReservation && (
-                  <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-xs text-emerald-200">
+                  <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/12 px-4 py-3 text-xs font-semibold text-emerald-200">
                     Latest booking: {latestReservation.id} · {latestReservation.department}
                   </div>
                 )}

@@ -1,9 +1,12 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { getDb } from './db.js'
+import { recordAuditEvent } from './audit.js'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me'
+const DEFAULT_JWT_SECRET = 'dev-secret-change-me'
+const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET
 const TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h'
+const MIN_JWT_SECRET_LENGTH = 32
 
 const ADMIN_USER = process.env.ADMIN_USER || 'admin'
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123'
@@ -16,7 +19,10 @@ const USER_PASS = process.env.USER_PASS || 'user123'
 
 const hashPassword = async (password) => bcrypt.hash(password, 12)
 const ALLOWED_ROLES = ['user', 'nurse', 'admin', 'system_admin']
+const USERNAME_MIN = 3
+const USERNAME_MAX = 64
 const PASSWORD_MIN = 8
+const PASSWORD_MAX = 72
 const LOCKOUT_ATTEMPTS = Number(process.env.AUTH_LOCKOUT_ATTEMPTS) || 5
 const LOCKOUT_MINUTES = Number(process.env.AUTH_LOCKOUT_MINUTES) || 15
 
@@ -31,13 +37,42 @@ const logAuthEvent = async (event) => {
   })
 }
 
+const safeAudit = async (event) => {
+  try {
+    await recordAuditEvent(event)
+  } catch (error) {
+    console.warn('Audit log failed', error)
+  }
+}
+
 const passwordMeetsPolicy = (password) => {
   if (typeof password !== 'string') return false
   if (password.length < PASSWORD_MIN) return false
+  if (password.length > PASSWORD_MAX) return false
   const hasUpper = /[A-Z]/.test(password)
   const hasLower = /[a-z]/.test(password)
   const hasNumber = /\d/.test(password)
   return hasUpper && hasLower && hasNumber
+}
+
+const usernameMeetsPolicy = (username) => {
+  if (typeof username !== 'string') return false
+  const cleaned = username.trim()
+  if (cleaned.length < USERNAME_MIN || cleaned.length > USERNAME_MAX) return false
+  const simpleHandle = /^[a-zA-Z0-9._-]+$/.test(cleaned)
+  const emailLike = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(cleaned)
+  return simpleHandle || emailLike
+}
+
+export const validateAuthConfig = () => {
+  const isProd = process.env.NODE_ENV === 'production'
+  if (!isProd) return
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === DEFAULT_JWT_SECRET) {
+    throw new Error('JWT_SECRET must be set to a strong value in production.')
+  }
+  if (process.env.JWT_SECRET.length < MIN_JWT_SECRET_LENGTH) {
+    throw new Error('JWT_SECRET must be at least 32 characters in production.')
+  }
 }
 
 export const seedUsers = async () => {
@@ -76,10 +111,24 @@ export const login = async (username, password, meta = {}) => {
       reason: 'not_found',
       ...meta,
     })
+    await safeAudit({
+      type: 'login_failed',
+      username,
+      success: false,
+      reason: 'not_found',
+      ...meta,
+    })
     throw new Error('Invalid username or password')
   }
   if (user.lockUntil && new Date(user.lockUntil).getTime() > Date.now()) {
     await logAuthEvent({
+      type: 'login_locked',
+      username,
+      success: false,
+      reason: 'locked',
+      ...meta,
+    })
+    await safeAudit({
       type: 'login_locked',
       username,
       success: false,
@@ -112,6 +161,13 @@ export const login = async (username, password, meta = {}) => {
       reason: shouldLock ? 'locked' : 'bad_password',
       ...meta,
     })
+    await safeAudit({
+      type: 'login_failed',
+      username,
+      success: false,
+      reason: shouldLock ? 'locked' : 'bad_password',
+      ...meta,
+    })
     throw new Error('Invalid username or password')
   }
 
@@ -133,6 +189,13 @@ export const login = async (username, password, meta = {}) => {
     success: true,
     ...meta,
   })
+  await safeAudit({
+    type: 'login_success',
+    username: user.username,
+    role: user.role,
+    success: true,
+    ...meta,
+  })
 
   return { token, user: { username: user.username, role: user.role } }
 }
@@ -144,13 +207,17 @@ export const registerUser = async ({
   fullName,
   email,
   organization,
+  meta = {},
 }) => {
   const cleanedUsername = typeof username === 'string' ? username.trim() : ''
   const cleanedPassword = typeof password === 'string' ? password.trim() : ''
-  const cleanedRole = typeof role === 'string' ? role.trim() : ''
+  const cleanedRole = typeof role === 'string' ? role.trim().toLowerCase() : ''
 
   if (!cleanedUsername || !cleanedPassword || !cleanedRole) {
     throw new Error('Missing required signup fields')
+  }
+  if (!usernameMeetsPolicy(cleanedUsername)) {
+    throw new Error('Username must be 3-32 characters and contain only letters, numbers, dot, dash, or underscore.')
   }
   if (!ALLOWED_ROLES.includes(cleanedRole)) {
     throw new Error('Invalid role')
@@ -184,6 +251,14 @@ export const registerUser = async ({
     username: cleanedUsername,
     role: cleanedRole,
     success: true,
+    ...meta,
+  })
+  await safeAudit({
+    type: 'signup_success',
+    username: cleanedUsername,
+    role: cleanedRole,
+    success: true,
+    ...meta,
   })
 
   const token = jwt.sign(

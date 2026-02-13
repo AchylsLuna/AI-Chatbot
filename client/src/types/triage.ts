@@ -55,23 +55,19 @@ export type AuthSession = {
 export type SignupDraft = {
   username: string
   password: string
-  role: UserRole
   fullName?: string
   email?: string
   organization?: string
 }
 
-export type AccessRequestDraft = {
+export type AccessRequest = {
+  id: string
   fullName: string
   email: string
   organization: string
   roleRequested: UserRole
-  notes?: string
-}
-
-export type AccessRequest = AccessRequestDraft & {
-  id: string
   status: 'pending' | 'approved' | 'rejected'
   createdAt: string
+  notes?: string
   reviewedAt?: string
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
+import type { AppPage } from '../types/navigation'
 import type { AuthSession, LedgerEntry, Reservation, ReservationStatus } from '../types/triage'
 import { formatRoleLabel } from '../utils/roles'
 
@@ -12,6 +13,7 @@ type DashboardProps = {
   onLogin: (username: string, password: string) => void
   onLogout: () => void
   apiReady: boolean
+  onNavigate?: (page: AppPage) => void
 }
 
 const statusStyles: Record<ReservationStatus, string> = {
@@ -36,6 +38,7 @@ const Dashboard = ({
   onLogin,
   onLogout,
   apiReady,
+  onNavigate,
 }: DashboardProps) => {
   const [selectedId, setSelectedId] = useState(reservations[0]?.id || '')
   const [username, setUsername] = useState('')
@@ -43,13 +46,6 @@ const Dashboard = ({
 
   const activeReservation = useMemo(() => {
     return reservations.find((reservation) => reservation.id === selectedId) ?? reservations[0]
-  }, [reservations, selectedId])
-
-  useEffect(() => {
-    if (!reservations.length) return
-    if (!reservations.some((reservation) => reservation.id === selectedId)) {
-      setSelectedId(reservations[0].id)
-    }
   }, [reservations, selectedId])
 
   const metrics = useMemo(() => {
@@ -100,11 +96,11 @@ const Dashboard = ({
   }, [])
 
   return (
-    <div className="min-h-screen pb-20">
-      <div className="mx-auto w-full max-w-6xl px-6 py-10">
+    <div className="page-shell">
+      <div className="page-wrap">
         <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
           <aside
-            className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-5 shadow-2xl shadow-black/40"
+            className="rounded-3xl agent-card p-5"
             data-reveal
           >
             <div className="flex items-start justify-between">
@@ -139,7 +135,7 @@ const Dashboard = ({
               ))}
             </div>
 
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-white/70">
+            <div className="mt-6 rounded-2xl agent-card-soft p-4 text-xs text-white/70">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">
                 Status tracker
               </p>
@@ -169,10 +165,10 @@ const Dashboard = ({
               </p>
             </div>
 
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-white/60">
+            <div className="mt-6 rounded-2xl agent-card-soft p-3 text-xs text-white/60">
               API status: {apiReady ? 'Connected' : 'Offline'}
             </div>
-            <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-white/60">
+            <div className="mt-3 rounded-2xl agent-card-soft p-3 text-xs text-white/60">
               {authUser
                 ? `${authUser.username} · ${formatRoleLabel(authUser.role)}`
                 : 'Not signed in'}
@@ -180,116 +176,103 @@ const Dashboard = ({
           </aside>
 
           <div>
-            <div
-              id="dashboard-overview"
-              className="mb-8 scroll-mt-24 flex flex-wrap items-center justify-between gap-4"
-              data-reveal
-            >
+            <div id="dashboard-overview" className="page-header scroll-mt-24" data-reveal>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                  Operations oversight layer
-                </p>
-                <h1 className="text-3xl font-display font-semibold text-white">
-                  Operations dashboard
-                </h1>
-                <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+                <p className="page-eyebrow">Operations oversight layer</p>
+                <h1 className="page-title">Operations dashboard</h1>
+                <p className="page-copy">
                   Monitor booked appointments, Decision Tree summaries, and blockchain logging status.
                 </p>
               </div>
-              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/70">
-                RBAC protected
-              </div>
+              <div className="agent-chip">RBAC protected</div>
             </div>
 
             <div
               id="dashboard-access"
-              className="mb-8 scroll-mt-24 rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              className="mb-8 scroll-mt-24 rounded-3xl agent-card p-6"
               data-reveal
             >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                Access control
-              </p>
-              <h2 className="text-lg font-semibold text-white">
-                {authUser ? `Signed in as ${authUser.username}` : 'Staff sign-in'}
-              </h2>
-              <p className="text-sm text-[color:var(--agent-muted)]">
-                {authUser
-                  ? `Role: ${formatRoleLabel(
-                      authUser.role
-                    )}. Viewing requires Nurse/Doctor, Admin, or System Admin access.`
-                  : 'Log in to review appointments and blockchain entries.'}
-              </p>
-            </div>
-            <div className="text-xs font-semibold text-white/60">
-              API status: {apiReady ? 'Connected' : 'Offline'}
-            </div>
-          </div>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                    Access control
+                  </p>
+                  <h2 className="text-lg font-semibold text-white">
+                    {authUser ? `Signed in as ${authUser.username}` : 'Staff sign-in'}
+                  </h2>
+                  <p className="text-sm text-[color:var(--agent-muted)]">
+                    {authUser
+                      ? `Role: ${formatRoleLabel(
+                          authUser.role
+                        )}. Viewing requires Nurse/Doctor, Admin, or System Admin access.`
+                      : 'Log in to review appointments and blockchain entries.'}
+                  </p>
+                </div>
+                <div className="text-xs font-semibold text-white/60">
+                  API status: {apiReady ? 'Connected' : 'Offline'}
+                </div>
+              </div>
 
-          {authUser ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                onClick={onLogout}
-                className="rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
-              >
-                Sign out
-              </button>
+              {authUser ? (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button onClick={onLogout} className="agent-button-ghost">
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <form
+                  className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    onLogin(username, password)
+                  }}
+                >
+                  <input
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    placeholder="Username"
+                    className="agent-input"
+                  />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Password"
+                    className="agent-input"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isAuthLoading}
+                    className="agent-button disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {isAuthLoading ? 'Signing in...' : 'Sign in'}
+                  </button>
+                </form>
+              )}
+              {authError && (
+                <p className="mt-3 text-xs font-semibold text-rose-300">{authError}</p>
+              )}
+              {!authUser && (
+                <p className="mt-3 text-xs text-white/50">
+                  Demo accounts are configured in the API server environment variables.
+                </p>
+              )}
             </div>
-          ) : (
-            <form
-              className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]"
-              onSubmit={(event) => {
-                event.preventDefault()
-                onLogin(username, password)
-              }}
-            >
-              <input
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                placeholder="Username"
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Password"
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={isAuthLoading}
-                className="rounded-xl bg-[color:var(--agent-accent)] px-4 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-emerald-200"
-              >
-                {isAuthLoading ? 'Signing in...' : 'Sign in'}
-              </button>
-            </form>
-          )}
-          {authError && (
-            <p className="mt-3 text-xs font-semibold text-rose-300">{authError}</p>
-          )}
-          {!authUser && (
-            <p className="mt-3 text-xs text-white/50">
-              Demo accounts are configured in the API server environment variables.
-            </p>
-          )}
-        </div>
 
         <div className="grid gap-4 sm:grid-cols-4">
-          <div className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface)] p-4 shadow-xl shadow-black/30" data-reveal>
+          <div className="rounded-2xl agent-card p-4" data-reveal>
             <p className="text-xs text-white/60">Total appointments</p>
             <p className="mt-2 text-2xl font-semibold text-white">{metrics.total}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface)] p-4 shadow-xl shadow-black/30" data-reveal style={{ '--reveal-delay': '80ms' } as CSSProperties}>
+          <div className="rounded-2xl agent-card p-4" data-reveal style={{ '--reveal-delay': '80ms' } as CSSProperties}>
             <p className="text-xs text-white/60">Booked</p>
             <p className="mt-2 text-2xl font-semibold text-amber-200">{metrics.booked}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface)] p-4 shadow-xl shadow-black/30" data-reveal style={{ '--reveal-delay': '160ms' } as CSSProperties}>
+          <div className="rounded-2xl agent-card p-4" data-reveal style={{ '--reveal-delay': '160ms' } as CSSProperties}>
             <p className="text-xs text-white/60">Recorded</p>
             <p className="mt-2 text-2xl font-semibold text-emerald-200">{metrics.recorded}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface)] p-4 shadow-xl shadow-black/30" data-reveal style={{ '--reveal-delay': '240ms' } as CSSProperties}>
+          <div className="rounded-2xl agent-card p-4" data-reveal style={{ '--reveal-delay': '240ms' } as CSSProperties}>
             <p className="text-xs text-white/60">Failed writes</p>
             <p className="mt-2 text-2xl font-semibold text-rose-200">{metrics.failed}</p>
           </div>
@@ -299,7 +282,7 @@ const Dashboard = ({
           <div className="space-y-6">
             <div
               id="dashboard-appointments"
-              className="scroll-mt-24 rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              className="scroll-mt-24 rounded-3xl agent-card p-6"
               data-reveal
             >
               <div className="flex items-center justify-between">
@@ -367,7 +350,7 @@ const Dashboard = ({
 
             <div
               id="dashboard-ledger"
-              className="scroll-mt-24 rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              className="scroll-mt-24 rounded-3xl agent-card p-6"
               data-reveal
             >
               <div className="flex items-center justify-between">
@@ -389,7 +372,7 @@ const Dashboard = ({
                   ledgerEntries.map((entry) => (
                     <div
                       key={entry.id}
-                      className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface-strong)] p-4"
+                      className="rounded-2xl agent-card-soft p-4"
                       data-reveal
                     >
                       <div className="flex items-center justify-between text-xs text-white/60">
@@ -423,8 +406,21 @@ const Dashboard = ({
           </div>
 
           <div className="space-y-6">
+            <div className="rounded-3xl agent-card p-6" data-reveal>
+              <h2 className="text-lg font-semibold text-white">Book appointment</h2>
+              <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+                Create a new appointment from the guided triage flow.
+              </p>
+              <button
+                onClick={() => onNavigate?.('triage')}
+                className="agent-button mt-4 w-full"
+              >
+                {reservations.length > 0 ? 'Book another appointment' : 'Book appointment'}
+              </button>
+            </div>
+
             <div
-              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              className="rounded-3xl agent-card p-6"
               data-reveal
             >
               <h2 className="text-lg font-semibold text-white">Appointment details</h2>
@@ -480,7 +476,7 @@ const Dashboard = ({
             </div>
 
             <div
-              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              className="rounded-3xl agent-card p-6"
               data-reveal
             >
               <h2 className="text-lg font-semibold text-white">HITL audit logic</h2>
@@ -501,7 +497,7 @@ const Dashboard = ({
             </div>
 
             <div
-              className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 shadow-2xl shadow-black/40"
+              className="rounded-3xl agent-card p-6"
               data-reveal
             >
               <h2 className="text-lg font-semibold text-white">Tech stack</h2>
@@ -523,10 +519,10 @@ const Dashboard = ({
             </div>
           </div>
         </div>
+        </div>
+      </div>
       </div>
     </div>
-  </div>
-  </div>
   )
 }
 

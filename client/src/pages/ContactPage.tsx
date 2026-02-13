@@ -1,151 +1,161 @@
-import { useState } from 'react';
-import type { CSSProperties } from 'react';
+import { useState } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 
-const revealDelay = (index: number, base = 80): CSSProperties =>
-  ({
-    '--reveal-delay': `${index * base}ms`,
-  } as CSSProperties);
+const revealDelay = (ms: number): CSSProperties =>
+  ({ '--reveal-delay': `${ms}ms` } as CSSProperties)
+
+const teamMembers = [
+  { name: 'Dr. Sarah Mitchell', role: 'Chief Medical Officer' },
+  { name: 'James Chen', role: 'Lead AI Architect' },
+  { name: 'Maria Rodriguez', role: 'Blockchain Engineer' },
+  { name: 'David Park', role: 'Product Manager' },
+  { name: 'Emily Watson', role: 'UX Research Lead' },
+]
+
+const contactChannels = [
+  { label: 'Support', value: 'support@pulseledger.health' },
+  { label: 'Clinical partnerships', value: 'partners@pulseledger.health' },
+  { label: 'Response time', value: 'Within 1 business day' },
+]
 
 const ContactPage = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    message: ''
-  });
+    message: '',
+  })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Handle form submission
-    console.log('Form submitted:', formData);
-  };
+  const [submitted, setSubmitted] = useState(false)
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const teamMembers = [
-    {
-      name: 'Dr. Sarah Mitchell',
-      role: 'Chief Medical Officer'
-    },
-    {
-      name: 'James Chen',
-      role: 'Lead AI Architect'
-    },
-    {
-      name: 'Maria Rodriguez',
-      role: 'Blockchain Engineer'
-    },
-    {
-      name: 'David Park',
-      role: 'Product Manager'
-    },
-    {
-      name: 'Emily Watson',
-      role: 'UX Research Lead'
-    }
-  ];
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    setSubmitted(true)
+  }
 
   return (
-    <div className="min-h-screen py-12">
-      <div className="mx-auto max-w-7xl px-6">
-        {/* Info Banner */}
-        <div className="mb-12 rounded-2xl border border-white/10 bg-white/5 p-6" data-reveal>
-          <p className="text-white/70">
-            The Pulse Ledger is evolving rapidly. Share your ideas, report an issue, or request early access to our clinical partner program.
+    <div className="page-shell">
+      <div className="page-wrap">
+        <div className="page-header" data-reveal>
+          <div>
+            <p className="page-eyebrow">Contact and support</p>
+            <h1 className="page-title">Talk to the AI Health Care team</h1>
+            <p className="page-copy">
+              Share product feedback, report a workflow issue, or ask about clinical onboarding.
+            </p>
+          </div>
+          <div className="agent-chip">Human support</div>
+        </div>
+
+        <div className="mb-8 rounded-3xl agent-card-soft p-5" data-reveal style={revealDelay(60)}>
+          <p className="text-sm text-[color:var(--agent-muted)]">
+            This is a UI sandbox for intake and triage operations. Messages in this page stay in
+            the local client for now.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Get in Touch Form */}
-          <div data-reveal>
-            <h2 className="text-3xl font-display font-semibold text-white mb-8">Get in Touch</h2>
-            
-            <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <section className="rounded-3xl agent-card p-6" data-reveal style={revealDelay(100)}>
+            <h2 className="text-lg font-semibold text-white">Get in touch</h2>
+            <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+              Include your role, deployment context, and the page where the issue occurs.
+            </p>
+
+            {submitted && (
+              <div className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-400/12 p-4 text-sm font-semibold text-emerald-200">
+                Message received. The team will follow up by email.
+              </div>
+            )}
+
+            <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
               <div>
-                <label htmlFor="name" className="block text-sm font-semibold text-white/70 mb-2">
-                  Name
+                <label htmlFor="contact-name" className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">
+                  Full name
                 </label>
                 <input
-                  type="text"
-                  id="name"
+                  id="contact-name"
                   name="name"
                   value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Your full name"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition"
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, name: event.target.value }))
+                  }
+                  className="agent-input mt-2"
+                  placeholder="Jordan Lee"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-semibold text-white/70 mb-2">
-                  Email
+                <label htmlFor="contact-email" className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">
+                  Work email
                 </label>
                 <input
+                  id="contact-email"
                   type="email"
-                  id="email"
                   name="email"
                   value={formData.email}
-                  onChange={handleChange}
-                  placeholder="you@example.com"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition"
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, email: event.target.value }))
+                  }
+                  className="agent-input mt-2"
+                  placeholder="you@hospital.org"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="message" className="block text-sm font-semibold text-white/70 mb-2">
+                <label htmlFor="contact-message" className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">
                   Message
                 </label>
                 <textarea
-                  id="message"
+                  id="contact-message"
                   name="message"
                   value={formData.message}
-                  onChange={handleChange}
-                  placeholder="How can we help?"
-                  rows={6}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition resize-none"
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, message: event.target.value }))
+                  }
+                  className="agent-textarea mt-2 min-h-[140px] resize-none"
+                  placeholder="Share context, expected behavior, and what happened instead."
                   required
                 />
               </div>
 
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-[color:var(--agent-accent)] px-6 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5 shadow-lg shadow-black/30"
-              >
-                Send Message
+              <button type="submit" className="agent-button w-full">
+                Send message
               </button>
             </form>
-          </div>
+          </section>
 
-          {/* Team Health Care */}
-          <div data-reveal>
-            <h2 className="text-3xl font-display font-semibold text-white mb-8">Team Health Care</h2>
-            
-            <div className="space-y-4">
-              {teamMembers.map((member, index) => (
-                <div
-                  key={index}
-                  className="rounded-2xl border border-white/10 bg-[color:var(--agent-surface)] p-4"
-                  data-reveal
-                  style={revealDelay(index)}
-                >
-                  <h3 className="text-lg font-semibold text-white mb-1">
-                    {member.name}
-                  </h3>
-                  <p className="text-white/60">{member.role}</p>
-                </div>
-              ))}
-            </div>
+          <div className="space-y-6">
+            <section className="rounded-3xl agent-card p-6" data-reveal style={revealDelay(140)}>
+              <h2 className="text-lg font-semibold text-white">Contact channels</h2>
+              <div className="mt-4 space-y-3">
+                {contactChannels.map((item) => (
+                  <div key={item.label} className="rounded-2xl agent-card-soft p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">
+                      {item.label}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-white">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-3xl agent-card p-6" data-reveal style={revealDelay(180)}>
+              <h2 className="text-lg font-semibold text-white">Core team</h2>
+              <div className="mt-4 space-y-3">
+                {teamMembers.map((member) => (
+                  <div key={member.name} className="rounded-2xl agent-card-soft p-4">
+                    <p className="text-sm font-semibold text-white">{member.name}</p>
+                    <p className="mt-1 text-xs text-white/60">{member.role}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
           </div>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ContactPage;
+export default ContactPage

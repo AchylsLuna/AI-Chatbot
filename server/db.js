@@ -16,6 +16,7 @@ export const connectDb = async () => {
     database.collection('reservations').createIndex({ id: 1 }, { unique: true }),
     database.collection('ledger').createIndex({ reservationId: 1 }, { unique: true }),
     database.collection('users').createIndex({ username: 1 }, { unique: true }),
+    database.collection('audit_logs').createIndex({ createdAt: -1 }),
   ])
 
   return database

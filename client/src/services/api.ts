@@ -1,7 +1,6 @@
 import type {
   AuthSession,
   AccessRequest,
-  AccessRequestDraft,
   LedgerEntry,
   Reservation,
   ReservationDraft,
@@ -92,17 +91,6 @@ export const api = {
       signal,
     })
     return handleResponse<{ summary: TriageSummary; elapsedMs: number }>(response)
-  },
-  createAccessRequest: async (
-    draft: AccessRequestDraft
-  ): Promise<AccessRequest> => {
-    const response = await fetch(`${API_BASE}/access-requests`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(draft),
-    })
-    const data = await handleResponse<{ request: AccessRequest }>(response)
-    return data.request
   },
   getAccessRequests: async (): Promise<AccessRequest[]> => {
     const data = await handleResponse<{ requests: AccessRequest[] }>(

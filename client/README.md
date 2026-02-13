@@ -1,4 +1,4 @@
-# AI Healthcare Triage Chatbot
+# AI Health Care
 
 A direct-booking outpatient triage concept that pairs AI guidance with immutable blockchain logging. The chatbot provides advice-only guidance, recommends a department, and books an appointment with a hash-only on-chain audit trail.
 
@@ -100,21 +100,9 @@ Create these values in server/.env (copy from server/.env.example).
 If the Ethereum variables are not provided, blockchain writes are marked as skipped and the appointment is still stored locally with a hash entry.
 If `CHAIN_STRICT=true`, bookings will fail unless the blockchain write confirms.
 
-### Local blockchain (Hardhat or Ganache)
+### Local blockchain
 
-1. Start a local chain (Hardhat example):
-
-```
-npx hardhat node
-```
-
-2. Deploy the contract:
-
-```
-npx hardhat run scripts/deploy.js --network localhost
-```
-
-3. Set environment variables:
+Set environment variables for your existing blockchain node and deployed contract:
 
 ```
 WEB3_RPC_URL=http://127.0.0.1:8545

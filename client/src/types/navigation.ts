@@ -1,10 +1,11 @@
 export type AppPage =
   | 'landing'
-  | 'access'
   | 'triage'
   | 'dashboard'
   | 'admin'
+  | 'admin_login'
   | 'login'
+  | 'forgot_password'
   | 'signup'
   | 'patient'
   | 'contact'
