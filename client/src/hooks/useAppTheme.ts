@@ -6,7 +6,7 @@ const getInitialTheme = (): ThemeMode => {
   if (typeof window === 'undefined') return 'dark'
   const stored = window.localStorage.getItem('pulse-ledger-theme')
   if (stored === 'light' || stored === 'dark') return stored
-  return 'light'
+  return 'dark'
 }
 
 const useAppTheme = () => {

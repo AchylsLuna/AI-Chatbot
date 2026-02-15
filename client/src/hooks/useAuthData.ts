@@ -2,8 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { requiresAuth } from '../config/accessControl'
 import { fallbackLedger, fallbackReservations } from '../config/fallbackData'
 import { api, setAuthToken } from '../services/api'
+import useSecureHealthStore from '../store/useSecureHealthStore'
 import type { AppPage } from '../types/navigation'
-import type { AuthSession, LedgerEntry, Reservation, ReservationDraft } from '../types/triage'
+import type {
+  AppointmentUpdateDraft,
+  AuthSession,
+  LedgerEntry,
+  LoginOtpChallenge,
+  Reservation,
+  ReservationDraft,
+} from '../types/triage'
+import { sanitizeText } from '../utils/sanitize'
 import { getDefaultPageForRole } from '../utils/roles'
 import type { NavigateToPage } from './useAppRouting'
 
@@ -13,15 +22,25 @@ type UseAuthDataArgs = {
 }
 
 const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
-  const [reservations, setReservations] = useState<Reservation[]>([])
-  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
-  const [latestReservationId, setLatestReservationId] = useState<string | null>(null)
+  const reservations = useSecureHealthStore((state) => state.reservations)
+  const ledgerEntries = useSecureHealthStore((state) => state.ledgerEntries)
+  const latestReservationId = useSecureHealthStore((state) => state.latestReservationId)
+  const setStoreReservations = useSecureHealthStore((state) => state.setReservations)
+  const setStoreLedgerEntries = useSecureHealthStore((state) => state.setLedgerEntries)
+  const setStoreLatestReservationId = useSecureHealthStore((state) => state.setLatestReservationId)
+  const prependReservation = useSecureHealthStore((state) => state.prependReservation)
+  const replaceReservation = useSecureHealthStore((state) => state.replaceReservation)
+  const prependLedgerEntry = useSecureHealthStore((state) => state.prependLedgerEntry)
+  const clearSensitiveData = useSecureHealthStore((state) => state.clearSensitiveData)
   const [apiReady, setApiReady] = useState(false)
   const [authToken, setAuthTokenState] = useState<string | null>(null)
   const [authUser, setAuthUser] = useState<AuthSession['user'] | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const [isAuthLoading, setIsAuthLoading] = useState(false)
   const [postLoginPage, setPostLoginPage] = useState<AppPage | null>(null)
+  const [pendingOtpChallenge, setPendingOtpChallenge] = useState<
+    (LoginOtpChallenge & { targetPage?: AppPage | null }) | null
+  >(null)
 
   const latestReservation = useMemo(
     () =>
@@ -36,6 +55,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   }, [authToken])
 
   useEffect(() => {
+    if (!authToken) {
+      clearSensitiveData()
+    }
+  }, [authToken, clearSensitiveData])
+
+  useEffect(() => {
     const storedToken = localStorage.getItem('pulse-ledger-token')
     if (storedToken) {
       setAuthTokenState(storedToken)
@@ -48,9 +73,10 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     if (!needsAuth) return
     if (authUser) return
     if (authToken && isAuthLoading) return
-    if (currentPage !== 'login' && currentPage !== 'admin_login') {
+    if (currentPage !== 'login' && currentPage !== 'admin_login' && currentPage !== 'otp') {
       setPostLoginPage(currentPage)
-      navigateToPage(currentPage === 'admin' ? 'admin_login' : 'login', { replace: true })
+      const needsAdminLogin = currentPage === 'admin' || currentPage === 'doctor_dashboard'
+      navigateToPage(needsAdminLogin ? 'admin_login' : 'login', { replace: true })
     }
   }, [authToken, authUser, currentPage, isAuthLoading, navigateToPage])
 
@@ -61,15 +87,22 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       if (!authToken) return
       setIsAuthLoading(true)
       try {
-        const [user, reservationData, ledgerData] = await Promise.all([
-          api.getSession(),
-          api.getReservations(),
-          api.getLedger(),
-        ])
+        const user = await api.getSession()
+        const reservationData = await api.getAppointments()
+        let ledgerData: LedgerEntry[] = []
+
+        if (user.role === 'admin' || user.role === 'system_admin') {
+          try {
+            ledgerData = await api.getLedger()
+          } catch (ledgerError) {
+            console.warn('Ledger unavailable for current session.', ledgerError)
+          }
+        }
+
         if (!isMounted) return
         setAuthUser(user)
-        setReservations(reservationData)
-        setLedgerEntries(ledgerData)
+        setStoreReservations(reservationData)
+        setStoreLedgerEntries(ledgerData)
         setApiReady(true)
       } catch (error) {
         console.error('API unavailable or unauthorized, using fallback data.', error)
@@ -77,10 +110,11 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
         if (message.match(/invalid|expired|missing authorization|forbidden/i)) {
           setAuthTokenState(null)
           localStorage.removeItem('pulse-ledger-token')
+          clearSensitiveData()
         }
         if (isMounted) {
-          setReservations(fallbackReservations)
-          setLedgerEntries(fallbackLedger)
+          setStoreReservations(fallbackReservations)
+          setStoreLedgerEntries(fallbackLedger)
         }
       } finally {
         if (isMounted) setIsAuthLoading(false)
@@ -92,62 +126,107 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     return () => {
       isMounted = false
     }
-  }, [authToken])
+  }, [authToken, clearSensitiveData, setStoreLedgerEntries, setStoreReservations])
 
   const handleCreateReservation = async (draft: ReservationDraft) => {
     try {
       const { reservation, ledgerEntry } = await api.createReservation(draft)
-      setReservations((prev) => [reservation, ...prev])
-      setLatestReservationId(reservation.id)
-      setLedgerEntries((prev) => [ledgerEntry, ...prev])
+      prependReservation(reservation)
+      setStoreLatestReservationId(reservation.id)
+      prependLedgerEntry(ledgerEntry)
       setApiReady(true)
     } catch (error) {
       console.error('Failed to create reservation', error)
       const fallback: Reservation = {
         id: `RES-${Math.floor(1000 + Math.random() * 9000)}`,
-        patientName: draft.patientName,
-        symptoms: draft.symptoms,
-        department: draft.summary.department,
+        patientName: sanitizeText(draft.patientName),
+        symptoms: sanitizeText(draft.symptoms),
+        department: sanitizeText(draft.summary.department),
         priority: draft.summary.priority,
         confidence: draft.summary.confidence,
-        requestedTime: draft.requestedTime,
+        requestedTime: sanitizeText(draft.requestedTime),
         createdAt: new Date().toISOString(),
         status: 'Booked',
-        summary: draft.summary.summary,
+        summary: sanitizeText(draft.summary.summary),
       }
-      setReservations((prev) => [fallback, ...prev])
-      setLatestReservationId(fallback.id)
+      prependReservation(fallback)
+      setStoreLatestReservationId(fallback.id)
     }
+  }
+
+  const handleUpdateReservation = async (reservationId: string, updates: AppointmentUpdateDraft) => {
+    const updated = await api.updateAppointment(reservationId, updates)
+    replaceReservation(updated)
+    return updated
   }
 
   const handleLogin = async (username: string, password: string, targetPage?: AppPage) => {
     setAuthError(null)
     setIsAuthLoading(true)
     try {
-      const session = await api.login(username, password)
+      const challenge = await api.requestOtpChallenge(username, password)
+      const resolvedTargetPage = targetPage ?? postLoginPage ?? null
+      setPendingOtpChallenge({ ...challenge, targetPage: resolvedTargetPage })
+      setPostLoginPage(null)
+      navigateToPage('otp')
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Login failed')
+    } finally {
+      setIsAuthLoading(false)
+    }
+  }
+
+  const handleVerifyOtp = async (code: string) => {
+    if (!pendingOtpChallenge) {
+      setAuthError('No active OTP challenge. Start login again.')
+      navigateToPage('login')
+      return
+    }
+
+    setAuthError(null)
+    setIsAuthLoading(true)
+    try {
+      const session = await api.verifyOtpLogin(pendingOtpChallenge.challengeId, code)
       setAuthTokenState(session.token)
       setAuthUser(session.user)
       localStorage.setItem('pulse-ledger-token', session.token)
       setApiReady(true)
-      const defaultPageByRole = getDefaultPageForRole(session.user.role)
-      const resolvedTargetPage = targetPage ?? postLoginPage ?? defaultPageByRole
-      setPostLoginPage(null)
-      const isAdminTarget = resolvedTargetPage === 'admin'
-      const hasAdminRole =
-        session.user.role === 'admin' || session.user.role === 'system_admin'
 
-      if (isAdminTarget && !hasAdminRole) {
-        setAuthError('Admin or System Admin account required for Admin Dashboard.')
+      const defaultPageByRole = getDefaultPageForRole(session.user.role)
+      const resolvedTargetPage =
+        pendingOtpChallenge.targetPage ?? postLoginPage ?? defaultPageByRole
+      const isAdminDashboardTarget = resolvedTargetPage === 'admin'
+      const isDoctorDashboardTarget = resolvedTargetPage === 'doctor_dashboard'
+      const hasAdminDashboardRole =
+        session.user.role === 'admin' || session.user.role === 'system_admin'
+      const hasAdminLoginRole = hasAdminDashboardRole || session.user.role === 'nurse'
+
+      setPendingOtpChallenge(null)
+      setPostLoginPage(null)
+
+      if (isAdminDashboardTarget && !hasAdminDashboardRole) {
+        setAuthError('Super Admin or Admin account required for Admin Dashboard.')
+        navigateToPage('admin_login')
+        return
+      }
+
+      if (isDoctorDashboardTarget && !hasAdminLoginRole) {
+        setAuthError('Super Admin, Admin, or Nurse account required for Doctor Dashboard.')
         navigateToPage('admin_login')
         return
       }
 
       navigateToPage(resolvedTargetPage)
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Login failed')
+      setAuthError(error instanceof Error ? error.message : 'OTP verification failed')
     } finally {
       setIsAuthLoading(false)
     }
+  }
+
+  const handleCancelOtp = () => {
+    setPendingOtpChallenge(null)
+    navigateToPage('login')
   }
 
   const handleSignupSuccess = (session: AuthSession) => {
@@ -164,9 +243,8 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setAuthUser(null)
     setAuthError(null)
     localStorage.removeItem('pulse-ledger-token')
-    setReservations([])
-    setLedgerEntries([])
-    setLatestReservationId(null)
+    clearSensitiveData()
+    setPendingOtpChallenge(null)
     setApiReady(false)
     setPostLoginPage(null)
     navigateToPage('landing')
@@ -184,8 +262,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     reservations,
     ledgerEntries,
     latestReservation,
+    pendingOtpChallenge,
     handleCreateReservation,
+    handleUpdateReservation,
     handleLogin,
+    handleVerifyOtp,
+    handleCancelOtp,
     handleSignupSuccess,
     handleLogout,
   }

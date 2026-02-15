@@ -30,7 +30,14 @@ const LoginPage = ({
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const homePage: AppPage = getDefaultPageForRole(authUser?.role)
-  const homeLabel = homePage === 'triage' ? 'Go to triage' : 'Go to dashboard'
+  const homeLabel =
+    homePage === 'appointments'
+      ? 'Go to appointments'
+      : homePage === 'doctor_dashboard'
+        ? "Go to doctor's dashboard"
+        : homePage === 'triage'
+          ? 'Go to triage'
+          : 'Go to dashboard'
 
   return (
     <AuthSplitLayout>
@@ -55,7 +62,7 @@ const LoginPage = ({
         </button>
 
         <h2 className="text-2xl font-semibold text-white">Welcome back</h2>
-        <p className="mt-2 text-sm text-white/60">Sign in to continue your health journey</p>
+        <p className="mt-2 text-sm text-white/60">Sign in, then verify OTP to continue.</p>
       </div>
 
       {authUser ? (
@@ -187,7 +194,7 @@ const LoginPage = ({
           </div>
 
           <button type="submit" disabled={isAuthLoading} className="agent-button w-full disabled:cursor-not-allowed">
-            {isAuthLoading ? 'Signing in...' : 'Sign In'}
+            {isAuthLoading ? 'Requesting OTP...' : 'Continue to OTP'}
           </button>
 
           {(formError || authError) && (

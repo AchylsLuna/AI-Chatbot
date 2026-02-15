@@ -10,21 +10,47 @@ type SignupPageProps = {
   onGoBack?: () => void
 }
 
+const meetsPasswordPolicy = (value: string) => {
+  if (value.length < 8) return false
+  if (!/[A-Z]/.test(value)) return false
+  if (!/[a-z]/.test(value)) return false
+  if (!/\d/.test(value)) return false
+  return true
+}
+
+const getPasswordStrength = (value: string): { label: 'Weak' | 'Medium' | 'Strong'; score: 1 | 2 | 3 } => {
+  let points = 0
+  if (value.length >= 8) points += 1
+  if (/[a-z]/.test(value)) points += 1
+  if (/[A-Z]/.test(value)) points += 1
+  if (/\d/.test(value)) points += 1
+  if (/[^A-Za-z0-9]/.test(value)) points += 1
+
+  if (points >= 4) return { label: 'Strong', score: 3 }
+  if (points >= 3) return { label: 'Medium', score: 2 }
+  return { label: 'Weak', score: 1 }
+}
+
 const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) => {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [signupSession, setSignupSession] = useState<AuthSession | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const passwordStrength = getPasswordStrength(password)
+  const passwordsMatch = password.length > 0 && confirmPassword.length > 0 && password === confirmPassword
 
   return (
     <AuthSplitLayout>
       {signupSession ? (
         <div className="space-y-4">
           <h2 className="text-2xl font-semibold text-white">Account created</h2>
-          <p className="text-sm text-white/60">Your account is ready. You can now sign in.</p>
+          <p className="text-sm text-white/60">
+            Your account is ready. Sign in and verify OTP to continue.
+          </p>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
             <p>Username: {signupSession.user.username}</p>
           </div>
@@ -39,6 +65,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                 setFullName('')
                 setEmail('')
                 setPassword('')
+                setConfirmPassword('')
               }}
               className="agent-button-ghost"
             >
@@ -74,18 +101,33 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             className="mt-6 space-y-4"
             onSubmit={async (event) => {
               event.preventDefault()
-              if (!fullName.trim() || !email.trim() || !password.trim()) {
-                setSubmitError('Please enter your full name, email, and password.')
+              const cleanedFullName = fullName.trim()
+              const cleanedEmail = email.trim()
+              const cleanedPassword = password.trim()
+              const cleanedConfirmPassword = confirmPassword.trim()
+
+              if (!cleanedFullName || !cleanedEmail || !cleanedPassword || !cleanedConfirmPassword) {
+                setSubmitError('Please complete all required fields.')
+                return
+              }
+              if (!meetsPasswordPolicy(cleanedPassword)) {
+                setSubmitError(
+                  'Use a stronger password: at least 8 characters with uppercase, lowercase, and number.'
+                )
+                return
+              }
+              if (cleanedPassword !== cleanedConfirmPassword) {
+                setSubmitError('Password and confirm password do not match.')
                 return
               }
               setIsSubmitting(true)
               setSubmitError(null)
               try {
                 const payload: SignupDraft = {
-                  username: email.trim(),
-                  password: password.trim(),
-                  fullName: fullName.trim(),
-                  email: email.trim(),
+                  username: cleanedEmail,
+                  password: cleanedPassword,
+                  fullName: cleanedFullName,
+                  email: cleanedEmail,
                 }
                 const session = await api.signup(payload)
                 setSignupSession(session)
@@ -164,7 +206,10 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  if (submitError) setSubmitError(null)
+                }}
                 placeholder="Password"
                 className="agent-input agent-input-icon agent-input-icon-right"
               />
@@ -205,6 +250,76 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                 )}
               </button>
             </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-white/60">Password strength</span>
+                <span
+                  className={`font-semibold ${
+                    passwordStrength.label === 'Strong'
+                      ? 'text-emerald-300'
+                      : passwordStrength.label === 'Medium'
+                        ? 'text-amber-300'
+                        : 'text-rose-300'
+                  }`}
+                >
+                  {passwordStrength.label}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 2, 3].map((bar) => (
+                  <div
+                    key={bar}
+                    className={`h-1.5 rounded-full ${
+                      passwordStrength.score >= bar
+                        ? passwordStrength.label === 'Strong'
+                          ? 'bg-emerald-400'
+                          : passwordStrength.label === 'Medium'
+                            ? 'bg-amber-400'
+                            : 'bg-rose-400'
+                        : 'bg-white/10'
+                    }`}
+                  />
+                ))}
+              </div>
+              <p className="text-[11px] text-white/50">
+                Use at least 8 characters with uppercase, lowercase, and number.
+              </p>
+            </div>
+
+            <div className="relative">
+              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-white/40">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="4" y="10" width="16" height="10" rx="2" />
+                  <path d="M8 10V7a4 4 0 018 0v3" />
+                  <path d="M9 15l2 2 4-4" />
+                </svg>
+              </span>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(event) => {
+                  setConfirmPassword(event.target.value)
+                  if (submitError) setSubmitError(null)
+                }}
+                placeholder="Confirm password"
+                className="agent-input agent-input-icon"
+              />
+            </div>
+
+            {confirmPassword.length > 0 && (
+              <p className={`text-xs font-semibold ${passwordsMatch ? 'text-emerald-300' : 'text-rose-300'}`}>
+                {passwordsMatch ? 'Passwords match.' : 'Passwords do not match.'}
+              </p>
+            )}
 
             <button type="submit" disabled={isSubmitting} className="agent-button w-full disabled:cursor-not-allowed">
               {isSubmitting ? 'Creating...' : 'Create Account'}

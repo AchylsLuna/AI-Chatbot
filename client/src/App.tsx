@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react'
+import GlobalAssistantChat from './components/chat/GlobalAssistantChat'
 import AppHeader from './components/layout/AppHeader'
+import WorkspaceHeader from './components/layout/WorkspaceHeader'
+import AppErrorBoundary from './components/states/AppErrorBoundary'
 import { AccessDeniedCard, AuthLoadingCard } from './components/states/RouteGuardCards'
 import { canAccessPage } from './config/accessControl'
 import useAuthData from './hooks/useAuthData'
@@ -8,10 +11,13 @@ import useScrollReveal from './hooks/useScrollReveal'
 import useAppTheme from './hooks/useAppTheme'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminLoginPage from './pages/AdminLoginPage'
+import AppointmentsPage from './pages/AppointmentsPage'
 import Dashboard from './pages/Dashboard'
+import DoctorDashboardPage from './pages/DoctorDashboardPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
+import OtpPage from './pages/OtpPage'
 import SignupPage from './pages/SignupPage'
 import TriagePage from './pages/TriagePage'
 import type { AppPage } from './types/navigation'
@@ -27,7 +33,7 @@ type DashboardWorkspacePage =
   | 'security'
   | 'user_management'
 
-type ProtectedPage = 'triage' | DashboardWorkspacePage
+type ProtectedPage = 'triage' | 'appointments' | 'doctor_dashboard' | DashboardWorkspacePage
 
 const dashboardWorkspacePages: DashboardWorkspacePage[] = [
   'dashboard',
@@ -54,8 +60,12 @@ function App() {
     reservations,
     ledgerEntries,
     latestReservation,
+    pendingOtpChallenge,
     handleCreateReservation,
+    handleUpdateReservation,
     handleLogin,
+    handleVerifyOtp,
+    handleCancelOtp,
     handleSignupSuccess,
     handleLogout,
   } = useAuthData({ currentPage, navigateToPage })
@@ -63,8 +73,13 @@ function App() {
     dashboardWorkspacePages.includes(page as DashboardWorkspacePage)
 
   const isProtectedRoute =
-    currentPage === 'triage' || isDashboardWorkspaceRoute(currentPage) || currentPage === 'admin'
+    currentPage === 'triage' ||
+    currentPage === 'appointments' ||
+    currentPage === 'doctor_dashboard' ||
+    isDashboardWorkspaceRoute(currentPage) ||
+    currentPage === 'admin'
   const showPublicHeader = !isLanding && !isAuthPage && !authUser && !isProtectedRoute
+  const showWorkspaceHeader = Boolean(authUser) && !isAuthPage && currentPage !== 'landing'
 
   useScrollReveal(currentPage)
 
@@ -96,6 +111,17 @@ function App() {
     />
   )
 
+  const otpPage = (
+    <OtpPage
+      challenge={pendingOtpChallenge}
+      authError={authError}
+      isAuthLoading={isAuthLoading}
+      onVerifyOtp={handleVerifyOtp}
+      onCancelOtp={handleCancelOtp}
+      onNavigate={navigateToPage}
+    />
+  )
+
   const renderProtectedPage = (
     page: ProtectedPage,
     options: {
@@ -110,7 +136,7 @@ function App() {
     }
 
     if (!authUser) {
-      return loginPage
+      return page === 'doctor_dashboard' ? adminLoginPage : loginPage
     }
 
     if (!canAccessPage(page, authUser.role)) {
@@ -118,7 +144,9 @@ function App() {
         <AccessDeniedCard
           title={options.deniedTitle}
           detail={options.deniedDetail}
-          onSwitchAccount={() => navigateToPage('login')}
+          onSwitchAccount={() =>
+            navigateToPage(page === 'doctor_dashboard' ? 'admin_login' : 'login')
+          }
           onBackToOverview={() => navigateToPage('landing')}
         />
       )
@@ -126,6 +154,12 @@ function App() {
 
     return options.allowedContent
   }
+
+  const withWorkspaceBoundary = (content: ReactNode, section: string) => (
+    <AppErrorBoundary section={section} resetKey={`${currentPage}-${authUser?.role ?? 'guest'}`}>
+      {content}
+    </AppErrorBoundary>
+  )
 
   let pageContent: ReactNode
 
@@ -136,10 +170,7 @@ function App() {
           onNavigate={navigateToPage}
           onCreateReservation={handleCreateReservation}
           latestReservation={latestReservation}
-          theme={theme}
-          onToggleTheme={toggleTheme}
           isAuthenticated={Boolean(authUser)}
-          authRole={authUser?.role ?? null}
         />
       )
       break
@@ -149,14 +180,58 @@ function App() {
         loadingLabel: 'Checking triage access...',
         deniedTitle: 'Triage access required',
         deniedDetail:
-          'Sign in with a User, Nurse/Doctor, Admin, or System Admin account to access triage.',
+          'Sign in with a User, Nurse, Admin, or Super Admin account to access triage.',
         allowedContent: (
-          <TriagePage
-            onCreateReservation={handleCreateReservation}
-            latestReservation={latestReservation}
-            onNavigate={navigateToPage}
-            authRole={authUser?.role ?? null}
-          />
+          withWorkspaceBoundary(
+            <TriagePage
+              onCreateReservation={handleCreateReservation}
+              latestReservation={latestReservation}
+              onNavigate={navigateToPage}
+              authRole={authUser?.role ?? null}
+            />,
+            'Triage workspace'
+          )
+        ),
+      })
+      break
+
+    case 'appointments':
+      pageContent = renderProtectedPage('appointments', {
+        loadingLabel: 'Checking appointment access...',
+        deniedTitle: 'Appointment access required',
+        deniedDetail: 'Sign in to view your appointment list.',
+        allowedContent: (
+          withWorkspaceBoundary(
+            <AppointmentsPage
+              reservations={reservations}
+              authUser={authUser}
+              onNavigate={navigateToPage}
+              onUpdateReservation={handleUpdateReservation}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+            />,
+            'Appointments workspace'
+          )
+        ),
+      })
+      break
+
+    case 'doctor_dashboard':
+      pageContent = renderProtectedPage('doctor_dashboard', {
+        loadingLabel: "Checking doctor's dashboard access...",
+        deniedTitle: "Doctor's dashboard access required",
+        deniedDetail: 'This page is available for Nurse, Admin, and Super Admin roles.',
+        allowedContent: (
+          withWorkspaceBoundary(
+            <DoctorDashboardPage
+              reservations={reservations}
+              authUser={authUser}
+              onNavigate={navigateToPage}
+              onLogout={handleLogout}
+              onUpdateReservation={handleUpdateReservation}
+            />,
+            "Doctor's dashboard"
+          )
         ),
       })
       break
@@ -174,18 +249,21 @@ function App() {
         loadingLabel: 'Checking dashboard access...',
         deniedTitle: 'Dashboard access required',
         deniedDetail:
-          'Your account does not have permission to view operational dashboards. Ask an Admin or System Admin to grant Nurse/Doctor or Admin access.',
+          'Your account does not have permission to view operational dashboards. Ask an Admin or Super Admin for access.',
         allowedContent: (
-          <Dashboard
-            reservations={reservations}
-            ledgerEntries={ledgerEntries}
-            authUser={authUser}
-            onLogout={handleLogout}
-            apiReady={apiReady}
-            theme={theme}
-            onNavigate={navigateToPage}
-            activePage={currentPage}
-          />
+          withWorkspaceBoundary(
+            <Dashboard
+              reservations={reservations}
+              ledgerEntries={ledgerEntries}
+              authUser={authUser}
+              onLogout={handleLogout}
+              apiReady={apiReady}
+              theme={theme}
+              onNavigate={navigateToPage}
+              activePage={currentPage}
+            />,
+            'Clinical dashboard'
+          )
         ),
       })
       break
@@ -199,13 +277,16 @@ function App() {
         pageContent = (
           <AccessDeniedCard
             title="Admin access required"
-            detail="This section is limited to Admin and System Admin roles. Sign in with the correct role or request elevated access."
+            detail="This section is limited to Admin and Super Admin roles. Sign in with the correct role or request elevated access."
             onSwitchAccount={() => navigateToPage('admin_login')}
             onBackToOverview={() => navigateToPage('landing')}
           />
         )
       } else {
-        pageContent = <AdminDashboard authUser={authUser} />
+        pageContent = withWorkspaceBoundary(
+          <AdminDashboard authUser={authUser} />,
+          'Admin dashboard'
+        )
       }
       break
 
@@ -215,6 +296,10 @@ function App() {
 
     case 'login':
       pageContent = loginPage
+      break
+
+    case 'otp':
+      pageContent = otpPage
       break
 
     case 'signup':
@@ -254,9 +339,24 @@ function App() {
         {showPublicHeader && (
           <AppHeader theme={theme} onToggleTheme={toggleTheme} onNavigate={navigateToPage} />
         )}
+        {showWorkspaceHeader && authUser && (
+          <WorkspaceHeader
+            key={`workspace-header-${currentPage}-${authUser.username}-${authUser.role}`}
+            authUser={authUser}
+            currentPage={currentPage}
+            onNavigate={navigateToPage}
+            onLogout={handleLogout}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        )}
 
-        <main className={showPublicHeader ? 'pt-20' : ''}>{pageContent}</main>
-
+        <main className={showPublicHeader || showWorkspaceHeader ? 'pt-20' : ''}>{pageContent}</main>
+        <GlobalAssistantChat
+          key={`global-chat-${authUser?.username ?? 'guest'}-${authUser?.role ?? 'guest'}`}
+          isIdentified={Boolean(authUser)}
+          userRole={authUser?.role ?? null}
+        />
       </div>
     </div>
   )

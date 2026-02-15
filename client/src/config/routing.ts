@@ -3,6 +3,8 @@ import type { AppPage } from '../types/navigation'
 const PAGE_ROUTES: Record<AppPage, string> = {
   landing: '/',
   triage: '/triage',
+  appointments: '/appointments',
+  doctor_dashboard: '/doctor-dashboard',
   dashboard: '/dashboard',
   analytics: '/dashboard/analytics',
   clinical_reports: '/dashboard/clinical-reports',
@@ -15,6 +17,7 @@ const PAGE_ROUTES: Record<AppPage, string> = {
   admin: '/admin',
   admin_login: '/admin-login',
   login: '/login',
+  otp: '/otp',
   forgot_password: '/forgot-password',
   signup: '/signup',
 }

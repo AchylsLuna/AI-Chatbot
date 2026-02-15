@@ -136,6 +136,7 @@ const useAppRouting = () => {
   const isAuthPage =
     currentPage === 'admin_login' ||
     currentPage === 'login' ||
+    currentPage === 'otp' ||
     currentPage === 'signup' ||
     currentPage === 'forgot_password'
 

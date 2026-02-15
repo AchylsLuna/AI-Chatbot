@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import AppLogoBadge from '../components/branding/AppLogoBadge'
+import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
+import WorkspaceSidebar from '../components/layout/WorkspaceSidebar'
 import { api } from '../services/api'
+import {
+  workspaceFieldClass,
+  workspaceHeadingTextClass,
+  workspaceMutedTextClass,
+  workspacePanelClass,
+  workspacePanelSoftClass,
+  workspacePrimaryButtonClass,
+  workspaceSubtleTextClass,
+} from '../styles/workspaceUi'
 import type { AppPage } from '../types/navigation'
+import { formatRoleLabel } from '../utils/roles'
 import { decisionTreeTriage } from '../utils/decisionTree'
 import type { Reservation, ReservationDraft, TriageSummary, UserRole } from '../types/triage'
 
@@ -29,23 +40,76 @@ const formatConfidence = (value: number) => `${Math.round(value * 100)}%`
 const DISCLAIMER =
   'This recommendation is guidance only. Not a medical diagnosis. For emergencies, contact local services.'
 
-const buildSidebarLinks = (role?: UserRole | null): Array<{ label: string; page: AppPage; hint: string }> => {
-  const links: Array<{ label: string; page: AppPage; hint: string }> = [
-    { label: 'Home', page: 'landing', hint: 'Platform overview' },
-    { label: 'Triage', page: 'triage', hint: 'Guided intake workspace' },
+const panelClass = workspacePanelClass
+const panelSoftClass = workspacePanelSoftClass
+const headingTextClass = workspaceHeadingTextClass
+const mutedTextClass = workspaceMutedTextClass
+const subtleTextClass = workspaceSubtleTextClass
+const fieldClass = workspaceFieldClass
+const primaryButtonClass = workspacePrimaryButtonClass
+
+const buildSidebarLinks = (
+  role?: UserRole | null
+): Array<{
+  key: string
+  label: string
+  caption: string
+  page: AppPage
+  icon: 'home' | 'chart' | 'calendar' | 'settings' | 'shield' | 'user'
+}> => {
+  const links: Array<{
+    key: string
+    label: string
+    caption: string
+    page: AppPage
+    icon: 'home' | 'chart' | 'calendar' | 'settings' | 'shield' | 'user'
+  }> = [
+    { key: 'landing', label: 'Home', page: 'landing', caption: 'Platform overview', icon: 'home' },
+    { key: 'triage', label: 'Triage', page: 'triage', caption: 'Guided intake workspace', icon: 'chart' },
+    {
+      key: 'appointments',
+      label: 'Appointments',
+      page: 'appointments',
+      caption: 'View booking status and details',
+      icon: 'calendar',
+    },
   ]
 
   if (role && role !== 'user') {
-    links.push({ label: 'Dashboard', page: 'dashboard', hint: 'Operations monitoring' })
+    links.push({
+      key: 'dashboard',
+      label: 'Dashboard',
+      page: 'dashboard',
+      caption: 'Operations monitoring',
+      icon: 'chart',
+    })
   }
 
   if (role === 'admin' || role === 'system_admin') {
-    links.push({ label: 'Admin', page: 'admin', hint: 'Restricted controls' })
+    links.push({
+      key: 'admin',
+      label: 'Admin',
+      page: 'admin',
+      caption: 'Restricted controls',
+      icon: 'settings',
+    })
   } else {
-    links.push({ label: 'Admin Login', page: 'admin_login', hint: 'Admin and system admin access' })
+    links.push({
+      key: 'admin_login',
+      label: 'Admin Login',
+      page: 'admin_login',
+      caption: 'Super admin, admin, and nurse access',
+      icon: 'shield',
+    })
   }
 
-  links.push({ label: 'Switch Account', page: 'login', hint: 'Sign in as another user' })
+  links.push({
+    key: 'login',
+    label: 'Switch Account',
+    page: 'login',
+    caption: 'Sign in as another user',
+    icon: 'user',
+  })
   return links
 }
 
@@ -188,85 +252,64 @@ const TriagePage = ({
     })
   }
 
-  const renderSidebar = () => (
-    <aside className="rounded-3xl agent-card p-5">
-      <div className="flex items-center gap-3 px-1 py-1.5">
-        <AppLogoBadge className="h-11 w-11" />
-        <div>
-          <p className="text-sm font-semibold text-white">AI Health Care</p>
-          <p className="text-[11px] text-white/60">Workspace navigation</p>
-        </div>
-      </div>
-
-      <div className="mt-5 space-y-2">
-        {sideBarLinks.map((link) => {
-          const isActive = link.page === 'triage'
-          return (
-            <button
-              key={link.page}
-              type="button"
-              onClick={() => onNavigate?.(link.page)}
-              className={`w-full rounded-2xl border px-3 py-2.5 text-left transition ${
-                isActive
-                  ? 'border-[color:var(--agent-accent)] bg-white/10 shadow-[0_10px_30px_rgba(124,252,196,0.12)]'
-                  : 'border-white/10 bg-[color:var(--agent-surface-strong)] hover:border-white/30 hover:bg-white/10'
-              }`}
-              aria-current={isActive ? 'page' : undefined}
-            >
-              <div className="flex items-center gap-2.5">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    isActive ? 'bg-[color:var(--agent-accent)]' : 'bg-white/45'
-                  }`}
-                />
-                <p className="text-sm font-semibold text-white">{link.label}</p>
-              </div>
-              <p className="mt-1 text-[11px] text-white/55">{link.hint}</p>
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="mt-5 rounded-2xl agent-card-soft p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/60">
-          Intake mode
-        </p>
-        <p className="mt-1 text-xs text-white/60">
-          Advice-only workflow with department recommendation and booking handoff.
-        </p>
-      </div>
-    </aside>
+  const renderSidebar = (className: string) => (
+    <WorkspaceSidebar
+      className={className}
+      brandTitle="AI Health Care"
+      brandSubtitle="Workspace navigation"
+      sectionLabel="Main navigation"
+      items={sideBarLinks}
+      activeKey="triage"
+      onSelect={(key) => {
+        const selected = sideBarLinks.find((item) => item.key === key)
+        if (selected) onNavigate?.(selected.page)
+      }}
+      statusLabel="Intake mode"
+      statusValue="Advice-only workflow active"
+      profileLabel="Role"
+      profileValue={formatRoleLabel(authRole)}
+      profileCaption="Book after recommendation"
+    />
   )
 
   const content = (
     <>
       {!isEmbedded && (
-        <div className="page-header" data-reveal>
-          <div>
-            <p className="page-eyebrow">Decision Tree guidance layer</p>
-            <h1 className="page-title">Guided triage intake</h1>
-            <p className="page-copy">
-              Advice-only guidance with free-text symptom input. Book appointments only after a
-              recommendation is generated.
-            </p>
+        <section className={`${panelClass} relative overflow-hidden p-6 sm:p-7`} data-reveal>
+          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] bg-[radial-gradient(circle_at_top,rgba(71,212,200,0.2),transparent_68%)] lg:block" />
+          <div className="relative flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className={`text-xs uppercase tracking-[0.2em] ${subtleTextClass}`}>
+                Decision Tree guidance layer
+              </p>
+              <h1 className={`mt-3 text-3xl font-semibold tracking-tight sm:text-4xl ${headingTextClass}`}>
+                Guided triage intake
+              </h1>
+              <p className={`mt-3 max-w-3xl text-sm sm:text-base ${mutedTextClass}`}>
+                Advice-only guidance with free-text symptom input. Book appointments only after a
+                recommendation is generated.
+              </p>
+            </div>
+            <div className="rounded-full border border-[rgba(120,139,198,0.35)] bg-[rgba(12,18,34,0.45)] px-4 py-2 text-xs font-semibold text-[#d5e1ff]">
+              Direct booking
+            </div>
           </div>
-          <div className="agent-chip">Direct booking</div>
-        </div>
+        </section>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-3xl agent-card p-6" data-reveal>
+      <div className={`${isEmbedded ? '' : 'mt-6 '}grid gap-6 lg:grid-cols-[1.1fr_0.9fr]`}>
+        <div className={`${panelClass} p-6`} data-reveal>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-white">Guided inquiry</h2>
-              <p className="text-xs text-white/60">Structured questions to avoid self-diagnosis</p>
+              <h2 className={`text-lg font-semibold ${headingTextClass}`}>Guided inquiry</h2>
+              <p className={`text-xs ${subtleTextClass}`}>Structured questions to avoid self-diagnosis</p>
             </div>
             <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-3 py-1 text-xs font-semibold text-amber-200">
               Advice only
             </span>
           </div>
 
-          <div className="mt-4 h-[360px] space-y-3 overflow-y-auto rounded-2xl agent-card-soft p-4">
+          <div className={`mt-4 h-[360px] space-y-3 overflow-y-auto rounded-2xl ${panelSoftClass} p-4`}>
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -275,8 +318,8 @@ const TriagePage = ({
                 <div
                   className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
                     message.sender === 'user'
-                      ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
-                      : 'bg-white/10 text-white/80'
+                      ? 'bg-[linear-gradient(135deg,#49d6c9,#41b8e6)] text-[#031922]'
+                      : 'bg-[rgba(20,29,54,0.88)] text-[rgba(211,225,252,0.95)]'
                   }`}
                 >
                   {message.text}
@@ -290,43 +333,40 @@ const TriagePage = ({
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder="Enter free-text symptoms, duration, and context"
-              className="agent-input flex-1"
+              className={`${fieldClass} flex-1`}
             />
-            <button
-              onClick={handleSend}
-              className="agent-button"
-            >
+            <button onClick={handleSend} className={primaryButtonClass}>
               Send
             </button>
           </div>
-          <p className="mt-3 text-xs text-white/50">
+          <p className={`mt-3 text-xs ${subtleTextClass}`}>
             The Decision Tree provides guidance only. For emergencies, contact local services.
           </p>
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-3xl agent-card p-6" data-reveal>
-            <h3 className="text-lg font-semibold text-white">Decision Tree triage summary</h3>
-            <p className="mt-2 text-xs text-white/60">
+          <div className={`${panelClass} p-6`} data-reveal>
+            <h3 className={`text-lg font-semibold ${headingTextClass}`}>Decision Tree triage summary</h3>
+            <p className={`mt-2 text-xs ${subtleTextClass}`}>
               Generated from the guided inquiry using a MedQuad-informed decision tree.
             </p>
-            <div className="mt-4 rounded-2xl agent-card-soft p-4">
+            <div className={`mt-4 rounded-2xl ${panelSoftClass} p-4`}>
               {isInputInvalid ? (
-                <p className="text-sm text-white/60">
+                <p className={`text-sm ${mutedTextClass}`}>
                   Enter clear symptoms to receive a department recommendation.
                 </p>
               ) : (
                 <>
-                  <p className="text-xs uppercase tracking-wider text-white/60">
+                  <p className={`text-xs uppercase tracking-wider ${subtleTextClass}`}>
                     Recommended department
                   </p>
-                  <p className="mt-2 text-lg font-semibold text-white">{summary.department}</p>
-                  <div className="mt-3 flex items-center justify-between text-xs text-white/60">
+                  <p className={`mt-2 text-lg font-semibold ${headingTextClass}`}>{summary.department}</p>
+                  <div className={`mt-3 flex items-center justify-between text-xs ${mutedTextClass}`}>
                     <span>Priority: {summary.priority}</span>
                     <span>Confidence: {formatConfidence(summary.confidence)}</span>
                   </div>
-                  <p className="mt-3 text-sm text-[color:var(--agent-muted)]">{summary.summary}</p>
-                  <p className="mt-2 text-xs text-white/50">{summary.symptoms}</p>
+                  <p className={`mt-3 text-sm ${mutedTextClass}`}>{summary.summary}</p>
+                  <p className={`mt-2 text-xs ${subtleTextClass}`}>{summary.symptoms}</p>
                 </>
               )}
             </div>
@@ -338,12 +378,12 @@ const TriagePage = ({
                   : 'Decision Tree (MedQuad) applied'}
               </span>
               {summaryLatency !== null && !isSummaryLoading && (
-                <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-semibold text-white/70">
+                <span className="rounded-full border border-[rgba(120,139,198,0.35)] px-2 py-1 text-[10px] font-semibold text-[#d5e1ff]">
                   {summaryLatency}ms
                 </span>
               )}
               {!isSummaryLoading && (
-                <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-semibold text-white/70">
+                <span className="rounded-full border border-[rgba(120,139,198,0.35)] px-2 py-1 text-[10px] font-semibold text-[#d5e1ff]">
                   Target response &lt; 5s
                 </span>
               )}
@@ -357,47 +397,50 @@ const TriagePage = ({
                   Decision Tree
                 </span>
               )}
+              {summary.proof && !isSummaryLoading && (
+                <span className="rounded-full border border-cyan-300/35 bg-cyan-300/15 px-2 py-1 text-[10px] font-semibold text-cyan-100">
+                  Signed summary
+                </span>
+              )}
             </div>
             {summaryError && (
               <p className="mt-2 text-xs font-semibold text-rose-300">{summaryError}</p>
             )}
-            {!isInputInvalid && (
-              <p className="mt-2 text-xs text-white/50">{summary.disclaimer}</p>
-            )}
+            {!isInputInvalid && <p className={`mt-2 text-xs ${subtleTextClass}`}>{summary.disclaimer}</p>}
           </div>
 
-          <div className="rounded-3xl agent-card p-6" data-reveal>
-            <h3 className="text-lg font-semibold text-white">Book appointment</h3>
-            <p className="mt-2 text-xs text-white/60">
+          <div className={`${panelClass} p-6`} data-reveal>
+            <h3 className={`text-lg font-semibold ${headingTextClass}`}>Book appointment</h3>
+            <p className={`mt-2 text-xs ${subtleTextClass}`}>
               Appointments are booked after a recommendation is generated.
             </p>
             <div className="mt-4 space-y-3">
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                <label className={`text-xs font-semibold uppercase tracking-wider ${subtleTextClass}`}>
                   Patient name
                 </label>
                 <input
                   value={patientName}
                   onChange={(event) => setPatientName(event.target.value)}
-                  className="agent-input mt-2"
+                  className={`${fieldClass} mt-2`}
                   placeholder="Jordan Lee"
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                <label className={`text-xs font-semibold uppercase tracking-wider ${subtleTextClass}`}>
                   Requested time
                 </label>
                 <input
                   value={requestedTime}
                   onChange={(event) => setRequestedTime(event.target.value)}
-                  className="agent-input mt-2"
+                  className={`${fieldClass} mt-2`}
                   placeholder="2:30 PM"
                 />
               </div>
               <button
                 onClick={handleCreateReservation}
                 disabled={!canBook || !patientName.trim() || !requestedTime.trim()}
-                className="agent-button w-full disabled:bg-white/10 disabled:text-white/40"
+                className={`${primaryButtonClass} w-full disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 Book appointment
               </button>
@@ -413,21 +456,23 @@ const TriagePage = ({
     </>
   )
 
+  if (isEmbedded) {
+    return <div>{content}</div>
+  }
+
   return (
-    <div className={isEmbedded ? '' : 'page-shell'}>
-      <div className={`w-full ${isEmbedded ? '' : 'page-wrap'}`}>
-        {isEmbedded ? (
-          content
-        ) : (
-          <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-            <div className="lg:sticky lg:top-24 lg:self-start" data-reveal>
-              {renderSidebar()}
-            </div>
-            <div>{content}</div>
+    <WorkspaceCanvas>
+      <div className="mx-auto w-full px-4 pb-10 pt-4 sm:px-6 lg:px-8">
+        <div className="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
+          <div className="lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+            {renderSidebar(
+              'h-fit p-0 lg:rounded-l-none lg:border-l-0 lg:-ml-8 lg:w-[calc(17rem+2rem)]'
+            )}
           </div>
-        )}
+          <div>{content}</div>
+        </div>
       </div>
-    </div>
+    </WorkspaceCanvas>
   )
 }
 

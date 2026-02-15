@@ -20,14 +20,14 @@ The system prioritizes guidance-first booking with immutable auditability.
 - Application layer (Business Logic): Node.js services orchestrating data flow
 - AI processing layer: NLP-based symptom routing to the correct department
 - Blockchain layer (CODEX integration): Ethereum smart contracts for hashed appointment records
-- Data layer: MongoDB for non-sensitive operational data
+- Data layer: in-memory storage for local runtime data
 
 ## Development Roadmap
 
 ### Sprint 1: AI and Core Logic
 
 - Build the NLP-driven chatbot for department routing
-- Create the appointment schema in MongoDB
+- Create the appointment schema in backend storage
 - Implement the operations monitoring dashboard
 
 ### Sprint 2: Blockchain and Security
@@ -45,7 +45,7 @@ The system prioritizes guidance-first booking with immutable auditability.
 ## Tech Stack (3 Platforms)
 
 - AI Platform: NLP triage engine, advice-only guidance logic
-- Web Platform: React, TypeScript, Tailwind CSS, Node.js, Express.js, REST API, MongoDB
+- Web Platform: React, TypeScript, Tailwind CSS, Node.js, Express.js, REST API
 - Blockchain Platform: Ethereum smart contracts for immutable appointment hashes
 
 ## Scripts
@@ -62,22 +62,23 @@ Server (from the server folder):
 - npm install
 - npm run dev
 
-## Local API (RBAC + MongoDB + Blockchain)
+## Local API (RBAC + In-Memory Storage + Blockchain)
 
-The demo API uses MongoDB, JWT-based RBAC, and an optional Ethereum contract call for booked appointments.
+The demo API uses in-memory storage, JWT-based RBAC, and an optional Ethereum contract call for booked appointments.
 
 ### Required services
 
-- MongoDB running locally (`mongodb://127.0.0.1:27017`)
+- No database service required. The backend runs with in-memory storage.
 
 ### Environment variables (server)
 
 ```
 PORT=5174
-MONGODB_URI=mongodb://127.0.0.1:27017
-MONGODB_DB=pulse-ledger
 JWT_SECRET=change-me
 JWT_EXPIRES_IN=12h
+OTP_TTL_MINUTES=5
+OTP_MAX_ATTEMPTS=5
+OTP_SECRET=change-me-otp
 CORS_ORIGIN=http://localhost:5173,http://localhost:5174
 SEED_USERS=true
 SEED_DEMO=true

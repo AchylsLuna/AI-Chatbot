@@ -1,4 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
+import WorkspaceSidebar from '../components/layout/WorkspaceSidebar'
+import {
+  workspaceHeadingTextClass,
+  workspaceMutedTextClass,
+  workspacePanelClass,
+  workspacePanelSoftClass,
+  workspaceSubtleTextClass,
+} from '../styles/workspaceUi'
 import type { AccessRequest, AuthSession } from '../types/triage'
 import { formatRoleLabel } from '../utils/roles'
 import { api } from '../services/api'
@@ -35,17 +44,17 @@ const roleDefinitions = [
     permissions: ['View personal appointments', 'Update profile and contact info', 'Receive status updates'],
   },
   {
-    title: 'Nurse / Doctor',
-    summary: 'Clinical staff who can review, validate, or override Decision Tree outcomes.',
+    title: 'Nurse',
+    summary: 'Clinical staff supporting intake flow, triage follow-up, and appointment updates.',
     permissions: ['Review triage summaries', 'Approve or re-route bookings', 'Document clinical notes'],
   },
   {
-    title: 'Admin',
-    summary: 'Operational leads managing staffing, policy controls, and day-to-day access.',
+    title: 'Admin / Doctor',
+    summary: 'Operational doctors managing appointments, staffing, and day-to-day clinical operations.',
     permissions: ['Assign roles to staff', 'Manage departments and schedules', 'Monitor KPIs'],
   },
   {
-    title: 'System Admin',
+    title: 'Super Admin',
     summary: 'Platform owners with infrastructure, security, and integration authority.',
     permissions: ['Configure SSO and security policies', 'Manage integrations and data exports', 'Approve escalations'],
   },
@@ -62,21 +71,24 @@ const adminTabs: Array<{
   key: AdminDashboardTab
   label: string
   description: string
+  icon: 'home' | 'settings'
 }> = [
   {
     key: 'overview',
     label: 'Overview',
     description: 'Operational modules, role definitions, and active request queue.',
+    icon: 'home',
   },
   {
     key: 'requirements',
     label: 'Requirements',
     description: 'Required role checks, submission details, and approval flow.',
+    icon: 'settings',
   },
 ]
 
 const adminAccessRequirements = [
-  'Role must be Admin or System Admin.',
+  'Role must be Admin or Super Admin.',
   'Verified work account with organization ownership.',
   'MFA and session security controls enabled.',
   'All elevated actions are audit logged.',
@@ -95,6 +107,12 @@ const approvalFlowDetails = [
   'Admin reviewer approves, rejects, or requests clarification.',
   'Final status and reviewer notes are written to audit records.',
 ]
+
+const panelClass = workspacePanelClass
+const panelSoftClass = workspacePanelSoftClass
+const headingTextClass = workspaceHeadingTextClass
+const mutedTextClass = workspaceMutedTextClass
+const subtleTextClass = workspaceSubtleTextClass
 
 const AdminDashboard = ({ authUser }: AdminDashboardProps) => {
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([])
@@ -127,201 +145,197 @@ const AdminDashboard = ({ authUser }: AdminDashboardProps) => {
     }
   }, [authUser])
 
+  const requestMetrics = useMemo(() => {
+    const pending = accessRequests.filter((item) => item.status === 'pending').length
+    const approved = accessRequests.filter((item) => item.status === 'approved').length
+    const rejected = accessRequests.filter((item) => item.status === 'rejected').length
+    return { total: accessRequests.length, pending, approved, rejected }
+  }, [accessRequests])
+
   return (
-    <div className="page-shell">
-      <div className="page-wrap">
-        <div className="page-header" data-reveal>
-          <div>
-            <p className="page-eyebrow">Administrative control layer</p>
-            <h1 className="page-title">Admin dashboard</h1>
-            <p className="page-copy">
-              Manage roles, configure policies, and keep audit trails aligned with healthcare
-              requirements.
-            </p>
-          </div>
-          <div className="agent-chip">Governance console</div>
-        </div>
-
-        <div className="mb-6 rounded-2xl border border-white/10 bg-white/[0.02] p-1" data-reveal>
-          <div className="grid gap-1 sm:grid-cols-2">
-            {adminTabs.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                  activeTab === tab.key
-                    ? 'bg-white/10 text-white'
-                    : 'text-white/60 hover:text-white'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <p className="px-4 pb-3 pt-2 text-xs text-[color:var(--agent-muted)]">
-            {adminTabs.find((tab) => tab.key === activeTab)?.description}
-          </p>
-        </div>
-
-        {activeTab === 'overview' ? (
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="space-y-6">
-              <div className="rounded-3xl agent-card p-6" data-reveal>
-                <h3 className="text-lg font-semibold text-white">Access requests</h3>
-                <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-                  Review pending access requests submitted through the signup form.
-                </p>
-                {isRequestsLoading ? (
-                  <p className="mt-4 text-sm text-white/60">Loading access requests...</p>
-                ) : requestsError ? (
-                  <p className="mt-4 text-sm text-rose-300">{requestsError}</p>
-                ) : accessRequests.length === 0 ? (
-                  <p className="mt-4 text-sm text-white/60">No requests available.</p>
-                ) : (
-                  <div className="mt-4 space-y-3">
-                    {accessRequests.slice(0, 4).map((request) => (
-                      <div
-                        key={request.id}
-                        className="rounded-2xl agent-card-soft p-4 text-sm text-white/70"
-                      >
-                        <p className="font-semibold text-white">{request.fullName}</p>
-                        <p className="text-xs text-white/60">{request.email}</p>
-                        <p className="mt-2 text-xs text-white/60">
-                          Requested role: {formatRoleLabel(request.roleRequested)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+    <WorkspaceCanvas>
+      <div className="mx-auto w-full px-4 pb-10 pt-4 sm:px-6 lg:px-8">
+        <section className={`${panelClass} relative overflow-hidden p-6 sm:p-7`}>
+          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] bg-[radial-gradient(circle_at_top,rgba(71,212,200,0.2),transparent_68%)] lg:block" />
+          <div className="relative grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+            <div>
+              <p className={`text-xs uppercase tracking-[0.2em] ${subtleTextClass}`}>
+                Administrative control layer
+              </p>
+              <h1 className={`mt-3 text-3xl font-semibold tracking-tight sm:text-4xl ${headingTextClass}`}>
+                Admin dashboard
+              </h1>
+              <p className={`mt-3 max-w-3xl text-sm sm:text-base ${mutedTextClass}`}>
+                Manage roles, configure policies, and keep audit trails aligned with healthcare
+                requirements.
+              </p>
+              <div className="mt-4 rounded-full border border-[rgba(71,212,200,0.45)] bg-[rgba(71,212,200,0.12)] px-3 py-1 text-xs font-semibold text-[#b6fff1] inline-flex">
+                Governance console
               </div>
-              <div className="rounded-3xl agent-card p-6" data-reveal>
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                      Access status
-                    </p>
-                    <h2 className="text-lg font-semibold text-white">
-                      {authUser ? `Signed in as ${authUser.username}` : 'Admin access required'}
-                    </h2>
-                    <p className="text-sm text-[color:var(--agent-muted)]">
-                      {authUser
-                        ? `Active role: ${formatRoleLabel(
-                            authUser.role
-                          )}. Administrative actions are logged.`
-                        : 'Only Admin or System Admin can modify roles and policies.'}
-                    </p>
-                  </div>
-                  <div className="text-xs font-semibold text-white/60">Security tier: RBAC</div>
-                </div>
+            </div>
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  {adminModules.map((module) => (
-                    <div key={module.title} className="rounded-2xl agent-card-soft p-4">
-                      <p className="text-sm font-semibold text-white">{module.title}</p>
-                      <p className="mt-2 text-xs text-white/60">{module.description}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                { label: 'Requests', value: requestMetrics.total },
+                { label: 'Pending', value: requestMetrics.pending },
+                { label: 'Approved', value: requestMetrics.approved },
+                { label: 'Rejected', value: requestMetrics.rejected },
+              ].map((card) => (
+                <div key={card.label} className={`${panelSoftClass} p-4`}>
+                  <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>{card.label}</p>
+                  <p className={`mt-2 text-2xl font-semibold ${headingTextClass}`}>{card.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
+          <WorkspaceSidebar
+            className="h-fit p-0 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:rounded-l-none lg:border-l-0 lg:-ml-8 lg:w-[calc(17rem+2rem)]"
+            brandTitle="AI Health Care"
+            brandSubtitle="Admin workspace"
+            sectionLabel="Admin navigation"
+            items={adminTabs}
+            activeKey={activeTab}
+            onSelect={(key) => setActiveTab(key as AdminDashboardTab)}
+            statusLabel="Governance"
+            statusValue="Policy controls active"
+            profileLabel="Signed in"
+            profileValue={authUser?.username ?? 'Unknown'}
+            profileCaption={formatRoleLabel(authUser?.role)}
+          />
+
+          <section className="space-y-6">
+            {activeTab === 'overview' ? (
+              <>
+                <div className={`${panelClass} p-6`}>
+                  <h3 className={`text-xl font-semibold ${headingTextClass}`}>Access requests</h3>
+                  <p className={`mt-2 text-sm ${mutedTextClass}`}>
+                    Review pending access requests submitted through the signup form.
+                  </p>
+                  {isRequestsLoading ? (
+                    <p className={`mt-4 text-sm ${mutedTextClass}`}>Loading access requests...</p>
+                  ) : requestsError ? (
+                    <p className="mt-4 text-sm text-rose-300">{requestsError}</p>
+                  ) : accessRequests.length === 0 ? (
+                    <p className={`mt-4 text-sm ${mutedTextClass}`}>No requests available.</p>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      {accessRequests.slice(0, 5).map((request) => (
+                        <div key={request.id} className={`${panelSoftClass} p-4 text-sm ${mutedTextClass}`}>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className={`font-semibold ${headingTextClass}`}>{request.fullName}</p>
+                              <p className={`text-xs ${mutedTextClass}`}>{request.email}</p>
+                            </div>
+                            <span className="rounded-full border border-[rgba(120,139,198,0.34)] bg-[rgba(16,23,42,0.6)] px-3 py-1 text-xs font-semibold text-[#d9e5ff]">
+                              {request.status}
+                            </span>
+                          </div>
+                          <p className={`mt-2 text-xs ${subtleTextClass}`}>
+                            Requested role: {formatRoleLabel(request.roleRequested)}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
 
-              <div className="rounded-3xl agent-card p-6" data-reveal>
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">Role definitions</h2>
-                    <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+                <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+                  <div className={`${panelClass} p-6`}>
+                    <h2 className={`text-xl font-semibold ${headingTextClass}`}>Role definitions</h2>
+                    <p className={`mt-2 text-sm ${mutedTextClass}`}>
                       Four-tier role model for patients, clinicians, and administrators.
                     </p>
-                  </div>
-                  <div className="text-xs font-semibold text-white/60">4 roles</div>
-                </div>
 
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  {roleDefinitions.map((role) => (
-                    <div key={role.title} className="rounded-2xl agent-card-soft p-4">
-                      <p className="text-sm font-semibold text-white">{role.title}</p>
-                      <p className="mt-2 text-xs text-white/60">{role.summary}</p>
-                      <ul className="mt-3 space-y-2 text-xs text-white/70">
-                        {role.permissions.map((permission) => (
-                          <li key={permission}>{permission}</li>
+                    <div className="mt-5 grid gap-4 md:grid-cols-2">
+                      {roleDefinitions.map((role) => (
+                        <div key={role.title} className={`${panelSoftClass} p-4`}>
+                          <p className={`text-sm font-semibold ${headingTextClass}`}>{role.title}</p>
+                          <p className={`mt-2 text-xs ${mutedTextClass}`}>{role.summary}</p>
+                          <ul className={`mt-3 space-y-2 text-xs ${mutedTextClass}`}>
+                            {role.permissions.map((permission) => (
+                              <li key={permission}>{permission}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className={`${panelClass} p-6`}>
+                      <h3 className={`text-lg font-semibold ${headingTextClass}`}>Governance checklist</h3>
+                      <p className={`mt-2 text-sm ${mutedTextClass}`}>
+                        Security, audit, and compliance workflows for admin operations.
+                      </p>
+                      <ul className={`mt-4 space-y-3 text-sm ${mutedTextClass}`}>
+                        {governanceChecklist.map((item) => (
+                          <li key={item}>{item}</li>
                         ))}
                       </ul>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
 
-            <div className="space-y-6">
-              <div className="rounded-3xl agent-card p-6" data-reveal>
-                <h3 className="text-lg font-semibold text-white">Governance checklist</h3>
-                <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-                  Admin dashboard details for security, audit, and compliance workflows.
-                </p>
-                <ul className="mt-4 space-y-3 text-sm text-white/70">
-                  {governanceChecklist.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="rounded-3xl agent-card p-6" data-reveal>
-                <h3 className="text-lg font-semibold text-white">Admin dashboard details</h3>
-                <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-                  Use this space to communicate how access is granted, which policies are enforced,
-                  and where approvals are recorded.
-                </p>
-                <div className="mt-4 space-y-3 text-sm text-white/70">
-                  <p>Role changes are logged automatically with timestamps and reviewer notes.</p>
-                  <p>Clinical overrides require Nurse/Doctor review before Admin approval.</p>
-                  <p>System Admins manage integrations, backup policies, and incident responses.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-3xl agent-card p-6" data-reveal>
-              <h3 className="text-lg font-semibold text-white">Admin dashboard requirements</h3>
-              <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-                Minimum requirements before granting access to the Admin dashboard.
-              </p>
-              <ul className="mt-4 space-y-3 text-sm text-white/70">
-                {adminAccessRequirements.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="rounded-3xl agent-card p-6" data-reveal>
-              <h3 className="text-lg font-semibold text-white">Required submission details</h3>
-              <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-                Information required when requesting Admin or System Admin access.
-              </p>
-              <ul className="mt-4 space-y-3 text-sm text-white/70">
-                {requiredSubmissionDetails.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="rounded-3xl agent-card p-6 lg:col-span-2" data-reveal>
-              <h3 className="text-lg font-semibold text-white">Approval flow details</h3>
-              <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-                Standard review sequence used for elevated access in this project.
-              </p>
-              <div className="mt-5 grid gap-3 md:grid-cols-2">
-                {approvalFlowDetails.map((step) => (
-                  <div key={step} className="rounded-2xl agent-card-soft p-4 text-sm text-white/70">
-                    {step}
+                    <div className={`${panelClass} p-6`}>
+                      <h3 className={`text-lg font-semibold ${headingTextClass}`}>Module controls</h3>
+                      <div className="mt-4 space-y-3">
+                        {adminModules.map((module) => (
+                          <article key={module.title} className={`${panelSoftClass} p-4`}>
+                            <p className={`text-sm font-semibold ${headingTextClass}`}>{module.title}</p>
+                            <p className={`mt-1 text-xs ${mutedTextClass}`}>{module.description}</p>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                ))}
+                </div>
+              </>
+            ) : (
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className={`${panelClass} p-6`}>
+                  <h3 className={`text-lg font-semibold ${headingTextClass}`}>Admin dashboard requirements</h3>
+                  <p className={`mt-2 text-sm ${mutedTextClass}`}>
+                    Minimum requirements before granting access to the Admin dashboard.
+                  </p>
+                  <ul className={`mt-4 space-y-3 text-sm ${mutedTextClass}`}>
+                    {adminAccessRequirements.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className={`${panelClass} p-6`}>
+                  <h3 className={`text-lg font-semibold ${headingTextClass}`}>Required submission details</h3>
+                  <p className={`mt-2 text-sm ${mutedTextClass}`}>
+                    Information required when requesting Admin or Super Admin access.
+                  </p>
+                  <ul className={`mt-4 space-y-3 text-sm ${mutedTextClass}`}>
+                    {requiredSubmissionDetails.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className={`${panelClass} p-6 lg:col-span-2`}>
+                  <h3 className={`text-lg font-semibold ${headingTextClass}`}>Approval flow details</h3>
+                  <p className={`mt-2 text-sm ${mutedTextClass}`}>
+                    Standard review sequence used for elevated access in this project.
+                  </p>
+                  <div className="mt-5 grid gap-3 md:grid-cols-2">
+                    {approvalFlowDetails.map((step) => (
+                      <div key={step} className={`${panelSoftClass} p-4 text-sm ${mutedTextClass}`}>
+                        {step}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
+          </section>
+        </div>
       </div>
-    </div>
+    </WorkspaceCanvas>
   )
 }
 

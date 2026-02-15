@@ -30,7 +30,10 @@ const AdminLoginPage = ({
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  const hasAdminAccess = authUser
+  const hasAdminLoginAccess = authUser
+    ? authUser.role === 'nurse' || authUser.role === 'admin' || authUser.role === 'system_admin'
+    : false
+  const hasAdminDashboardAccess = authUser
     ? authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
 
@@ -78,7 +81,7 @@ const AdminLoginPage = ({
           </p>
           <h2 className="mt-3 text-3xl font-semibold text-white">Admin Login</h2>
           <p className="mt-2 text-sm text-white/60">
-            Use an Admin or System Admin account to continue to the Admin Dashboard.
+            Use Super Admin, Admin (Doctor), or Nurse account to continue.
           </p>
         </div>
 
@@ -89,16 +92,24 @@ const AdminLoginPage = ({
               {formatRoleLabel(authUser.role)}).
             </div>
 
-            {hasAdminAccess ? (
+            {hasAdminLoginAccess ? (
               <div className="space-y-3">
                 <p className="text-sm text-emerald-300">
-                  Access verified. Continue to the Admin Dashboard.
+                  Access verified. Continue to the Doctor Dashboard.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <button onClick={() => onNavigate?.('admin')} className="agent-button w-full">
-                    Continue
+                  <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button w-full">
+                    Open Doctor Dashboard
                   </button>
-                  <button onClick={onLogout} className="agent-button-ghost w-full">
+                  {hasAdminDashboardAccess && (
+                    <button onClick={() => onNavigate?.('admin')} className="agent-button-ghost w-full">
+                      Open Admin Dashboard
+                    </button>
+                  )}
+                  <button
+                    onClick={onLogout}
+                    className={`agent-button-ghost w-full ${hasAdminDashboardAccess ? 'sm:col-span-2' : 'sm:col-span-1'}`}
+                  >
                     Sign out
                   </button>
                 </div>
@@ -106,8 +117,8 @@ const AdminLoginPage = ({
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-rose-300">
-                  This account does not have admin access. Sign out and use an Admin or System Admin
-                  account.
+                  This account does not have admin portal access. Sign out and use Super Admin,
+                  Admin, or Nurse account.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <button onClick={onLogout} className="agent-button-ghost w-full">
@@ -130,7 +141,7 @@ const AdminLoginPage = ({
                 setFormError('Use a valid .com email address before signing in.')
                 return
               }
-              onLogin(email, password, 'admin')
+              onLogin(email, password, 'doctor_dashboard')
             }}
           >
             <div className="space-y-2">
@@ -255,7 +266,7 @@ const AdminLoginPage = ({
               disabled={isAuthLoading}
               className="agent-button w-full disabled:cursor-not-allowed"
             >
-              {isAuthLoading ? 'Verifying...' : 'Sign In to Admin Dashboard'}
+              {isAuthLoading ? 'Requesting OTP...' : 'Continue to OTP'}
             </button>
           </form>
         )}

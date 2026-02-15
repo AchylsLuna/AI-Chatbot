@@ -1,12 +1,29 @@
 import type {
+  AlertAuditAction,
+  AppointmentUpdateDraft,
   AuthSession,
   AccessRequest,
   LedgerEntry,
+  LoginOtpChallenge,
   Reservation,
   ReservationDraft,
   SignupDraft,
   TriageSummary,
 } from '../types/triage'
+import {
+  aiAlertAuditResponseSchema,
+  accessRequestsResponseSchema,
+  appointmentResponseSchema,
+  appointmentsResponseSchema,
+  authSessionSchema,
+  authUserSchema,
+  createdReservationResponseSchema,
+  ledgerResponseSchema,
+  loginOtpChallengeSchema,
+  parseApiSchema,
+  reservationsResponseSchema,
+  triageSummaryResponseSchema,
+} from '../schemas/apiSchemas'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5174/api'
 let authToken: string | null = null
@@ -17,12 +34,12 @@ export const setAuthToken = (token: string | null) => {
   authToken = token
 }
 
-const handleResponse = async <T>(response: Response): Promise<T> => {
+const handleResponse = async (response: Response): Promise<unknown> => {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     throw new Error(error?.error || 'Request failed')
   }
-  return response.json() as Promise<T>
+  return response.json() as Promise<unknown>
 }
 
 const withAuth = (init?: RequestInit): RequestInit => {
@@ -48,7 +65,26 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     })
-    return handleResponse<AuthSession>(response)
+    const payload = await handleResponse(response)
+    return parseApiSchema(authSessionSchema, payload, 'login')
+  },
+  requestOtpChallenge: async (username: string, password: string): Promise<LoginOtpChallenge> => {
+    const response = await request(`${API_BASE}/auth/otp/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
+    const payload = await handleResponse(response)
+    return parseApiSchema(loginOtpChallengeSchema, payload, 'OTP challenge')
+  },
+  verifyOtpLogin: async (challengeId: string, code: string): Promise<AuthSession> => {
+    const response = await request(`${API_BASE}/auth/otp/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challengeId, code }),
+    })
+    const payload = await handleResponse(response)
+    return parseApiSchema(authSessionSchema, payload, 'OTP verification')
   },
   signup: async (draft: SignupDraft): Promise<AuthSession> => {
     const response = await request(`${API_BASE}/auth/signup`, {
@@ -56,22 +92,27 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(draft),
     })
-    return handleResponse<AuthSession>(response)
+    const payload = await handleResponse(response)
+    return parseApiSchema(authSessionSchema, payload, 'signup')
   },
   getSession: async (): Promise<AuthSession['user']> => {
     const response = await request(`${API_BASE}/auth/session`, withAuth())
-    return handleResponse<AuthSession['user']>(response)
+    const payload = await handleResponse(response)
+    return parseApiSchema(authUserSchema, payload, 'session')
   },
   getReservations: async (): Promise<Reservation[]> => {
-    const data = await handleResponse<{ reservations: Reservation[] }>(
-      await request(`${API_BASE}/reservations`, withAuth())
-    )
+    const payload = await handleResponse(await request(`${API_BASE}/reservations`, withAuth()))
+    const data = parseApiSchema(reservationsResponseSchema, payload, 'reservations')
     return data.reservations
   },
+  getAppointments: async (): Promise<Reservation[]> => {
+    const payload = await handleResponse(await request(`${API_BASE}/appointments`, withAuth()))
+    const data = parseApiSchema(appointmentsResponseSchema, payload, 'appointments')
+    return data.appointments
+  },
   getLedger: async (): Promise<LedgerEntry[]> => {
-    const data = await handleResponse<{ ledger: LedgerEntry[] }>(
-      await request(`${API_BASE}/ledger`, withAuth())
-    )
+    const payload = await handleResponse(await request(`${API_BASE}/ledger`, withAuth()))
+    const data = parseApiSchema(ledgerResponseSchema, payload, 'ledger')
     return data.ledger
   },
   createReservation: async (
@@ -88,7 +129,24 @@ export const api = {
       }),
     }))
 
-    return handleResponse<{ reservation: Reservation; ledgerEntry: LedgerEntry }>(response)
+    const payload = await handleResponse(response)
+    return parseApiSchema(createdReservationResponseSchema, payload, 'create reservation')
+  },
+  updateAppointment: async (
+    id: string,
+    updates: AppointmentUpdateDraft
+  ): Promise<Reservation> => {
+    const response = await request(
+      `${API_BASE}/appointments/${encodeURIComponent(id)}`,
+      withAuth({
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+    )
+    const payload = await handleResponse(response)
+    const data = parseApiSchema(appointmentResponseSchema, payload, 'update appointment')
+    return data.appointment
   },
   generateTriageSummary: async (
     symptoms: string,
@@ -100,12 +158,29 @@ export const api = {
       body: JSON.stringify({ symptoms }),
       signal,
     })
-    return handleResponse<{ summary: TriageSummary; elapsedMs: number }>(response)
+    const payload = await handleResponse(response)
+    return parseApiSchema(triageSummaryResponseSchema, payload, 'triage summary')
   },
   getAccessRequests: async (): Promise<AccessRequest[]> => {
-    const data = await handleResponse<{ requests: AccessRequest[] }>(
-      await request(`${API_BASE}/access-requests`, withAuth())
-    )
+    const payload = await handleResponse(await request(`${API_BASE}/access-requests`, withAuth()))
+    const data = parseApiSchema(accessRequestsResponseSchema, payload, 'access requests')
     return data.requests
+  },
+  logAiAlertAction: async (
+    alertId: string,
+    action: AlertAuditAction,
+    context?: string
+  ): Promise<boolean> => {
+    const response = await request(
+      `${API_BASE}/audit/ai-alert-action`,
+      withAuth({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alertId, action, context }),
+      })
+    )
+    const payload = await handleResponse(response)
+    const data = parseApiSchema(aiAlertAuditResponseSchema, payload, 'AI alert audit')
+    return data.ok
   },
 }

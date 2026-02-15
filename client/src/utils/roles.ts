@@ -3,9 +3,9 @@ import type { UserRole } from '../types/triage'
 
 const roleLabels: Record<UserRole, string> = {
   user: 'User',
-  nurse: 'Nurse / Doctor',
-  admin: 'Admin',
-  system_admin: 'System Admin',
+  nurse: 'Nurse',
+  admin: 'Admin / Doctor',
+  system_admin: 'Super Admin',
 }
 
 export const formatRoleLabel = (role?: string | null) => {
@@ -17,7 +17,7 @@ export const formatRoleLabel = (role?: string | null) => {
 
 export const getDefaultPageForRole = (role?: UserRole | null): AppPage => {
   if (role === 'nurse' || role === 'admin' || role === 'system_admin') {
-    return 'dashboard'
+    return 'doctor_dashboard'
   }
-  return 'triage'
+  return 'appointments'
 }

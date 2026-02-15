@@ -18,15 +18,17 @@ const AppHeader = ({ theme, onToggleTheme, onNavigate }: AppHeaderProps) => (
         >
           <AppLogoBadge className="h-11 w-11 transition group-hover:-translate-y-0.5" />
           <div>
-            <p className="font-display text-lg font-semibold tracking-tight text-white">AI Health Care</p>
-            <p className="text-xs text-white/60">AI triage and immutable operations</p>
+            <p className="font-display text-lg font-semibold tracking-tight text-[color:var(--agent-ink)]">
+              AI Health Care
+            </p>
+            <p className="text-xs text-[color:var(--agent-muted)]">AI triage and immutable operations</p>
           </div>
         </button>
 
         <nav className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={onToggleTheme}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+            className="inline-flex items-center gap-2 rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)]/85 transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-overlay-strong)] hover:text-[color:var(--agent-ink)]"
           >
             {theme === 'dark' ? (
               <svg
@@ -71,9 +73,16 @@ const AppHeader = ({ theme, onToggleTheme, onNavigate }: AppHeaderProps) => (
 
           <button
             onClick={() => onNavigate('login')}
-            className="rounded-full border border-white/10 bg-white/5 px-5 py-2 text-xs font-semibold text-white/75 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+            className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-5 py-2 text-xs font-semibold text-[color:var(--agent-ink)]/85 transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-overlay-strong)] hover:text-[color:var(--agent-ink)]"
           >
             Log in
+          </button>
+
+          <button
+            onClick={() => onNavigate('signup')}
+            className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-5 py-2 text-xs font-semibold text-[color:var(--agent-ink)]/85 transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-overlay-strong)] hover:text-[color:var(--agent-ink)]"
+          >
+            Register
           </button>
         </nav>
       </div>

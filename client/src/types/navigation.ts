@@ -1,6 +1,8 @@
 export type AppPage =
   | 'landing'
   | 'triage'
+  | 'appointments'
+  | 'doctor_dashboard'
   | 'dashboard'
   | 'analytics'
   | 'clinical_reports'
@@ -13,5 +15,6 @@ export type AppPage =
   | 'admin'
   | 'admin_login'
   | 'login'
+  | 'otp'
   | 'forgot_password'
   | 'signup'

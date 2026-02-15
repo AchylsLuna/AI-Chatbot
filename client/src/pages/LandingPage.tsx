@@ -1,30 +1,15 @@
-import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { AppPage } from '../types/navigation'
-import type { Reservation, ReservationDraft, UserRole } from '../types/triage'
+import type { Reservation, ReservationDraft } from '../types/triage'
 import AppLogoBadge from '../components/branding/AppLogoBadge'
-import { getDefaultPageForRole } from '../utils/roles'
 import TriagePage from './TriagePage'
 
 type LandingPageProps = {
   onNavigate?: (page: AppPage) => void
   onCreateReservation: (draft: ReservationDraft) => void
   latestReservation?: Reservation
-  theme: 'light' | 'dark'
-  onToggleTheme: () => void
   isAuthenticated?: boolean
-  authRole?: UserRole | null
 }
-
-type NavTarget = 'home' | 'about' | 'workflow' | 'triage' | 'projects'
-
-const navItems: Array<{ label: string; target: NavTarget }> = [
-  { label: 'Home', target: 'home' },
-  { label: 'Platform', target: 'about' },
-  { label: 'Workflow', target: 'workflow' },
-  { label: 'Triage', target: 'triage' },
-  { label: 'Modules', target: 'projects' },
-]
 
 const headlineStats = [
   { label: 'Average intake', value: '2-4 min' },
@@ -86,63 +71,15 @@ const LandingPage = ({
   onNavigate,
   onCreateReservation,
   latestReservation,
-  theme,
-  onToggleTheme,
   isAuthenticated = false,
-  authRole = null,
 }: LandingPageProps) => {
-  const [activeTarget, setActiveTarget] = useState<NavTarget>('home')
-
-  const workspacePage = getDefaultPageForRole(authRole)
-
-  useEffect(() => {
+  const handleScrollTop = () => {
     if (typeof window === 'undefined') return
-
-    const sectionOrder: NavTarget[] = ['home', 'about', 'workflow', 'triage', 'projects']
-    const observed = sectionOrder
-      .map((id) => document.getElementById(id))
-      .filter((node): node is HTMLElement => Boolean(node))
-
-    if (!observed.length) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)
-
-        if (visible[0]?.target?.id) {
-          setActiveTarget(visible[0].target.id as NavTarget)
-        }
-      },
-      {
-        rootMargin: '-25% 0px -55% 0px',
-        threshold: [0.2, 0.45, 0.7],
-      }
-    )
-
-    observed.forEach((node) => observer.observe(node))
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [])
-
-  const handleNav = (target: NavTarget) => {
-    if (typeof window === 'undefined') return
-    setActiveTarget(target)
-    if (target === 'home') {
-      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
-      return
-    }
-    const node = document.getElementById(target)
-    if (node) {
-      node.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)]">
+    <div className="relative min-h-screen overflow-x-hidden bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)]">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 agent-grid opacity-15" />
         <div className="absolute -top-48 left-[10%] h-80 w-80 rounded-full bg-[radial-gradient(circle_at_center,rgba(124,252,196,0.26),transparent_62%)] blur-3xl animate-drift-slow" />
@@ -154,7 +91,7 @@ const LandingPage = ({
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4">
           <button
             type="button"
-            onClick={() => handleNav('home')}
+            onClick={handleScrollTop}
             className="flex items-center gap-3 text-left"
             data-reveal
             style={revealDelay(40)}
@@ -166,42 +103,20 @@ const LandingPage = ({
             </div>
           </button>
 
-          <nav
-            className="hidden items-center gap-3 rounded-full border border-white/10 bg-white/5 p-1 md:flex"
-            data-reveal
-            style={revealDelay(90)}
-          >
-            {navItems.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                  activeTarget === item.target
-                    ? 'bg-white/10 text-white'
-                    : 'text-white/60 hover:text-white'
-                }`}
-                onClick={() => handleNav(item.target)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-2" data-reveal style={revealDelay(130)}>
+          <div className="flex items-center gap-2" data-reveal style={revealDelay(90)}>
             <button
               type="button"
-              className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white sm:px-4"
-              onClick={onToggleTheme}
-              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white sm:px-5"
+              onClick={() => onNavigate?.('login')}
             >
-              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              Sign in
             </button>
             <button
               type="button"
               className="rounded-full bg-[color:var(--agent-accent)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5 hover:bg-[color:var(--agent-accent-strong)] sm:px-5"
-              onClick={() => onNavigate?.(isAuthenticated ? workspacePage : 'login')}
+              onClick={() => onNavigate?.(isAuthenticated ? 'triage' : 'signup')}
             >
-              {isAuthenticated ? 'Open workspace' : 'Log in'}
+              Get started
             </button>
           </div>
         </div>
@@ -228,16 +143,16 @@ const LandingPage = ({
               <button
                 type="button"
                 className="rounded-full bg-[color:var(--agent-accent)] px-6 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5 hover:bg-[color:var(--agent-accent-strong)]"
-                onClick={() => handleNav('triage')}
+                onClick={() => onNavigate?.(isAuthenticated ? 'triage' : 'signup')}
               >
-                Launch Triage Demo
+                Get started
               </button>
               <button
                 type="button"
                 className="rounded-full border border-white/10 px-6 py-3 text-sm font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
-                onClick={() => handleNav('workflow')}
+                onClick={() => onNavigate?.('login')}
               >
-                View Workflow
+                Sign in
               </button>
             </div>
 
@@ -383,7 +298,7 @@ const LandingPage = ({
           </div>
         </section>
 
-        <footer className="mx-auto w-full max-w-6xl px-6 pb-10">
+        <footer id="site-footer" className="mx-auto w-full max-w-6xl px-6 pb-10">
           <div
             className="rounded-[34px] border border-white/10 bg-[color:var(--agent-surface-strong)] px-8 py-10 sm:px-12 sm:py-12"
             data-reveal

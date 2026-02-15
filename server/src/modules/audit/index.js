@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { getDb } from '../../config/db.js'
+import { getStore } from '../../config/store.js'
 
 const AUDIT_COLLECTION = 'audit_logs'
 const AUDIT_HMAC_SECRET = process.env.AUDIT_HMAC_SECRET || ''
@@ -17,8 +17,8 @@ const generateId = () => {
 }
 
 export const recordAuditEvent = async (event) => {
-  const db = getDb()
-  const collection = db.collection(AUDIT_COLLECTION)
+  const store = getStore()
+  const collection = store.collection(AUDIT_COLLECTION)
   const createdAt = new Date().toISOString()
   const last = await collection.find().sort({ createdAt: -1 }).limit(1).toArray()
   const prevHash = last[0]?.hash || null

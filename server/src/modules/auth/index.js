@@ -1,11 +1,16 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { getDb } from '../../config/db.js'
+import crypto from 'node:crypto'
+import { getStore } from '../../config/store.js'
 import { recordAuditEvent } from '../audit/index.js'
 
 const DEFAULT_JWT_SECRET = 'dev-secret-change-me'
 const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET
-const TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h'
+const JWT_ISSUER = process.env.JWT_ISSUER || 'ai-healthcare-api'
+const JWT_AUDIENCE = process.env.JWT_AUDIENCE || 'ai-healthcare-client'
+const USER_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN_USER || process.env.JWT_EXPIRES_IN || '2h'
+const CLINICAL_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN_CLINICAL || '45m'
+const ADMIN_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN_ADMIN || '30m'
 const MIN_JWT_SECRET_LENGTH = 32
 
 const ADMIN_USER = process.env.ADMIN_USER || 'admin@aihealthcare.com'
@@ -31,12 +36,17 @@ const PASSWORD_MIN = 8
 const PASSWORD_MAX = 72
 const LOCKOUT_ATTEMPTS = Number(process.env.AUTH_LOCKOUT_ATTEMPTS) || 5
 const LOCKOUT_MINUTES = Number(process.env.AUTH_LOCKOUT_MINUTES) || 15
+const OTP_COLLECTION = 'otp_challenges'
+const OTP_LENGTH = 6
+const OTP_TTL_MINUTES = Number(process.env.OTP_TTL_MINUTES) || 5
+const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS) || 5
+const OTP_SECRET = process.env.OTP_SECRET || JWT_SECRET
 
 const nowIso = () => new Date().toISOString()
 
 const logAuthEvent = async (event) => {
-  const db = getDb()
-  await db.collection('auth_events').insertOne({
+  const store = getStore()
+  await store.collection('auth_events').insertOne({
     id: `AUTH-${Date.now()}`,
     createdAt: nowIso(),
     ...event,
@@ -50,6 +60,45 @@ const safeAudit = async (event) => {
     console.warn('Audit log failed', error)
   }
 }
+
+const tokenExpiryForRole = (role) => {
+  if (role === 'admin' || role === 'system_admin') return ADMIN_TOKEN_EXPIRES_IN
+  if (role === 'nurse') return CLINICAL_TOKEN_EXPIRES_IN
+  return USER_TOKEN_EXPIRES_IN
+}
+
+const issueSessionForUser = (user, options = {}) => {
+  const authMethod = typeof options.authMethod === 'string' ? options.authMethod : 'password'
+  const mfa = Boolean(options.mfa)
+  const sessionId = `sess-${crypto.randomBytes(10).toString('hex')}`
+  const token = jwt.sign(
+    {
+      username: user.username,
+      role: user.role,
+      authMethod,
+      mfa,
+      sessionId,
+    },
+    JWT_SECRET,
+    {
+      expiresIn: tokenExpiryForRole(user.role),
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+      subject: user.username,
+      jwtid: sessionId,
+    }
+  )
+  return { token, user: { username: user.username, role: user.role } }
+}
+
+const generateOtpCode = () =>
+  String(Math.floor(Math.random() * 10 ** OTP_LENGTH)).padStart(OTP_LENGTH, '0')
+
+const hashOtpCode = (challengeId, code) =>
+  crypto
+    .createHash('sha256')
+    .update(`${OTP_SECRET}:${challengeId}:${code}`)
+    .digest('hex')
 
 const passwordMeetsPolicy = (password) => {
   if (typeof password !== 'string') return false
@@ -102,8 +151,8 @@ export const validateAuthConfig = () => {
 }
 
 export const seedUsers = async () => {
-  const db = getDb()
-  const users = db.collection('users')
+  const store = getStore()
+  const users = store.collection('users')
   const seedUser = async (username, role, password) => {
     const existing = await users.findOne({ username })
     if (!existing) {
@@ -139,9 +188,9 @@ export const seedUsers = async () => {
   }
 }
 
-export const login = async (username, password, meta = {}) => {
-  const db = getDb()
-  const users = db.collection('users')
+const verifyCredentials = async (username, password, meta = {}) => {
+  const store = getStore()
+  const users = store.collection('users')
   const user = await users.findOne({ username })
   if (!user) {
     await logAuthEvent({
@@ -216,11 +265,31 @@ export const login = async (username, password, meta = {}) => {
     { $set: { failedLoginCount: 0, lockUntil: null } }
   )
 
-  const token = jwt.sign(
-    { username: user.username, role: user.role },
-    JWT_SECRET,
-    { expiresIn: TOKEN_EXPIRES_IN }
-  )
+  return user
+}
+
+export const login = async (username, password, meta = {}) => {
+  const user = await verifyCredentials(username, password, meta)
+  if (user.role !== 'user') {
+    await logAuthEvent({
+      type: 'login_mfa_required',
+      username: user.username,
+      role: user.role,
+      success: false,
+      authMethod: 'password',
+      ...meta,
+    })
+    await safeAudit({
+      type: 'login_mfa_required',
+      username: user.username,
+      role: user.role,
+      success: false,
+      authMethod: 'password',
+      ...meta,
+    })
+    throw new Error('MFA required for this role. Use OTP login.')
+  }
+  const session = issueSessionForUser(user, { authMethod: 'password', mfa: false })
 
   await logAuthEvent({
     type: 'login_success',
@@ -237,7 +306,150 @@ export const login = async (username, password, meta = {}) => {
     ...meta,
   })
 
-  return { token, user: { username: user.username, role: user.role } }
+  return session
+}
+
+export const requestLoginOtp = async (username, password, meta = {}) => {
+  const user = await verifyCredentials(username, password, meta)
+  const store = getStore()
+  const challenges = store.collection(OTP_COLLECTION)
+
+  const challengeId = `OTP-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`
+  const code = generateOtpCode()
+  const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000)
+
+  await challenges.deleteMany({
+    username: user.username,
+    consumedAt: null,
+  })
+
+  await challenges.insertOne({
+    id: challengeId,
+    username: user.username,
+    role: user.role,
+    codeHash: hashOtpCode(challengeId, code),
+    attempts: 0,
+    createdAt: nowIso(),
+    expiresAt,
+    consumedAt: null,
+  })
+
+  await logAuthEvent({
+    type: 'otp_challenge_issued',
+    username: user.username,
+    role: user.role,
+    success: true,
+    ...meta,
+  })
+  await safeAudit({
+    type: 'otp_challenge_issued',
+    username: user.username,
+    role: user.role,
+    success: true,
+    ...meta,
+  })
+
+  const payload = {
+    challengeId,
+    username: user.username,
+    expiresAt: expiresAt.toISOString(),
+    expiresInSeconds: OTP_TTL_MINUTES * 60,
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    return { ...payload, otpPreview: code }
+  }
+
+  return payload
+}
+
+export const verifyLoginOtp = async ({ challengeId, code }, meta = {}) => {
+  const cleanedChallengeId = typeof challengeId === 'string' ? challengeId.trim() : ''
+  const cleanedCode = typeof code === 'string' ? code.trim() : ''
+
+  if (!cleanedChallengeId || !/^\d{6}$/.test(cleanedCode)) {
+    throw new Error('Invalid OTP input')
+  }
+
+  const store = getStore()
+  const challenges = store.collection(OTP_COLLECTION)
+  const users = store.collection('users')
+  const challenge = await challenges.findOne({ id: cleanedChallengeId })
+
+  if (!challenge) {
+    throw new Error('OTP challenge not found. Please request a new code.')
+  }
+
+  if (challenge.consumedAt) {
+    throw new Error('OTP code already used. Please request a new code.')
+  }
+
+  const expiresAtMs = new Date(challenge.expiresAt).getTime()
+  if (Number.isNaN(expiresAtMs) || expiresAtMs <= Date.now()) {
+    throw new Error('OTP code expired. Please request a new code.')
+  }
+
+  if ((challenge.attempts || 0) >= OTP_MAX_ATTEMPTS) {
+    throw new Error('Too many OTP attempts. Please request a new code.')
+  }
+
+  const isCodeValid = hashOtpCode(cleanedChallengeId, cleanedCode) === challenge.codeHash
+  if (!isCodeValid) {
+    const nextAttempts = (challenge.attempts || 0) + 1
+    await challenges.updateOne(
+      { id: cleanedChallengeId },
+      { $set: { attempts: nextAttempts } }
+    )
+    await logAuthEvent({
+      type: 'otp_verify_failed',
+      username: challenge.username,
+      success: false,
+      reason: 'invalid_code',
+      ...meta,
+    })
+    await safeAudit({
+      type: 'otp_verify_failed',
+      username: challenge.username,
+      success: false,
+      reason: 'invalid_code',
+      ...meta,
+    })
+    if (nextAttempts >= OTP_MAX_ATTEMPTS) {
+      throw new Error('Too many OTP attempts. Please request a new code.')
+    }
+    throw new Error('Invalid OTP code')
+  }
+
+  await challenges.updateOne(
+    { id: cleanedChallengeId },
+    { $set: { consumedAt: nowIso(), attempts: (challenge.attempts || 0) + 1 } }
+  )
+
+  const user = await users.findOne({ username: challenge.username })
+  if (!user) {
+    throw new Error('Account not found')
+  }
+
+  const session = issueSessionForUser(user, { authMethod: 'otp', mfa: true })
+
+  await logAuthEvent({
+    type: 'login_success',
+    username: user.username,
+    role: user.role,
+    success: true,
+    authMethod: 'otp',
+    ...meta,
+  })
+  await safeAudit({
+    type: 'login_success',
+    username: user.username,
+    role: user.role,
+    success: true,
+    authMethod: 'otp',
+    ...meta,
+  })
+
+  return session
 }
 
 export const registerUser = async ({
@@ -266,8 +478,8 @@ export const registerUser = async ({
     throw new Error('Password must be at least 8 characters with upper, lower, and number')
   }
 
-  const db = getDb()
-  const users = db.collection('users')
+  const store = getStore()
+  const users = store.collection('users')
   const existing = await users.findOne({ username: cleanedUsername })
   if (existing) {
     throw new Error('User already exists')
@@ -301,13 +513,10 @@ export const registerUser = async ({
     ...meta,
   })
 
-  const token = jwt.sign(
+  return issueSessionForUser(
     { username: cleanedUsername, role: cleanedRole },
-    JWT_SECRET,
-    { expiresIn: TOKEN_EXPIRES_IN }
+    { authMethod: 'signup', mfa: false }
   )
-
-  return { token, user: { username: cleanedUsername, role: cleanedRole } }
 }
 
 export const requireAuth = (req, res, next) => {
@@ -317,8 +526,41 @@ export const requireAuth = (req, res, next) => {
   }
   const token = header.replace('Bearer ', '')
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    req.user = payload
+    const payload = jwt.verify(token, JWT_SECRET, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    })
+    if (!payload || typeof payload !== 'object') {
+      return res.status(401).json({ error: 'Invalid token payload' })
+    }
+
+    const username =
+      typeof payload.username === 'string' ? payload.username : ''
+    const role = typeof payload.role === 'string' ? payload.role : ''
+    const authMethod =
+      typeof payload.authMethod === 'string' ? payload.authMethod : 'unknown'
+    const mfa = Boolean(payload.mfa)
+    const isClinicalRole = role === 'nurse' || role === 'admin' || role === 'system_admin'
+
+    if (!username || !ALLOWED_ROLES.includes(role)) {
+      return res.status(401).json({ error: 'Invalid token claims' })
+    }
+    if (isClinicalRole && !mfa) {
+      return res.status(401).json({ error: 'MFA token required for this role' })
+    }
+
+    req.user = {
+      username,
+      role,
+      authMethod,
+      mfa,
+      sessionId:
+        typeof payload.sessionId === 'string'
+          ? payload.sessionId
+          : typeof payload.jti === 'string'
+            ? payload.jti
+            : null,
+    }
     return next()
   } catch (error) {
     return res.status(401).json({ error: 'Invalid or expired token' })

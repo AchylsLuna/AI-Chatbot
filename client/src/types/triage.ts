@@ -8,6 +8,13 @@ export type TriageSummary = {
   symptoms: string
   disclaimer: string
   source?: 'ai' | 'rules' | 'decision_tree'
+  proof?: {
+    version: 'v1'
+    issuedAt: number
+    expiresAt: number
+    nonce: string
+    signature: string
+  }
 }
 
 export type Reservation = {
@@ -52,6 +59,14 @@ export type AuthSession = {
   }
 }
 
+export type LoginOtpChallenge = {
+  challengeId: string
+  username: string
+  expiresAt: string
+  expiresInSeconds: number
+  otpPreview?: string
+}
+
 export type SignupDraft = {
   username: string
   password: string
@@ -71,3 +86,19 @@ export type AccessRequest = {
   notes?: string
   reviewedAt?: string
 }
+
+export type AppointmentUpdateDraft = {
+  requestedTime?: string
+  status?: ReservationStatus
+  department?: string
+  priority?: 'Low' | 'Routine' | 'High'
+  summary?: string
+}
+
+export type AlertAuditAction =
+  | 'view'
+  | 'dismiss'
+  | 'approve'
+  | 'open'
+  | 'identity_reveal'
+  | 'identity_hide'
