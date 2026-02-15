@@ -1,3 +1,4 @@
+import type { AppPage } from '../types/navigation'
 import type { UserRole } from '../types/triage'
 
 const roleLabels: Record<UserRole, string> = {
@@ -12,4 +13,11 @@ export const formatRoleLabel = (role?: string | null) => {
   const normalized = role as UserRole
   if (roleLabels[normalized]) return roleLabels[normalized]
   return role.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+export const getDefaultPageForRole = (role?: UserRole | null): AppPage => {
+  if (role === 'nurse' || role === 'admin' || role === 'system_admin') {
+    return 'dashboard'
+  }
+  return 'triage'
 }

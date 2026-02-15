@@ -1,9 +1,17 @@
 import type { AppPage } from '../types/navigation'
 
-export const PAGE_ROUTES: Record<AppPage, string> = {
+const PAGE_ROUTES: Record<AppPage, string> = {
   landing: '/',
   triage: '/triage',
   dashboard: '/dashboard',
+  analytics: '/dashboard/analytics',
+  clinical_reports: '/dashboard/clinical-reports',
+  care_alerts: '/dashboard/care-alerts',
+  care_support: '/dashboard/care-support',
+  ledger_monitoring: '/dashboard/ledger-monitoring',
+  intake_monitoring: '/dashboard/intake-monitoring',
+  security: '/dashboard/security',
+  user_management: '/dashboard/user-management',
   admin: '/admin',
   admin_login: '/admin-login',
   login: '/login',

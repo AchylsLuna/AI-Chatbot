@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { getDb } from './db.js'
-import { recordAuditEvent } from './audit.js'
+import { getDb } from '../../config/db.js'
+import { recordAuditEvent } from '../audit/index.js'
 
 const DEFAULT_JWT_SECRET = 'dev-secret-change-me'
 const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET
@@ -84,6 +84,20 @@ export const validateAuthConfig = () => {
   }
   if (process.env.JWT_SECRET.length < MIN_JWT_SECRET_LENGTH) {
     throw new Error('JWT_SECRET must be at least 32 characters in production.')
+  }
+
+  const seedUsersEnabled = String(process.env.SEED_USERS || 'true').toLowerCase() === 'true'
+  if (seedUsersEnabled) {
+    const usingDefaultSeedCredentials = [
+      ADMIN_USER === ROLE_DEFAULT_EMAILS.admin || ADMIN_PASS === 'admin123',
+      NURSE_USER === ROLE_DEFAULT_EMAILS.nurse || NURSE_PASS === 'nurse123',
+      SYSADMIN_USER === ROLE_DEFAULT_EMAILS.system_admin || SYSADMIN_PASS === 'sysadmin123',
+      USER_USER === ROLE_DEFAULT_EMAILS.user || USER_PASS === 'user123',
+    ].some(Boolean)
+
+    if (usingDefaultSeedCredentials) {
+      throw new Error('Default seeded usernames/passwords must be overridden in production.')
+    }
   }
 }
 

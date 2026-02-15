@@ -1,4 +1,4 @@
-export const ALLOWED_DEPARTMENTS = [
+const ALLOWED_DEPARTMENTS = [
   'Cardiology',
   'Dermatology',
   'Gastroenterology',
@@ -6,7 +6,7 @@ export const ALLOWED_DEPARTMENTS = [
   'Orthopedics',
   'General Medicine',
 ]
-export const SYMPTOM_KEYWORDS = [
+const SYMPTOM_KEYWORDS = [
   'chest',
   'breath',
   'palpitation',
@@ -32,7 +32,7 @@ export const SYMPTOM_KEYWORDS = [
   'cough',
   'sore throat',
 ]
-export const DISCLAIMER =
+const DISCLAIMER =
   'This recommendation is guidance only. Not a medical diagnosis. For emergencies, contact local services.'
 
 export const normalizeDepartment = (value, fallback) => {

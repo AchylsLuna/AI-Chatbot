@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { getDb } from './db.js'
+import { getDb } from '../../config/db.js'
 
 const AUDIT_COLLECTION = 'audit_logs'
 const AUDIT_HMAC_SECRET = process.env.AUDIT_HMAC_SECRET || ''

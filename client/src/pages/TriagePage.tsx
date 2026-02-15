@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import AppLogoBadge from '../components/branding/AppLogoBadge'
 import { api } from '../services/api'
+import type { AppPage } from '../types/navigation'
 import { decisionTreeTriage } from '../utils/decisionTree'
-import type { Reservation, ReservationDraft, TriageSummary } from '../types/triage'
+import type { Reservation, ReservationDraft, TriageSummary, UserRole } from '../types/triage'
 
 const quickPrompts = [
   'How long have these symptoms been present?',
@@ -19,11 +21,33 @@ type TriagePageProps = {
   onCreateReservation: (draft: ReservationDraft) => void
   latestReservation?: Reservation
   variant?: 'full' | 'embedded'
+  onNavigate?: (page: AppPage) => void
+  authRole?: UserRole | null
 }
 
 const formatConfidence = (value: number) => `${Math.round(value * 100)}%`
 const DISCLAIMER =
   'This recommendation is guidance only. Not a medical diagnosis. For emergencies, contact local services.'
+
+const buildSidebarLinks = (role?: UserRole | null): Array<{ label: string; page: AppPage; hint: string }> => {
+  const links: Array<{ label: string; page: AppPage; hint: string }> = [
+    { label: 'Home', page: 'landing', hint: 'Platform overview' },
+    { label: 'Triage', page: 'triage', hint: 'Guided intake workspace' },
+  ]
+
+  if (role && role !== 'user') {
+    links.push({ label: 'Dashboard', page: 'dashboard', hint: 'Operations monitoring' })
+  }
+
+  if (role === 'admin' || role === 'system_admin') {
+    links.push({ label: 'Admin', page: 'admin', hint: 'Restricted controls' })
+  } else {
+    links.push({ label: 'Admin Login', page: 'admin_login', hint: 'Admin and system admin access' })
+  }
+
+  links.push({ label: 'Switch Account', page: 'login', hint: 'Sign in as another user' })
+  return links
+}
 
 const buildFallbackSummary = (symptomsText: string): TriageSummary => {
   const decision = decisionTreeTriage(symptomsText)
@@ -48,8 +72,11 @@ const TriagePage = ({
   onCreateReservation,
   latestReservation,
   variant = 'full',
+  onNavigate,
+  authRole = null,
 }: TriagePageProps) => {
   const isEmbedded = variant === 'embedded'
+  const sideBarLinks = buildSidebarLinks(authRole)
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'intro',
@@ -161,180 +188,244 @@ const TriagePage = ({
     })
   }
 
+  const renderSidebar = () => (
+    <aside className="rounded-3xl agent-card p-5">
+      <div className="flex items-center gap-3 px-1 py-1.5">
+        <AppLogoBadge className="h-11 w-11" />
+        <div>
+          <p className="text-sm font-semibold text-white">AI Health Care</p>
+          <p className="text-[11px] text-white/60">Workspace navigation</p>
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-2">
+        {sideBarLinks.map((link) => {
+          const isActive = link.page === 'triage'
+          return (
+            <button
+              key={link.page}
+              type="button"
+              onClick={() => onNavigate?.(link.page)}
+              className={`w-full rounded-2xl border px-3 py-2.5 text-left transition ${
+                isActive
+                  ? 'border-[color:var(--agent-accent)] bg-white/10 shadow-[0_10px_30px_rgba(124,252,196,0.12)]'
+                  : 'border-white/10 bg-[color:var(--agent-surface-strong)] hover:border-white/30 hover:bg-white/10'
+              }`}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              <div className="flex items-center gap-2.5">
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    isActive ? 'bg-[color:var(--agent-accent)]' : 'bg-white/45'
+                  }`}
+                />
+                <p className="text-sm font-semibold text-white">{link.label}</p>
+              </div>
+              <p className="mt-1 text-[11px] text-white/55">{link.hint}</p>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="mt-5 rounded-2xl agent-card-soft p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/60">
+          Intake mode
+        </p>
+        <p className="mt-1 text-xs text-white/60">
+          Advice-only workflow with department recommendation and booking handoff.
+        </p>
+      </div>
+    </aside>
+  )
+
+  const content = (
+    <>
+      {!isEmbedded && (
+        <div className="page-header" data-reveal>
+          <div>
+            <p className="page-eyebrow">Decision Tree guidance layer</p>
+            <h1 className="page-title">Guided triage intake</h1>
+            <p className="page-copy">
+              Advice-only guidance with free-text symptom input. Book appointments only after a
+              recommendation is generated.
+            </p>
+          </div>
+          <div className="agent-chip">Direct booking</div>
+        </div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-3xl agent-card p-6" data-reveal>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Guided inquiry</h2>
+              <p className="text-xs text-white/60">Structured questions to avoid self-diagnosis</p>
+            </div>
+            <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-3 py-1 text-xs font-semibold text-amber-200">
+              Advice only
+            </span>
+          </div>
+
+          <div className="mt-4 h-[360px] space-y-3 overflow-y-auto rounded-2xl agent-card-soft p-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                    message.sender === 'user'
+                      ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
+                      : 'bg-white/10 text-white/80'
+                  }`}
+                >
+                  {message.text}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex gap-2">
+            <input
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Enter free-text symptoms, duration, and context"
+              className="agent-input flex-1"
+            />
+            <button
+              onClick={handleSend}
+              className="agent-button"
+            >
+              Send
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-white/50">
+            The Decision Tree provides guidance only. For emergencies, contact local services.
+          </p>
+        </div>
+
+        <div className="space-y-6">
+          <div className="rounded-3xl agent-card p-6" data-reveal>
+            <h3 className="text-lg font-semibold text-white">Decision Tree triage summary</h3>
+            <p className="mt-2 text-xs text-white/60">
+              Generated from the guided inquiry using a MedQuad-informed decision tree.
+            </p>
+            <div className="mt-4 rounded-2xl agent-card-soft p-4">
+              {isInputInvalid ? (
+                <p className="text-sm text-white/60">
+                  Enter clear symptoms to receive a department recommendation.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs uppercase tracking-wider text-white/60">
+                    Recommended department
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-white">{summary.department}</p>
+                  <div className="mt-3 flex items-center justify-between text-xs text-white/60">
+                    <span>Priority: {summary.priority}</span>
+                    <span>Confidence: {formatConfidence(summary.confidence)}</span>
+                  </div>
+                  <p className="mt-3 text-sm text-[color:var(--agent-muted)]">{summary.summary}</p>
+                  <p className="mt-2 text-xs text-white/50">{summary.symptoms}</p>
+                </>
+              )}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="text-emerald-200">
+                {isSummaryLoading
+                  ? 'Generating decision tree recommendation...'
+                  : 'Decision Tree (MedQuad) applied'}
+              </span>
+              {summaryLatency !== null && !isSummaryLoading && (
+                <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-semibold text-white/70">
+                  {summaryLatency}ms
+                </span>
+              )}
+              {!isSummaryLoading && (
+                <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-semibold text-white/70">
+                  Target response &lt; 5s
+                </span>
+              )}
+              {summary.source === 'ai' && !isSummaryLoading && (
+                <span className="rounded-full border border-emerald-400/30 bg-emerald-400/15 px-2 py-1 text-[10px] font-semibold text-emerald-200">
+                  AI-assisted summary
+                </span>
+              )}
+              {summary.source !== 'ai' && !isSummaryLoading && (
+                <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2 py-1 text-[10px] font-semibold text-amber-200">
+                  Decision Tree
+                </span>
+              )}
+            </div>
+            {summaryError && (
+              <p className="mt-2 text-xs font-semibold text-rose-300">{summaryError}</p>
+            )}
+            {!isInputInvalid && (
+              <p className="mt-2 text-xs text-white/50">{summary.disclaimer}</p>
+            )}
+          </div>
+
+          <div className="rounded-3xl agent-card p-6" data-reveal>
+            <h3 className="text-lg font-semibold text-white">Book appointment</h3>
+            <p className="mt-2 text-xs text-white/60">
+              Appointments are booked after a recommendation is generated.
+            </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                  Patient name
+                </label>
+                <input
+                  value={patientName}
+                  onChange={(event) => setPatientName(event.target.value)}
+                  className="agent-input mt-2"
+                  placeholder="Jordan Lee"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                  Requested time
+                </label>
+                <input
+                  value={requestedTime}
+                  onChange={(event) => setRequestedTime(event.target.value)}
+                  className="agent-input mt-2"
+                  placeholder="2:30 PM"
+                />
+              </div>
+              <button
+                onClick={handleCreateReservation}
+                disabled={!canBook || !patientName.trim() || !requestedTime.trim()}
+                className="agent-button w-full disabled:bg-white/10 disabled:text-white/40"
+              >
+                Book appointment
+              </button>
+              {latestReservation && (
+                <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/12 px-4 py-3 text-xs font-semibold text-emerald-200">
+                  Latest booking: {latestReservation.id} · {latestReservation.department}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+
   return (
     <div className={isEmbedded ? '' : 'page-shell'}>
       <div className={`w-full ${isEmbedded ? '' : 'page-wrap'}`}>
-        {!isEmbedded && (
-          <div className="page-header" data-reveal>
-            <div>
-              <p className="page-eyebrow">Decision Tree guidance layer</p>
-              <h1 className="page-title">Guided triage intake</h1>
-              <p className="page-copy">
-                Advice-only guidance with free-text symptom input. Book appointments only after a
-                recommendation is generated.
-              </p>
+        {isEmbedded ? (
+          content
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div className="lg:sticky lg:top-24 lg:self-start" data-reveal>
+              {renderSidebar()}
             </div>
-            <div className="agent-chip">Direct booking</div>
+            <div>{content}</div>
           </div>
         )}
-
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-3xl agent-card p-6" data-reveal>
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Guided inquiry</h2>
-                <p className="text-xs text-white/60">Structured questions to avoid self-diagnosis</p>
-              </div>
-              <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-3 py-1 text-xs font-semibold text-amber-200">
-                Advice only
-              </span>
-            </div>
-
-            <div className="mt-4 h-[360px] space-y-3 overflow-y-auto rounded-2xl agent-card-soft p-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                      message.sender === 'user'
-                        ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
-                        : 'bg-white/10 text-white/80'
-                    }`}
-                  >
-                    {message.text}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <input
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="Enter free-text symptoms, duration, and context"
-                className="agent-input flex-1"
-              />
-              <button
-                onClick={handleSend}
-                className="agent-button"
-              >
-                Send
-              </button>
-            </div>
-            <p className="mt-3 text-xs text-white/50">
-              The Decision Tree provides guidance only. For emergencies, contact local services.
-            </p>
-          </div>
-
-          <div className="space-y-6">
-            <div className="rounded-3xl agent-card p-6" data-reveal>
-              <h3 className="text-lg font-semibold text-white">Decision Tree triage summary</h3>
-              <p className="mt-2 text-xs text-white/60">
-                Generated from the guided inquiry using a MedQuad-informed decision tree.
-              </p>
-              <div className="mt-4 rounded-2xl agent-card-soft p-4">
-                {isInputInvalid ? (
-                  <p className="text-sm text-white/60">
-                    Enter clear symptoms to receive a department recommendation.
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-xs uppercase tracking-wider text-white/60">
-                      Recommended department
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-white">{summary.department}</p>
-                    <div className="mt-3 flex items-center justify-between text-xs text-white/60">
-                      <span>Priority: {summary.priority}</span>
-                      <span>Confidence: {formatConfidence(summary.confidence)}</span>
-                    </div>
-                    <p className="mt-3 text-sm text-[color:var(--agent-muted)]">{summary.summary}</p>
-                    <p className="mt-2 text-xs text-white/50">{summary.symptoms}</p>
-                  </>
-                )}
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="text-emerald-200">
-                  {isSummaryLoading
-                    ? 'Generating decision tree recommendation...'
-                    : 'Decision Tree (MedQuad) applied'}
-                </span>
-                {summaryLatency !== null && !isSummaryLoading && (
-                  <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-semibold text-white/70">
-                    {summaryLatency}ms
-                  </span>
-                )}
-                {!isSummaryLoading && (
-                  <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-semibold text-white/70">
-                    Target response &lt; 5s
-                  </span>
-                )}
-                {summary.source === 'ai' && !isSummaryLoading && (
-                  <span className="rounded-full border border-emerald-400/30 bg-emerald-400/15 px-2 py-1 text-[10px] font-semibold text-emerald-200">
-                    AI-assisted summary
-                  </span>
-                )}
-                {summary.source !== 'ai' && !isSummaryLoading && (
-                  <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2 py-1 text-[10px] font-semibold text-amber-200">
-                    Decision Tree
-                  </span>
-                )}
-              </div>
-              {summaryError && (
-                <p className="mt-2 text-xs font-semibold text-rose-300">{summaryError}</p>
-              )}
-              {!isInputInvalid && (
-                <p className="mt-2 text-xs text-white/50">{summary.disclaimer}</p>
-              )}
-            </div>
-
-            <div className="rounded-3xl agent-card p-6" data-reveal>
-              <h3 className="text-lg font-semibold text-white">Book appointment</h3>
-              <p className="mt-2 text-xs text-white/60">
-                Appointments are booked after a recommendation is generated.
-              </p>
-              <div className="mt-4 space-y-3">
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                    Patient name
-                  </label>
-                  <input
-                    value={patientName}
-                    onChange={(event) => setPatientName(event.target.value)}
-                    className="agent-input mt-2"
-                    placeholder="Jordan Lee"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                    Requested time
-                  </label>
-                  <input
-                    value={requestedTime}
-                    onChange={(event) => setRequestedTime(event.target.value)}
-                    className="agent-input mt-2"
-                    placeholder="2:30 PM"
-                  />
-                </div>
-                <button
-                  onClick={handleCreateReservation}
-                  disabled={!canBook || !patientName.trim() || !requestedTime.trim()}
-                  className="agent-button w-full disabled:bg-white/10 disabled:text-white/40"
-                >
-                  Book appointment
-                </button>
-                {latestReservation && (
-                  <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/12 px-4 py-3 text-xs font-semibold text-emerald-200">
-                    Latest booking: {latestReservation.id} · {latestReservation.department}
-                  </div>
-                )}
-              </div>
-            </div>
-
-          </div>
-        </div>
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-export type DecisionTreeResult = {
+type DecisionTreeResult = {
   department: string
   priority: 'Low' | 'Routine' | 'High'
   confidence: number

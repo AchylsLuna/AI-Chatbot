@@ -4,6 +4,7 @@ import { fallbackLedger, fallbackReservations } from '../config/fallbackData'
 import { api, setAuthToken } from '../services/api'
 import type { AppPage } from '../types/navigation'
 import type { AuthSession, LedgerEntry, Reservation, ReservationDraft } from '../types/triage'
+import { getDefaultPageForRole } from '../utils/roles'
 import type { NavigateToPage } from './useAppRouting'
 
 type UseAuthDataArgs = {
@@ -128,8 +129,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       setAuthUser(session.user)
       localStorage.setItem('pulse-ledger-token', session.token)
       setApiReady(true)
-      const defaultPageByRole: AppPage =
-        session.user.role === 'user' ? 'triage' : 'dashboard'
+      const defaultPageByRole = getDefaultPageForRole(session.user.role)
       const resolvedTargetPage = targetPage ?? postLoginPage ?? defaultPageByRole
       setPostLoginPage(null)
       const isAdminTarget = resolvedTargetPage === 'admin'
@@ -156,7 +156,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setAuthError(null)
     localStorage.setItem('pulse-ledger-token', session.token)
     setApiReady(true)
-    navigateToPage(session.user.role === 'user' ? 'triage' : 'dashboard')
+    navigateToPage(getDefaultPageForRole(session.user.role))
   }
 
   const handleLogout = () => {

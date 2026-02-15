@@ -1,15 +1,28 @@
 {
-  "name": "ai-chatbot",
+  "name": "ai-chatbot-monorepo",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "dev": "npm run dev:server & npm run dev:client",
+    "dev:client": "cd client && vite",
+    "dev:server": "node server/index.js",
+    "build": "cd client && tsc -b && vite build",
+    "lint": "cd client && eslint .",
+    "test": "echo \"No server tests configured\"",
+    "sanity": "npm run lint && npm run build && node --check server/index.js",
+    "start": "node server/index.js",
+    "preview": "cd client && vite preview",
+    "clean": "rm -rf client/dist"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "ethers": "^6.15.0",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.16.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

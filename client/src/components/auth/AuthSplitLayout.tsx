@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import AppLogoBadge from '../branding/AppLogoBadge'
 
 type AuthSplitLayoutProps = {
   children: ReactNode
@@ -8,19 +9,7 @@ type AuthSplitLayoutProps = {
 const AuthShowcase = () => (
   <div className="space-y-8" data-reveal>
     <div className="flex items-center gap-3">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-[color:var(--agent-accent)]">
-        <svg
-          viewBox="0 0 24 24"
-          className="h-5 w-5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M4 14h4l2-6 4 12 2-6h4" />
-        </svg>
-      </div>
+      <AppLogoBadge className="h-11 w-11" />
       <span className="text-lg font-semibold tracking-wide">AI Health Care</span>
     </div>
 

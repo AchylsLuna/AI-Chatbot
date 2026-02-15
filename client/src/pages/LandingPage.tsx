@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { AppPage } from '../types/navigation'
-import type { Reservation, ReservationDraft } from '../types/triage'
+import type { Reservation, ReservationDraft, UserRole } from '../types/triage'
+import AppLogoBadge from '../components/branding/AppLogoBadge'
+import { getDefaultPageForRole } from '../utils/roles'
 import TriagePage from './TriagePage'
 
 type LandingPageProps = {
@@ -11,6 +13,7 @@ type LandingPageProps = {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   isAuthenticated?: boolean
+  authRole?: UserRole | null
 }
 
 type NavTarget = 'home' | 'about' | 'workflow' | 'triage' | 'projects'
@@ -68,6 +71,12 @@ const moduleCards = [
   },
 ]
 
+const footerColumns: Array<{ title: string; links: string[] }> = [
+  { title: 'Product', links: ['Features', 'How It Works', 'Testimonials'] },
+  { title: 'Company', links: ['About Us', 'Careers', 'Contact'] },
+  { title: 'Legal', links: ['Privacy Policy', 'Terms of Service', 'HIPAA Compliance'] },
+]
+
 const revealDelay = (ms: number): CSSProperties =>
   ({
     '--reveal-delay': `${ms}ms`,
@@ -80,37 +89,11 @@ const LandingPage = ({
   theme,
   onToggleTheme,
   isAuthenticated = false,
+  authRole = null,
 }: LandingPageProps) => {
-  const [isNavHidden, setIsNavHidden] = useState(false)
   const [activeTarget, setActiveTarget] = useState<NavTarget>('home')
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    let lastY = window.scrollY
-    let ticking = false
-
-    const onScroll = () => {
-      const currentY = window.scrollY
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const isNearTop = currentY <= 8
-          if (isNearTop) {
-            setIsNavHidden(false)
-          } else if (currentY > lastY + 8) {
-            setIsNavHidden(true)
-          } else if (currentY < lastY - 8) {
-            setIsNavHidden(false)
-          }
-          lastY = currentY
-          ticking = false
-        })
-        ticking = true
-      }
-    }
-
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+  const workspacePage = getDefaultPageForRole(authRole)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -167,78 +150,62 @@ const LandingPage = ({
         <div className="absolute bottom-[-120px] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,209,102,0.16),transparent_62%)] blur-3xl animate-float-slow" />
       </div>
 
-      {!isAuthenticated && (
-        <header
-          className={`sticky top-0 z-40 border-b border-white/10 bg-[color:var(--agent-bg)]/95 backdrop-blur transition-transform duration-300 ${
-            isNavHidden ? '-translate-y-full' : 'translate-y-0'
-          }`}
-        >
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[color:var(--agent-bg)]/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4">
+          <button
+            type="button"
+            onClick={() => handleNav('home')}
+            className="flex items-center gap-3 text-left"
+            data-reveal
+            style={revealDelay(40)}
+          >
+            <AppLogoBadge className="h-10 w-10" markClassName="h-[18px] w-[18px] text-[#3bb4db]" />
+            <div>
+              <p className="text-sm font-semibold text-white">AI Health Care</p>
+              <p className="text-[11px] text-white/50">AI triage and immutable operations</p>
+            </div>
+          </button>
+
+          <nav
+            className="hidden items-center gap-3 rounded-full border border-white/10 bg-white/5 p-1 md:flex"
+            data-reveal
+            style={revealDelay(90)}
+          >
+            {navItems.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                  activeTarget === item.target
+                    ? 'bg-white/10 text-white'
+                    : 'text-white/60 hover:text-white'
+                }`}
+                onClick={() => handleNav(item.target)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-2" data-reveal style={revealDelay(130)}>
             <button
               type="button"
-              onClick={() => handleNav('home')}
-              className="flex items-center gap-3 text-left"
-              data-reveal
-              style={revealDelay(40)}
+              className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white sm:px-4"
+              onClick={onToggleTheme}
+              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
             >
-              <div className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/5">
-                <svg
-                  className="h-5 w-5 text-[color:var(--agent-accent)]"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h4l2-3 3 6 2-3h3" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">AI Health Care</p>
-                <p className="text-[11px] text-white/50">AI triage and immutable operations</p>
-              </div>
+              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
             </button>
-
-            <nav
-              className="hidden items-center gap-3 rounded-full border border-white/10 bg-white/5 p-1 md:flex"
-              data-reveal
-              style={revealDelay(90)}
+            <button
+              type="button"
+              className="rounded-full bg-[color:var(--agent-accent)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5 hover:bg-[color:var(--agent-accent-strong)] sm:px-5"
+              onClick={() => onNavigate?.(isAuthenticated ? workspacePage : 'login')}
             >
-              {navItems.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                    activeTarget === item.target
-                      ? 'bg-white/10 text-white'
-                      : 'text-white/60 hover:text-white'
-                  }`}
-                  onClick={() => handleNav(item.target)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-
-            <div className="flex items-center gap-2" data-reveal style={revealDelay(130)}>
-              <button
-                type="button"
-                className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white sm:px-4"
-                onClick={onToggleTheme}
-                title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-              >
-                {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-              </button>
-              <button
-                type="button"
-                className="rounded-full bg-[color:var(--agent-accent)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5 hover:bg-[color:var(--agent-accent-strong)] sm:px-5"
-                onClick={() => onNavigate?.('login')}
-              >
-                Log in
-              </button>
-            </div>
+              {isAuthenticated ? 'Open workspace' : 'Log in'}
+            </button>
           </div>
-        </header>
-      )}
+        </div>
+      </header>
 
       <main className="relative z-10 pb-24">
         <section
@@ -414,8 +381,39 @@ const LandingPage = ({
               </article>
             ))}
           </div>
-
         </section>
+
+        <footer className="mx-auto w-full max-w-6xl px-6 pb-10">
+          <div
+            className="rounded-[34px] border border-white/10 bg-[color:var(--agent-surface-strong)] px-8 py-10 sm:px-12 sm:py-12"
+            data-reveal
+            style={revealDelay(150)}
+          >
+            <div className="grid gap-10 lg:grid-cols-[1fr_1.6fr] lg:items-start">
+              <div className="flex items-center gap-4">
+                <AppLogoBadge className="h-14 w-14" markClassName="h-[22px] w-[22px] text-[#3bb4db]" />
+                <p className="font-display text-4xl font-semibold tracking-tight text-white">HealthAI</p>
+              </div>
+
+              <div className="grid gap-8 sm:grid-cols-3">
+                {footerColumns.map((column) => (
+                  <div key={column.title}>
+                    <p className="text-lg font-semibold text-white">{column.title}</p>
+                    <ul className="mt-5 space-y-3 text-base text-white/55">
+                      {column.links.map((link) => (
+                        <li key={link}>{link}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-10 border-t border-white/10 pt-6 text-center text-sm text-white/45">
+              &copy; 2024 HealthAI. All rights reserved.
+            </div>
+          </div>
+        </footer>
       </main>
     </div>
   )

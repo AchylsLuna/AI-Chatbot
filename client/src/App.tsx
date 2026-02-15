@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { AccessDeniedCard, AuthLoadingCard } from './components/states/RouteGuardCards'
 import AppHeader from './components/layout/AppHeader'
+import { AccessDeniedCard, AuthLoadingCard } from './components/states/RouteGuardCards'
 import { canAccessPage } from './config/accessControl'
 import useAuthData from './hooks/useAuthData'
 import useAppRouting from './hooks/useAppRouting'
@@ -14,8 +14,32 @@ import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import TriagePage from './pages/TriagePage'
+import type { AppPage } from './types/navigation'
 
-type ProtectedPage = 'dashboard'
+type DashboardWorkspacePage =
+  | 'dashboard'
+  | 'analytics'
+  | 'clinical_reports'
+  | 'care_alerts'
+  | 'care_support'
+  | 'ledger_monitoring'
+  | 'intake_monitoring'
+  | 'security'
+  | 'user_management'
+
+type ProtectedPage = 'triage' | DashboardWorkspacePage
+
+const dashboardWorkspacePages: DashboardWorkspacePage[] = [
+  'dashboard',
+  'analytics',
+  'clinical_reports',
+  'care_alerts',
+  'care_support',
+  'ledger_monitoring',
+  'intake_monitoring',
+  'security',
+  'user_management',
+]
 
 function App() {
   const { currentPage, navigateToPage, navigateBack, isLanding, isAuthPage } = useAppRouting()
@@ -35,6 +59,12 @@ function App() {
     handleSignupSuccess,
     handleLogout,
   } = useAuthData({ currentPage, navigateToPage })
+  const isDashboardWorkspaceRoute = (page: AppPage): page is DashboardWorkspacePage =>
+    dashboardWorkspacePages.includes(page as DashboardWorkspacePage)
+
+  const isProtectedRoute =
+    currentPage === 'triage' || isDashboardWorkspaceRoute(currentPage) || currentPage === 'admin'
+  const showPublicHeader = !isLanding && !isAuthPage && !authUser && !isProtectedRoute
 
   useScrollReveal(currentPage)
 
@@ -109,21 +139,38 @@ function App() {
           theme={theme}
           onToggleTheme={toggleTheme}
           isAuthenticated={Boolean(authUser)}
+          authRole={authUser?.role ?? null}
         />
       )
       break
 
     case 'triage':
-      pageContent = (
-        <TriagePage
-          onCreateReservation={handleCreateReservation}
-          latestReservation={latestReservation}
-        />
-      )
+      pageContent = renderProtectedPage('triage', {
+        loadingLabel: 'Checking triage access...',
+        deniedTitle: 'Triage access required',
+        deniedDetail:
+          'Sign in with a User, Nurse/Doctor, Admin, or System Admin account to access triage.',
+        allowedContent: (
+          <TriagePage
+            onCreateReservation={handleCreateReservation}
+            latestReservation={latestReservation}
+            onNavigate={navigateToPage}
+            authRole={authUser?.role ?? null}
+          />
+        ),
+      })
       break
 
     case 'dashboard':
-      pageContent = renderProtectedPage('dashboard', {
+    case 'analytics':
+    case 'clinical_reports':
+    case 'care_alerts':
+    case 'care_support':
+    case 'ledger_monitoring':
+    case 'intake_monitoring':
+    case 'security':
+    case 'user_management':
+      pageContent = renderProtectedPage(currentPage, {
         loadingLabel: 'Checking dashboard access...',
         deniedTitle: 'Dashboard access required',
         deniedDetail:
@@ -133,12 +180,11 @@ function App() {
             reservations={reservations}
             ledgerEntries={ledgerEntries}
             authUser={authUser}
-            authError={authError}
-            isAuthLoading={isAuthLoading}
-            onLogin={handleLogin}
             onLogout={handleLogout}
             apiReady={apiReady}
+            theme={theme}
             onNavigate={navigateToPage}
+            activePage={currentPage}
           />
         ),
       })
@@ -195,7 +241,7 @@ function App() {
     <div
       className={`${theme === 'dark' ? 'theme-dark' : 'theme-light'} relative min-h-screen bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)]`}
     >
-      {!isLanding && (
+      {!isLanding && !authUser && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute inset-0 agent-grid opacity-20" />
           <div className="absolute -top-48 left-[15%] h-72 w-72 rounded-full bg-[radial-gradient(circle_at_center,_rgba(124,252,196,0.3),_transparent_65%)] blur-3xl animate-drift-slow" />
@@ -205,11 +251,11 @@ function App() {
       )}
 
       <div className="relative z-10">
-        {!isLanding && !authUser && !isAuthPage && (
+        {showPublicHeader && (
           <AppHeader theme={theme} onToggleTheme={toggleTheme} onNavigate={navigateToPage} />
         )}
 
-        <main className={isLanding || isAuthPage ? '' : 'pt-20'}>{pageContent}</main>
+        <main className={showPublicHeader ? 'pt-20' : ''}>{pageContent}</main>
 
       </div>
     </div>

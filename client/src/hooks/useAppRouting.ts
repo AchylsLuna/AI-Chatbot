@@ -13,7 +13,7 @@ type NavigateOptions = {
 }
 
 export type NavigateToPage = (page: AppPage, options?: NavigateOptions) => void
-export type NavigateBack = (fallback?: AppPage) => void
+type NavigateBack = (fallback?: AppPage) => void
 
 const useAppRouting = () => {
   const [currentPage, setCurrentPage] = useState<AppPage>(() => {

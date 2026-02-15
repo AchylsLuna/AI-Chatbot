@@ -2,6 +2,7 @@ import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
 import type { AuthSession } from '../types/triage'
+import { getDefaultPageForRole } from '../utils/roles'
 
 const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
 
@@ -28,9 +29,8 @@ const LoginPage = ({
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const isBasicUser = authUser?.role === 'user'
-  const homePage: AppPage = isBasicUser ? 'triage' : 'dashboard'
-  const homeLabel = isBasicUser ? 'Go to triage' : 'Go to dashboard'
+  const homePage: AppPage = getDefaultPageForRole(authUser?.role)
+  const homeLabel = homePage === 'triage' ? 'Go to triage' : 'Go to dashboard'
 
   return (
     <AuthSplitLayout>
