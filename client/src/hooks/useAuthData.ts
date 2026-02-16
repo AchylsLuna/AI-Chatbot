@@ -2,6 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { requiresAuth } from '../config/accessControl'
 import { fallbackLedger, fallbackReservations } from '../config/fallbackData'
 import { api, setAuthToken } from '../services/api'
+import {
+  getAuth0Session,
+  getAuthProvider,
+  handleAuth0Redirect,
+  hasAuth0RedirectParams,
+  isAuth0Enabled,
+  isBiometricHookAvailable,
+  logoutAuth0Session,
+  startAuth0Login,
+} from '../services/authProvider'
 import useSecureHealthStore from '../store/useSecureHealthStore'
 import type { AppPage } from '../types/navigation'
 import type {
@@ -22,6 +32,8 @@ type UseAuthDataArgs = {
 }
 
 const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
+  const authProvider = getAuthProvider()
+  const auth0Enabled = isAuth0Enabled()
   const reservations = useSecureHealthStore((state) => state.reservations)
   const ledgerEntries = useSecureHealthStore((state) => state.ledgerEntries)
   const latestReservationId = useSecureHealthStore((state) => state.latestReservationId)
@@ -41,6 +53,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const [pendingOtpChallenge, setPendingOtpChallenge] = useState<
     (LoginOtpChallenge & { targetPage?: AppPage | null }) | null
   >(null)
+  const [isBiometricReady, setIsBiometricReady] = useState(false)
 
   const latestReservation = useMemo(
     () =>
@@ -61,12 +74,67 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   }, [authToken, clearSensitiveData])
 
   useEffect(() => {
+    let isMounted = true
+    ;(async () => {
+      const supported = await isBiometricHookAvailable()
+      if (isMounted) {
+        setIsBiometricReady(supported)
+      }
+    })()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (authProvider !== 'local') return
     const storedToken = localStorage.getItem('pulse-ledger-token')
     if (storedToken) {
       setAuthTokenState(storedToken)
       setIsAuthLoading(true)
     }
-  }, [])
+  }, [authProvider])
+
+  useEffect(() => {
+    if (!auth0Enabled) return
+    let isMounted = true
+
+    const bootstrapAuth0Session = async () => {
+      const hasRedirect = hasAuth0RedirectParams()
+      if (hasRedirect) setIsAuthLoading(true)
+      try {
+        const redirectTarget = hasRedirect ? await handleAuth0Redirect() : null
+        if (hasRedirect) {
+          const path = window.location.pathname
+          window.history.replaceState({}, document.title, path)
+        }
+        const session = await getAuth0Session()
+        if (!isMounted || !session) return
+
+        setAuthTokenState(session.token)
+        setAuthUser(session.user)
+        setApiReady(true)
+        if (redirectTarget) {
+          const resolvedRedirectTarget =
+            session.user.role === 'user' ? getDefaultPageForRole(session.user.role) : redirectTarget
+          navigateToPage(resolvedRedirectTarget, { replace: true })
+        }
+      } catch (error) {
+        if (!isMounted) return
+        setAuthError(error instanceof Error ? error.message : 'Auth0 login failed')
+      } finally {
+        if (isMounted) {
+          setIsAuthLoading(false)
+        }
+      }
+    }
+
+    void bootstrapAuth0Session()
+
+    return () => {
+      isMounted = false
+    }
+  }, [auth0Enabled, navigateToPage])
 
   useEffect(() => {
     const needsAuth = Boolean(requiresAuth[currentPage])
@@ -109,7 +177,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
         const message = error instanceof Error ? error.message : ''
         if (message.match(/invalid|expired|missing authorization|forbidden/i)) {
           setAuthTokenState(null)
-          localStorage.removeItem('pulse-ledger-token')
+          if (authProvider === 'local') {
+            localStorage.removeItem('pulse-ledger-token')
+          }
           clearSensitiveData()
         }
         if (isMounted) {
@@ -126,7 +196,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     return () => {
       isMounted = false
     }
-  }, [authToken, clearSensitiveData, setStoreLedgerEntries, setStoreReservations])
+  }, [authProvider, authToken, clearSensitiveData, setStoreLedgerEntries, setStoreReservations])
 
   const handleCreateReservation = async (draft: ReservationDraft) => {
     try {
@@ -160,7 +230,25 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     return updated
   }
 
+  const handleProviderLogin = async (targetPage?: AppPage) => {
+    if (!auth0Enabled) {
+      throw new Error('Auth0 is not enabled in this environment.')
+    }
+    setAuthError(null)
+    setIsAuthLoading(true)
+    try {
+      await startAuth0Login(targetPage ?? postLoginPage ?? undefined)
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Auth0 login failed')
+      setIsAuthLoading(false)
+    }
+  }
+
   const handleLogin = async (username: string, password: string, targetPage?: AppPage) => {
+    if (auth0Enabled) {
+      await handleProviderLogin(targetPage)
+      return
+    }
     setAuthError(null)
     setIsAuthLoading(true)
     try {
@@ -189,14 +277,17 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       const session = await api.verifyOtpLogin(pendingOtpChallenge.challengeId, code)
       setAuthTokenState(session.token)
       setAuthUser(session.user)
-      localStorage.setItem('pulse-ledger-token', session.token)
+      if (authProvider === 'local') {
+        localStorage.setItem('pulse-ledger-token', session.token)
+      }
       setApiReady(true)
 
       const defaultPageByRole = getDefaultPageForRole(session.user.role)
       const resolvedTargetPage =
         pendingOtpChallenge.targetPage ?? postLoginPage ?? defaultPageByRole
-      const isAdminDashboardTarget = resolvedTargetPage === 'admin'
-      const isDoctorDashboardTarget = resolvedTargetPage === 'doctor_dashboard'
+      const finalTargetPage = session.user.role === 'user' ? defaultPageByRole : resolvedTargetPage
+      const isAdminDashboardTarget = finalTargetPage === 'admin'
+      const isDoctorDashboardTarget = finalTargetPage === 'doctor_dashboard'
       const hasAdminDashboardRole =
         session.user.role === 'admin' || session.user.role === 'system_admin'
       const hasAdminLoginRole = hasAdminDashboardRole || session.user.role === 'nurse'
@@ -216,7 +307,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
         return
       }
 
-      navigateToPage(resolvedTargetPage)
+      navigateToPage(finalTargetPage)
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'OTP verification failed')
     } finally {
@@ -233,16 +324,23 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setAuthTokenState(session.token)
     setAuthUser(session.user)
     setAuthError(null)
-    localStorage.setItem('pulse-ledger-token', session.token)
+    if (authProvider === 'local') {
+      localStorage.setItem('pulse-ledger-token', session.token)
+    }
     setApiReady(true)
     navigateToPage(getDefaultPageForRole(session.user.role))
   }
 
   const handleLogout = () => {
+    if (auth0Enabled) {
+      void logoutAuth0Session()
+    }
     setAuthTokenState(null)
     setAuthUser(null)
     setAuthError(null)
-    localStorage.removeItem('pulse-ledger-token')
+    if (authProvider === 'local') {
+      localStorage.removeItem('pulse-ledger-token')
+    }
     clearSensitiveData()
     setPendingOtpChallenge(null)
     setApiReady(false)
@@ -250,9 +348,20 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     navigateToPage('landing')
   }
 
-  const isCheckingSession = Boolean(authToken && isAuthLoading && !authUser)
+  const isCheckingSession = Boolean(isAuthLoading && !authUser && (authToken || auth0Enabled))
+  const sessionStatus = authUser
+    ? isAuthLoading
+      ? 'Refreshing session'
+      : 'Session active'
+    : isAuthLoading
+      ? 'Authenticating'
+      : 'No active session'
 
   return {
+    authProvider,
+    auth0Enabled,
+    isBiometricReady,
+    sessionStatus,
     apiReady,
     authToken,
     authUser,
@@ -265,6 +374,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     pendingOtpChallenge,
     handleCreateReservation,
     handleUpdateReservation,
+    handleProviderLogin,
     handleLogin,
     handleVerifyOtp,
     handleCancelOtp,

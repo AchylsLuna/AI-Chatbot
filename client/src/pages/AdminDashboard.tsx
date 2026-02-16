@@ -8,12 +8,14 @@ import {
   workspacePanelSoftClass,
   workspaceSubtleTextClass,
 } from '../styles/workspaceUi'
+import type { AppPage } from '../types/navigation'
 import type { AccessRequest, AuthSession } from '../types/triage'
 import { formatRoleLabel } from '../utils/roles'
 import { api } from '../services/api'
 
 type AdminDashboardProps = {
   authUser: AuthSession['user'] | null
+  onNavigate?: (page: AppPage) => void
 }
 
 type AdminDashboardTab = 'overview' | 'requirements'
@@ -114,7 +116,7 @@ const headingTextClass = workspaceHeadingTextClass
 const mutedTextClass = workspaceMutedTextClass
 const subtleTextClass = workspaceSubtleTextClass
 
-const AdminDashboard = ({ authUser }: AdminDashboardProps) => {
+const AdminDashboard = ({ authUser, onNavigate }: AdminDashboardProps) => {
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([])
   const [requestsError, setRequestsError] = useState<string | null>(null)
   const [isRequestsLoading, setIsRequestsLoading] = useState(false)
@@ -190,11 +192,12 @@ const AdminDashboard = ({ authUser }: AdminDashboardProps) => {
           </div>
         </section>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[16.25rem_minmax(0,1fr)]">
           <WorkspaceSidebar
-            className="h-fit p-0 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:rounded-l-none lg:border-l-0 lg:-ml-8 lg:w-[calc(17rem+2rem)]"
-            brandTitle="AI Health Care"
+            className="h-fit p-0 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto"
+            brandTitle="Healix AI"
             brandSubtitle="Admin workspace"
+            onBrandClick={() => onNavigate?.('landing')}
             sectionLabel="Admin navigation"
             items={adminTabs}
             activeKey={activeTab}

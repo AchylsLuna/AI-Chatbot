@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
-import type { AuthSession } from '../types/triage'
+import type { AuthProvider, AuthSession } from '../types/triage'
 import { getDefaultPageForRole } from '../utils/roles'
 
 const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
@@ -11,6 +11,9 @@ type LoginPageProps = {
   authError: string | null
   isAuthLoading: boolean
   onLogin: (username: string, password: string) => void
+  onProviderLogin?: () => void
+  authProvider?: AuthProvider
+  isBiometricReady?: boolean
   onLogout: () => void
   onNavigate?: (page: AppPage) => void
   onGoBack?: () => void
@@ -21,6 +24,9 @@ const LoginPage = ({
   authError,
   isAuthLoading,
   onLogin,
+  onProviderLogin,
+  authProvider = 'local',
+  isBiometricReady = false,
   onLogout,
   onNavigate,
   onGoBack,
@@ -196,6 +202,23 @@ const LoginPage = ({
           <button type="submit" disabled={isAuthLoading} className="agent-button w-full disabled:cursor-not-allowed">
             {isAuthLoading ? 'Requesting OTP...' : 'Continue to OTP'}
           </button>
+
+          {onProviderLogin ? (
+            <button
+              type="button"
+              disabled={isAuthLoading}
+              onClick={onProviderLogin}
+              className="agent-button-ghost w-full disabled:cursor-not-allowed"
+            >
+              Continue with Auth0
+            </button>
+          ) : null}
+
+          {authProvider === 'auth0' ? (
+            <p className="text-center text-[11px] text-white/55">
+              Secure SSO mode is active{isBiometricReady ? ' with biometric hooks ready.' : '.'}
+            </p>
+          ) : null}
 
           {(formError || authError) && (
             <p className="text-xs font-semibold text-rose-300">{formError ?? authError}</p>

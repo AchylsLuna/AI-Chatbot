@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { getStore } from '../../config/store.js'
 import { recordAuditEvent } from '../audit/index.js'
 
@@ -41,6 +42,13 @@ const OTP_LENGTH = 6
 const OTP_TTL_MINUTES = Number(process.env.OTP_TTL_MINUTES) || 5
 const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS) || 5
 const OTP_SECRET = process.env.OTP_SECRET || JWT_SECRET
+const AUTH_PROVIDER = String(process.env.AUTH_PROVIDER || 'local').toLowerCase()
+const AUTH0_DOMAIN = String(process.env.AUTH0_DOMAIN || '').trim().replace(/^https?:\/\//, '')
+const AUTH0_AUDIENCE = String(process.env.AUTH0_AUDIENCE || '').trim()
+const AUTH0_ROLE_CLAIM = process.env.AUTH0_ROLE_CLAIM || 'https://healix.app/role'
+const AUTH0_ISSUER = AUTH0_DOMAIN ? `https://${AUTH0_DOMAIN.replace(/\/$/, '')}/` : ''
+const AUTH0_ENABLED = AUTH_PROVIDER === 'auth0' || AUTH_PROVIDER === 'hybrid'
+let auth0Jwks = null
 
 const nowIso = () => new Date().toISOString()
 
@@ -88,7 +96,16 @@ const issueSessionForUser = (user, options = {}) => {
       jwtid: sessionId,
     }
   )
-  return { token, user: { username: user.username, role: user.role } }
+  return {
+    token,
+    user: {
+      username: user.username,
+      role: user.role,
+      authMethod,
+      mfa,
+      sessionId,
+    },
+  }
 }
 
 const generateOtpCode = () =>
@@ -125,6 +142,79 @@ const isComEmail = (value) => {
   return /^[^\s@]+@[^\s@]+\.com$/.test(cleaned)
 }
 
+const getAuth0Jwks = () => {
+  if (!AUTH0_ISSUER) return null
+  if (!auth0Jwks) {
+    auth0Jwks = createRemoteJWKSet(new URL(`${AUTH0_ISSUER}.well-known/jwks.json`))
+  }
+  return auth0Jwks
+}
+
+const resolveRoleClaim = (payload) => {
+  const claim = payload?.[AUTH0_ROLE_CLAIM]
+  if (typeof claim === 'string' && ALLOWED_ROLES.includes(claim)) return claim
+  if (Array.isArray(claim)) {
+    const role = claim.find((entry) => typeof entry === 'string' && ALLOWED_ROLES.includes(entry))
+    if (role) return role
+  }
+  return 'user'
+}
+
+const resolveAuth0Mfa = (payload) => {
+  const amr = Array.isArray(payload?.amr) ? payload.amr : []
+  const hasStrongFactor = amr.some((method) =>
+    typeof method === 'string' ? ['mfa', 'fpt', 'face', 'otp', 'webauthn'].includes(method) : false
+  )
+  if (hasStrongFactor) return true
+  const acr = typeof payload?.acr === 'string' ? payload.acr.toLowerCase() : ''
+  return acr.includes('mfa') || acr.includes('phrh')
+}
+
+const verifyAuth0Token = async (token) => {
+  if (!AUTH0_ENABLED || !AUTH0_ISSUER || !AUTH0_AUDIENCE) {
+    throw new Error('Auth0 verification is not enabled.')
+  }
+  const jwks = getAuth0Jwks()
+  if (!jwks) throw new Error('Auth0 JWKS not configured.')
+
+  const { payload } = await jwtVerify(token, jwks, {
+    issuer: AUTH0_ISSUER,
+    audience: AUTH0_AUDIENCE,
+  })
+
+  const username =
+    typeof payload.email === 'string' && payload.email.trim()
+      ? payload.email.trim().toLowerCase()
+      : typeof payload.preferred_username === 'string' && payload.preferred_username.trim()
+        ? payload.preferred_username.trim().toLowerCase()
+        : typeof payload.sub === 'string'
+          ? payload.sub
+          : ''
+  const role = resolveRoleClaim(payload)
+  const mfa = resolveAuth0Mfa(payload)
+  const isClinicalRole = role === 'nurse' || role === 'admin' || role === 'system_admin'
+
+  if (!username || !ALLOWED_ROLES.includes(role)) {
+    throw new Error('Invalid Auth0 token claims')
+  }
+  if (isClinicalRole && !mfa) {
+    throw new Error('Clinical Auth0 session must include MFA')
+  }
+
+  return {
+    username,
+    role,
+    authMethod: 'auth0',
+    mfa,
+    sessionId:
+      typeof payload.jti === 'string'
+        ? payload.jti
+        : typeof payload.sub === 'string'
+          ? payload.sub
+          : null,
+  }
+}
+
 export const validateAuthConfig = () => {
   const isProd = process.env.NODE_ENV === 'production'
   if (!isProd) return
@@ -146,6 +236,12 @@ export const validateAuthConfig = () => {
 
     if (usingDefaultSeedCredentials) {
       throw new Error('Default seeded usernames/passwords must be overridden in production.')
+    }
+  }
+
+  if (AUTH0_ENABLED) {
+    if (!AUTH0_DOMAIN || !AUTH0_AUDIENCE) {
+      throw new Error('AUTH0_DOMAIN and AUTH0_AUDIENCE are required when AUTH_PROVIDER uses Auth0.')
     }
   }
 }
@@ -519,7 +615,7 @@ export const registerUser = async ({
   )
 }
 
-export const requireAuth = (req, res, next) => {
+export const requireAuth = async (req, res, next) => {
   const header = req.headers.authorization
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Missing authorization token' })
@@ -563,6 +659,14 @@ export const requireAuth = (req, res, next) => {
     }
     return next()
   } catch (error) {
+    if (AUTH0_ENABLED) {
+      try {
+        req.user = await verifyAuth0Token(token)
+        return next()
+      } catch {
+        return res.status(401).json({ error: 'Invalid or expired token' })
+      }
+    }
     return res.status(401).json({ error: 'Invalid or expired token' })
   }
 }

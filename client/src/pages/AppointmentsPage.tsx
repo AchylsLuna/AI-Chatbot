@@ -24,49 +24,11 @@ type AppointmentsPageProps = {
   onUpdateReservation: (reservationId: string, updates: AppointmentUpdateDraft) => Promise<Reservation>
   theme: 'light' | 'dark'
   onToggleTheme: () => void
+  dataMaskingEnabled: boolean
 }
 
-type UserSidebarSection = 'overview' | 'appointments' | 'book' | 'account'
+type UserSidebarSection = 'overview' | 'appointments' | 'medications' | 'records' | 'account'
 
-const userSidebarItems: Array<{
-  key: UserSidebarSection
-  label: string
-  caption: string
-  icon: 'home' | 'calendar' | 'book' | 'user'
-}> = [
-  {
-    key: 'overview',
-    label: 'Overview',
-    caption: 'Quick appointment status',
-    icon: 'home',
-  },
-  {
-    key: 'appointments',
-    label: 'Appointments',
-    caption: 'Your booked records',
-    icon: 'calendar',
-  },
-  {
-    key: 'book',
-    label: 'Book Appointment',
-    caption: 'Requirements and booking steps',
-    icon: 'book',
-  },
-  {
-    key: 'account',
-    label: 'Account',
-    caption: 'Login details and role',
-    icon: 'user',
-  },
-]
-
-const canEditAppointments = (role?: AuthSession['user']['role'] | null) =>
-  role === 'nurse' || role === 'admin' || role === 'system_admin'
-
-const canOpenDoctorDashboard = (role?: AuthSession['user']['role'] | null) =>
-  role === 'nurse' || role === 'admin' || role === 'system_admin'
-
-const notificationPrefKey = 'pulse-ledger-notification-preferences'
 type NotificationPreferences = {
   emailAlerts: boolean
   browserAlerts: boolean
@@ -74,12 +36,81 @@ type NotificationPreferences = {
   securityAlerts: boolean
 }
 
+const userSidebarItems: Array<{
+  key: Exclude<UserSidebarSection, 'account'>
+  label: string
+  caption: string
+  icon: 'home' | 'calendar' | 'pill' | 'folder'
+}> = [
+  {
+    key: 'overview',
+    label: 'Overview',
+    caption: 'Main dashboard summary',
+    icon: 'home',
+  },
+  {
+    key: 'appointments',
+    label: 'Appointments',
+    caption: 'Booked schedules and status',
+    icon: 'calendar',
+  },
+]
+
+const medicationTimeline = [
+  { time: '08:00 AM', title: 'Metformin 500mg', status: 'Taken' },
+  { time: '12:30 PM', title: 'Vitamin D3', status: 'Scheduled' },
+  { time: '06:00 PM', title: 'Lisinopril 10mg', status: 'Scheduled' },
+  { time: '09:00 PM', title: 'Atorvastatin 20mg', status: 'Pending' },
+]
+
+const secureRecordCards = [
+  {
+    title: 'Laboratory Panel',
+    detail: 'CBC and chemistry profile linked to immutable digest.',
+    hash: '0x9f3a...c42b',
+  },
+  {
+    title: 'Radiology Summary',
+    detail: 'AI-assisted annotation encrypted and role-restricted.',
+    hash: '0x2ad1...98ee',
+  },
+  {
+    title: 'Care Plan Export',
+    detail: 'Generated plan signed with clinical approval metadata.',
+    hash: '0x73df...11ac',
+  },
+]
+
+const suggestedSlots = [
+  'Tue 09:30 AM - shortest queue',
+  'Wed 01:10 PM - specialist available',
+  'Fri 10:45 AM - high confidence triage handoff',
+]
+
+const secureCommsFeed = [
+  {
+    sender: 'Care Team',
+    text: 'We reviewed your latest triage summary. Keep hydration steady today.',
+  },
+  {
+    sender: 'Wellness AI',
+    text: 'Your resting heart rate trend improved this week. Consider a 20-minute light walk.',
+  },
+]
+
+const notificationPrefKey = 'pulse-ledger-notification-preferences'
 const defaultNotificationPrefs: NotificationPreferences = {
   emailAlerts: true,
   browserAlerts: true,
   appointmentReminders: true,
   securityAlerts: true,
 }
+
+const canEditAppointments = (role?: AuthSession['user']['role'] | null) =>
+  role === 'nurse' || role === 'admin' || role === 'system_admin'
+
+const canOpenDoctorDashboard = (role?: AuthSession['user']['role'] | null) =>
+  role === 'nurse' || role === 'admin' || role === 'system_admin'
 
 const meetsPasswordPolicy = (value: string) => {
   if (value.length < 8) return false
@@ -98,6 +129,25 @@ const fieldClass = workspaceFieldClass
 const primaryButtonClass = workspacePrimaryButtonClass
 const ghostButtonClass = workspaceGhostButtonClass
 
+const VitalRing = ({ score }: { score: number }) => {
+  const clamped = Math.max(0, Math.min(100, score))
+  return (
+    <div
+      className="grid h-36 w-36 place-items-center rounded-full border border-white/10"
+      style={{
+        background: `conic-gradient(#64FFDA ${clamped}%, rgba(255,255,255,0.12) 0)`,
+      }}
+    >
+      <div className="grid h-24 w-24 place-items-center rounded-full bg-[rgba(10,25,47,0.9)]">
+        <div className="text-center">
+          <p className="text-2xl font-semibold text-white">{clamped}</p>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-white/60">Wellness</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const AppointmentsPage = ({
   reservations,
   authUser,
@@ -105,11 +155,13 @@ const AppointmentsPage = ({
   onUpdateReservation,
   theme,
   onToggleTheme,
+  dataMaskingEnabled,
 }: AppointmentsPageProps) => {
   const editable = canEditAppointments(authUser?.role)
   const doctorDashboardAllowed = canOpenDoctorDashboard(authUser?.role)
   const isUserPortal = authUser?.role === 'user'
   const canReveal = canRevealIdentity(authUser?.role)
+
   const [activeUserSection, setActiveUserSection] = useState<UserSidebarSection>('overview')
   const [showIdentity, setShowIdentity] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -118,11 +170,13 @@ const AppointmentsPage = ({
   const [draftDepartment, setDraftDepartment] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
+
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => {
     if (typeof window === 'undefined') return defaultNotificationPrefs
     const stored = window.localStorage.getItem(notificationPrefKey)
@@ -134,10 +188,7 @@ const AppointmentsPage = ({
     }
   })
 
-  const title = editable ? "Doctor's Appointment Console" : 'My Appointments'
-  const subtitle = editable
-    ? 'Review and update appointment details from one place.'
-    : 'Track your appointment bookings and status.'
+  const shouldMaskIdentity = dataMaskingEnabled || (editable && !showIdentity)
 
   const metrics = useMemo(() => {
     const booked = reservations.filter((item) => item.status === 'Booked').length
@@ -153,15 +204,16 @@ const AppointmentsPage = ({
       ),
     [reservations]
   )
-  const nextAppointment = sortedAppointments.find((item) => item.status === 'Booked') ?? null
-  const lastUpdated = sortedAppointments[0]?.createdAt
-    ? new Date(sortedAppointments[0].createdAt).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : 'No records yet'
+
+  const wellnessScore = useMemo(() => {
+    const base = 68 + metrics.recorded * 4 - metrics.failed * 3 + Math.min(9, metrics.booked * 2)
+    return Math.max(32, Math.min(96, base))
+  }, [metrics])
+
+  const aiDailyBrief = useMemo(() => {
+    const trend = metrics.recorded >= metrics.failed ? 'stabilized' : 'needs close follow-up'
+    return `You've maintained better routine consistency this week. Booking outcomes are ${trend}. Based on recent status patterns, consider a light walk and hydration check today.`
+  }, [metrics])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -195,6 +247,7 @@ const AppointmentsPage = ({
   }
 
   const toggleIdentity = async () => {
+    if (dataMaskingEnabled) return
     const next = !showIdentity
     setShowIdentity(next)
     try {
@@ -212,7 +265,7 @@ const AppointmentsPage = ({
     if (sortedAppointments.length === 0) {
       return (
         <div className={`${panelClass} p-6 text-sm ${mutedTextClass}`}>
-          No appointments yet. Create one from the triage page.
+          No appointments yet. Use "Book new appointment" to start a booking flow.
         </div>
       )
     }
@@ -226,10 +279,10 @@ const AppointmentsPage = ({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className={`text-xs uppercase tracking-[0.16em] ${subtleTextClass}`}>
-                    {editable && !showIdentity ? maskIdentifier(appointment.id) : appointment.id}
+                    {shouldMaskIdentity ? maskIdentifier(appointment.id) : appointment.id}
                   </p>
                   <h2 className={`mt-2 text-xl font-semibold ${headingTextClass}`}>
-                    {editable && !showIdentity
+                    {shouldMaskIdentity
                       ? maskPersonName(appointment.patientName)
                       : appointment.patientName}
                   </h2>
@@ -310,281 +363,366 @@ const AppointmentsPage = ({
     )
   }
 
-  const renderUserPanel = () => {
-    if (activeUserSection === 'overview') {
-      return (
-        <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {[
-              {
-                label: 'Total',
-                value: metrics.total,
-                tint:
-                  'from-[rgba(69,90,167,0.42)] via-[rgba(39,52,92,0.76)] to-[rgba(25,32,56,0.84)]',
-              },
-              {
-                label: 'Booked',
-                value: metrics.booked,
-                tint:
-                  'from-[rgba(56,154,221,0.34)] via-[rgba(31,73,120,0.72)] to-[rgba(20,36,61,0.84)]',
-              },
-              {
-                label: 'Recorded',
-                value: metrics.recorded,
-                tint:
-                  'from-[rgba(58,177,137,0.36)] via-[rgba(27,86,72,0.72)] to-[rgba(18,44,41,0.86)]',
-              },
-              {
-                label: 'Failed',
-                value: metrics.failed,
-                tint:
-                  'from-[rgba(178,97,86,0.34)] via-[rgba(96,49,45,0.72)] to-[rgba(52,26,25,0.86)]',
-              },
-            ].map((card) => (
-              <div
-                key={card.label}
-                className={`rounded-[20px] border border-[rgba(117,138,198,0.28)] bg-[linear-gradient(145deg,var(--tw-gradient-stops))] ${card.tint} p-4 shadow-[0_16px_32px_rgba(2,6,18,0.35)]`}
-              >
-                <p className={`text-xs uppercase tracking-[0.16em] ${subtleTextClass}`}>{card.label}</p>
-                <p className={`mt-2 text-2xl font-semibold ${headingTextClass}`}>{card.value}</p>
+  const renderOverviewPanel = () => (
+    <div className="space-y-5">
+      <div className={`${panelClass} p-6`}>
+        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>AI Daily Brief</p>
+        <p className={`mt-3 text-sm leading-relaxed ${mutedTextClass}`}>{aiDailyBrief}</p>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className={`${panelClass} p-6`}>
+          <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>Vital Ring</p>
+          <h3 className={`mt-2 text-xl font-semibold ${headingTextClass}`}>Combined Wellness Score</h3>
+          <div className="mt-4 flex items-center justify-center">
+            <VitalRing score={wellnessScore} />
+          </div>
+        </div>
+
+        <div className={`${panelClass} p-6`}>
+          <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>Secure Comms</p>
+          <h3 className={`mt-2 text-xl font-semibold ${headingTextClass}`}>Care Team Messaging</h3>
+          <div className="mt-4 space-y-3">
+            {secureCommsFeed.map((message) => (
+              <div key={message.text} className={`${panelSoftClass} p-4`}>
+                <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>{message.sender}</p>
+                <p className={`mt-2 text-sm ${mutedTextClass}`}>{message.text}</p>
               </div>
             ))}
           </div>
-
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <div className={`${panelClass} p-6`}>
-              <h2 className={`text-xl font-semibold ${headingTextClass}`}>Welcome to your user portal</h2>
-              <p className={`mt-2 text-sm ${mutedTextClass}`}>
-                Use the sidebar to open your appointments, book a new schedule, or review account details.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveUserSection('appointments')}
-                  className={primaryButtonClass}
-                >
-                  Open my appointments
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigate?.('triage')}
-                  className={ghostButtonClass}
-                >
-                  Start new booking
-                </button>
-              </div>
-            </div>
-
-            <div className={`${panelClass} p-6`}>
-              <h3 className={`text-base font-semibold ${headingTextClass}`}>Live appointment insight</h3>
-              <div className="mt-4 space-y-3">
-                <div className={`${panelSoftClass} p-4`}>
-                  <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>Next booked</p>
-                  <p className={`mt-2 text-sm font-semibold ${headingTextClass}`}>
-                    {nextAppointment
-                      ? `${nextAppointment.patientName} | ${nextAppointment.requestedTime}`
-                      : 'No booked appointment yet'}
-                  </p>
-                </div>
-                <div className={`${panelSoftClass} p-4`}>
-                  <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>Last updated</p>
-                  <p className={`mt-2 text-sm font-semibold ${headingTextClass}`}>{lastUpdated}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    if (activeUserSection === 'appointments') {
-      return renderAppointmentCards()
-    }
-
-    if (activeUserSection === 'book') {
-      return (
-        <div className="space-y-4">
-          <div className={`${panelClass} p-6`}>
-            <h2 className={`text-xl font-semibold ${headingTextClass}`}>Book appointment</h2>
-            <p className={`mt-2 text-sm ${mutedTextClass}`}>
-              Complete the requirements below, then follow the guided booking flow.
-            </p>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <article className={`${panelClass} p-6`}>
-              <h3 className={`text-base font-semibold ${headingTextClass}`}>Requirements</h3>
-              <ul className={`mt-3 space-y-2 text-sm ${mutedTextClass}`}>
-                <li>Signed-in account (User, Nurse, Admin, or Super Admin).</li>
-                <li>Clear symptom details (duration, severity, and context).</li>
-                <li>Preferred booking time and patient full name.</li>
-                <li>Non-emergency case. For emergencies, contact local services.</li>
-              </ul>
-            </article>
-
-            <article className={`${panelClass} p-6`}>
-              <h3 className={`text-base font-semibold ${headingTextClass}`}>How to book</h3>
-              <ol className={`mt-3 space-y-2 text-sm ${mutedTextClass}`}>
-                <li>1. Open the triage workspace.</li>
-                <li>2. Enter symptoms in guided chat.</li>
-                <li>3. Review AI recommendation and confidence.</li>
-                <li>4. Enter patient name and requested time.</li>
-                <li>5. Submit booking and check status in Appointments.</li>
-              </ol>
-            </article>
-          </div>
-
-          <div className={`${panelClass} p-6`}>
-            <div className="flex flex-wrap items-center gap-3">
-              <button type="button" onClick={() => onNavigate?.('triage')} className={primaryButtonClass}>
-                Start booking now
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveUserSection('appointments')}
-                className={ghostButtonClass}
-              >
-                View my appointments
-              </button>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    return (
-      <div className={`${panelClass} p-6`}>
-        <h2 className={`text-xl font-semibold ${headingTextClass}`}>Account details</h2>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className={`${panelSoftClass} p-4`}>
-            <p className={`text-sm ${mutedTextClass}`}>
-              Signed in as <span className={`font-semibold ${headingTextClass}`}>{authUser?.username ?? 'Unknown'}</span>
-            </p>
-            <p className={`mt-2 text-sm ${mutedTextClass}`}>
-              Role: <span className={`font-semibold ${headingTextClass}`}>{formatRoleLabel(authUser?.role)}</span>
-            </p>
-            <p className={`mt-3 text-xs ${subtleTextClass}`}>
-              For role changes, request access from your Super Admin or Admin.
-            </p>
-          </div>
-
-          <div className={`${panelSoftClass} p-4`}>
-            <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>Theme mode</p>
-            <p className={`mt-2 text-sm ${mutedTextClass}`}>
-              Current theme: <span className={`font-semibold ${headingTextClass}`}>{theme === 'dark' ? 'Dark' : 'Light'}</span>
-            </p>
-            <button type="button" onClick={onToggleTheme} className={`mt-3 ${ghostButtonClass}`}>
-              Switch to {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            </button>
-          </div>
-
-          <div className={`${panelSoftClass} p-4 xl:col-span-2`}>
-            <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>Notifications</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {[
-                { key: 'emailAlerts', label: 'Email alerts' },
-                { key: 'browserAlerts', label: 'Browser alerts' },
-                { key: 'appointmentReminders', label: 'Appointment reminders' },
-                { key: 'securityAlerts', label: 'Security alerts' },
-              ].map((item) => {
-                const prefKey = item.key as keyof typeof notificationPrefs
-                const active = notificationPrefs[prefKey]
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() =>
-                      setNotificationPrefs((prev) => ({ ...prev, [prefKey]: !prev[prefKey] }))
-                    }
-                    className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
-                      active
-                        ? 'border-[rgba(71,212,200,0.72)] bg-[rgba(71,212,200,0.18)] text-[#eff8ff]'
-                        : 'border-[rgba(120,139,198,0.35)] bg-[rgba(12,18,34,0.45)] text-[rgba(208,222,255,0.78)] hover:border-[rgba(146,168,235,0.55)] hover:text-[#eef3ff]'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <form
-            className={`${panelSoftClass} p-4 xl:col-span-2`}
-            onSubmit={(event) => {
-              event.preventDefault()
-              setPasswordError(null)
-              setPasswordMessage(null)
-
-              if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
-                setPasswordError('Fill in current, new, and confirm password.')
-                return
-              }
-              if (!meetsPasswordPolicy(newPassword.trim())) {
-                setPasswordError(
-                  'New password must be at least 8 characters and include uppercase, lowercase, and number.'
-                )
-                return
-              }
-              if (newPassword.trim() !== confirmPassword.trim()) {
-                setPasswordError('New password and confirm password do not match.')
-                return
-              }
-
-              setPasswordMessage('Password updated successfully for this session.')
-              setCurrentPassword('')
-              setNewPassword('')
-              setConfirmPassword('')
-            }}
-          >
-            <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>Change password</p>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                placeholder="Current password"
-                className={fieldClass}
-              />
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                placeholder="New password"
-                className={fieldClass}
-              />
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="Confirm password"
-                className={fieldClass}
-              />
-            </div>
-            {passwordError && <p className="mt-3 text-xs font-semibold text-rose-300">{passwordError}</p>}
-            {passwordMessage && (
-              <p className="mt-3 text-xs font-semibold text-emerald-300">{passwordMessage}</p>
-            )}
-            <button type="submit" className={`mt-4 ${primaryButtonClass}`}>
-              Update password
-            </button>
-          </form>
         </div>
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[
+          { label: 'Total', value: metrics.total },
+          { label: 'Booked', value: metrics.booked },
+          { label: 'Recorded', value: metrics.recorded },
+        ].map((card) => (
+          <div key={card.label} className={`${panelSoftClass} p-4`}>
+            <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>{card.label}</p>
+            <p className={`mt-2 text-2xl font-semibold ${headingTextClass}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderAppointmentSection = () => (
+    <div className="space-y-4">
+      <article className={`${panelClass} p-6`}>
+        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>AI Time Optimizer</p>
+        <h3 className={`mt-2 text-xl font-semibold ${headingTextClass}`}>Suggested Appointment Slots</h3>
+        <ul className={`mt-3 space-y-2 text-sm ${mutedTextClass}`}>
+          {suggestedSlots.map((slot) => (
+            <li key={slot}>{slot}</li>
+          ))}
+        </ul>
+      </article>
+      {renderAppointmentCards()}
+    </div>
+  )
+
+  const renderMedicationsSection = () => (
+    <div className="space-y-4">
+      <article className={`${panelClass} p-6`}>
+        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>Medication Timeline</p>
+        <h3 className={`mt-2 text-xl font-semibold ${headingTextClass}`}>Today's Tracker</h3>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {medicationTimeline.map((item) => (
+            <div key={`${item.time}-${item.title}`} className={`${panelSoftClass} p-4`}>
+              <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>{item.time}</p>
+              <p className={`mt-2 text-sm font-semibold ${headingTextClass}`}>{item.title}</p>
+              <p className={`mt-1 text-xs ${mutedTextClass}`}>{item.status}</p>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <article className={`${panelClass} p-6`}>
+        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>Refill Prediction</p>
+        <p className={`mt-3 text-sm ${mutedTextClass}`}>
+          AI predicts your Metformin supply will reach reorder threshold in 6 days.
+        </p>
+      </article>
+    </div>
+  )
+
+  const renderRecordsSection = () => (
+    <div className="space-y-4">
+      <article className={`${panelClass} p-6`}>
+        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>Encrypted Vault</p>
+        <h3 className={`mt-2 text-xl font-semibold ${headingTextClass}`}>My Records</h3>
+        <p className={`mt-2 text-sm ${mutedTextClass}`}>
+          Records are encrypted in transit and linked to immutable ledger references.
+        </p>
+      </article>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {secureRecordCards.map((record) => (
+          <article key={record.hash} className={`${panelClass} p-5`}>
+            <h4 className={`text-base font-semibold ${headingTextClass}`}>{record.title}</h4>
+            <p className={`mt-2 text-sm ${mutedTextClass}`}>{record.detail}</p>
+            <p className={`mt-3 text-xs ${subtleTextClass}`}>Digest: {record.hash}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderAccountSection = () => (
+    <div className={`${panelClass} p-6`}>
+      <h2 className={`text-xl font-semibold ${headingTextClass}`}>Account and Privacy Settings</h2>
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className={`${panelSoftClass} p-4`}>
+          <p className={`text-sm ${mutedTextClass}`}>
+            Signed in as <span className={`font-semibold ${headingTextClass}`}>{authUser?.username ?? 'Unknown'}</span>
+          </p>
+          <p className={`mt-2 text-sm ${mutedTextClass}`}>
+            Role: <span className={`font-semibold ${headingTextClass}`}>{formatRoleLabel(authUser?.role)}</span>
+          </p>
+          {editable && canReveal ? (
+            <button
+              type="button"
+              onClick={toggleIdentity}
+              disabled={dataMaskingEnabled}
+              className={`mt-4 ${ghostButtonClass} ${dataMaskingEnabled ? 'cursor-not-allowed opacity-60' : ''}`}
+            >
+              {dataMaskingEnabled ? 'Data masking is active in header' : showIdentity ? 'Hide identity' : 'View identity'}
+            </button>
+          ) : null}
+        </div>
+
+        <div className={`${panelSoftClass} p-4`}>
+          <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>Theme mode</p>
+          <p className={`mt-2 text-sm ${mutedTextClass}`}>
+            Current theme: <span className={`font-semibold ${headingTextClass}`}>{theme === 'dark' ? 'Dark' : 'Light'}</span>
+          </p>
+          <button type="button" onClick={onToggleTheme} className={`mt-3 ${ghostButtonClass}`}>
+            Switch to {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          </button>
+        </div>
+
+        <div className={`${panelSoftClass} p-4 xl:col-span-2`}>
+          <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>Notifications</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {[
+              { key: 'emailAlerts', label: 'Email alerts' },
+              { key: 'browserAlerts', label: 'Browser alerts' },
+              { key: 'appointmentReminders', label: 'Appointment reminders' },
+              { key: 'securityAlerts', label: 'Security alerts' },
+            ].map((item) => {
+              const prefKey = item.key as keyof NotificationPreferences
+              const active = notificationPrefs[prefKey]
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() =>
+                    setNotificationPrefs((prev) => ({ ...prev, [prefKey]: !prev[prefKey] }))
+                  }
+                  className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
+                    active
+                      ? 'border-[rgba(71,212,200,0.72)] bg-[rgba(71,212,200,0.18)] text-[#eff8ff]'
+                      : 'border-[rgba(120,139,198,0.35)] bg-[rgba(12,18,34,0.45)] text-[rgba(208,222,255,0.78)] hover:border-[rgba(146,168,235,0.55)] hover:text-[#eef3ff]'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <form
+          className={`${panelSoftClass} p-4 xl:col-span-2`}
+          onSubmit={(event) => {
+            event.preventDefault()
+            setPasswordError(null)
+            setPasswordMessage(null)
+
+            if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+              setPasswordError('Fill in current, new, and confirm password.')
+              return
+            }
+            if (!meetsPasswordPolicy(newPassword.trim())) {
+              setPasswordError(
+                'New password must be at least 8 characters and include uppercase, lowercase, and number.'
+              )
+              return
+            }
+            if (newPassword.trim() !== confirmPassword.trim()) {
+              setPasswordError('New password and confirm password do not match.')
+              return
+            }
+
+            setPasswordMessage('Password updated successfully for this session.')
+            setCurrentPassword('')
+            setNewPassword('')
+            setConfirmPassword('')
+          }}
+        >
+          <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>Change password</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              placeholder="Current password"
+              className={fieldClass}
+            />
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              placeholder="New password"
+              className={fieldClass}
+            />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="Confirm password"
+              className={fieldClass}
+            />
+          </div>
+          {passwordError && <p className="mt-3 text-xs font-semibold text-rose-300">{passwordError}</p>}
+          {passwordMessage && (
+            <p className="mt-3 text-xs font-semibold text-emerald-300">{passwordMessage}</p>
+          )}
+          <button type="submit" className={`mt-4 ${primaryButtonClass}`}>
+            Update password
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+
+  const renderUserPanel = () => {
+    if (activeUserSection === 'overview') return renderOverviewPanel()
+    if (activeUserSection === 'appointments') return renderAppointmentSection()
+    if (activeUserSection === 'medications') return renderMedicationsSection()
+    if (activeUserSection === 'records') return renderRecordsSection()
+    return renderAccountSection()
+  }
+
+  const title = editable ? "Doctor's Appointment Console" : 'Healix Patient Portal'
+  const subtitle = editable
+    ? 'Review and update appointment details from one place.'
+    : 'Calm, role-safe workspace for daily health insight and booking guidance.'
+
+  const renderHeroSection = () => (
+    <section className={`${panelClass} relative overflow-hidden p-6 sm:p-7`}>
+      <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] bg-[radial-gradient(circle_at_top,rgba(71,212,200,0.2),transparent_68%)] lg:block" />
+      <div className="relative grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <div>
+          <p className={`text-xs uppercase tracking-[0.2em] ${subtleTextClass}`}>Clinical precision portal</p>
+          <h1 className={`mt-3 text-3xl font-semibold tracking-tight sm:text-4xl ${headingTextClass}`}>
+            {title}
+          </h1>
+          <p className={`mt-3 max-w-3xl text-sm sm:text-base ${mutedTextClass}`}>{subtitle}</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (isUserPortal) {
+                  setActiveUserSection('appointments')
+                  return
+                }
+                onNavigate?.('triage')
+              }}
+              className={primaryButtonClass}
+            >
+              {isUserPortal ? 'Open appointments' : 'Book new appointment'}
+            </button>
+            {doctorDashboardAllowed && (
+              <button
+                type="button"
+                onClick={() => onNavigate?.('doctor_dashboard')}
+                className={ghostButtonClass}
+              >
+                Open command center
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[
+            { label: 'Total', value: metrics.total },
+            { label: 'Booked', value: metrics.booked },
+            { label: 'Recorded', value: metrics.recorded },
+            { label: 'Failed', value: metrics.failed },
+          ].map((card) => (
+            <div key={card.label} className={`${panelSoftClass} p-4`}>
+              <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>{card.label}</p>
+              <p className={`mt-2 text-2xl font-semibold ${headingTextClass}`}>{card.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+
+  const renderUserSectionIntro = () => {
+    if (activeUserSection === 'overview') {
+      return renderHeroSection()
+    }
+
+    const introBySection: Record<
+      Exclude<UserSidebarSection, 'overview'>,
+      { eyebrow: string; title: string; description: string }
+    > = {
+      appointments: {
+        eyebrow: 'Appointment workspace',
+        title: 'Appointment bookings',
+        description:
+          'View booked schedules, update booking details, and track appointment outcomes in one place.',
+      },
+      medications: {
+        eyebrow: 'Medication workspace',
+        title: 'Medication tracker',
+        description:
+          'Monitor daily medications, refill predictions, and timeline status from your care plan.',
+      },
+      records: {
+        eyebrow: 'Encrypted vault',
+        title: 'Medical records',
+        description:
+          'Access role-safe records linked to immutable digests and protected clinical metadata.',
+      },
+      account: {
+        eyebrow: 'Account workspace',
+        title: 'Account settings',
+        description:
+          'Manage password updates, notification preferences, and privacy controls for your session.',
+      },
+    }
+
+    const intro = introBySection[activeUserSection]
+    return (
+      <section className={`${panelClass} p-6 sm:p-7`}>
+        <p className={`text-xs uppercase tracking-[0.2em] ${subtleTextClass}`}>{intro.eyebrow}</p>
+        <h1 className={`mt-3 text-3xl font-semibold tracking-tight sm:text-4xl ${headingTextClass}`}>
+          {intro.title}
+        </h1>
+        <p className={`mt-3 max-w-3xl text-sm sm:text-base ${mutedTextClass}`}>{intro.description}</p>
+      </section>
     )
   }
 
   const renderUserSidebar = (className: string) => (
     <WorkspaceSidebar
       className={className}
-      brandTitle="AI Health Care"
-      brandSubtitle="User workspace"
-      sectionLabel="User navigation"
+      brandTitle="Healix AI"
+      brandSubtitle="Patient workspace"
+      onBrandClick={() => onNavigate?.('landing')}
+      sectionLabel="Main"
       items={userSidebarItems}
-      activeKey={activeUserSection}
+      activeKey={activeUserSection === 'account' ? 'overview' : activeUserSection}
       onSelect={(key) => setActiveUserSection(key as UserSidebarSection)}
-      statusLabel="Compliance"
-      statusValue="HIPAA/GDPR Active"
+      statusLabel="Security Shield"
+      statusValue={dataMaskingEnabled ? 'Data masking active' : 'Clinical visibility mode'}
       profileLabel="Signed in"
       profileValue={authUser?.username ?? 'Unknown'}
       profileCaption={formatRoleLabel(authUser?.role)}
@@ -593,62 +731,34 @@ const AppointmentsPage = ({
 
   return (
     <WorkspaceCanvas>
-      <div className="mx-auto w-full px-4 pb-10 pt-4 sm:px-6 lg:px-8">
-        <section className={`${panelClass} relative overflow-hidden p-6 sm:p-7`}>
-          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] bg-[radial-gradient(circle_at_top,rgba(71,212,200,0.2),transparent_68%)] lg:block" />
-          <div className="relative grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-            <div>
-              <p className={`text-xs uppercase tracking-[0.2em] ${subtleTextClass}`}>Appointment hub</p>
-              <h1 className={`mt-3 text-3xl font-semibold tracking-tight sm:text-4xl ${headingTextClass}`}>
-                {title}
-              </h1>
-              <p className={`mt-3 max-w-3xl text-sm sm:text-base ${mutedTextClass}`}>{subtitle}</p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button type="button" onClick={() => onNavigate?.('triage')} className={primaryButtonClass}>
-                  Book new appointment
-                </button>
-                {editable && canReveal && (
-                  <button type="button" onClick={toggleIdentity} className={ghostButtonClass}>
-                    {showIdentity ? 'Hide identity' : 'View identity'}
-                  </button>
-                )}
-                {doctorDashboardAllowed && (
-                  <button
-                    type="button"
-                    onClick={() => onNavigate?.('doctor_dashboard')}
-                    className={ghostButtonClass}
-                  >
-                    Open doctor dashboard
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                { label: 'Total', value: metrics.total },
-                { label: 'Booked', value: metrics.booked },
-                { label: 'Recorded', value: metrics.recorded },
-                { label: 'Failed', value: metrics.failed },
-              ].map((card) => (
-                <div key={card.label} className={`${panelSoftClass} p-4`}>
-                  <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>{card.label}</p>
-                  <p className={`mt-2 text-2xl font-semibold ${headingTextClass}`}>{card.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
+      <div className="mx-auto w-full max-w-[1500px] px-4 pb-12 pt-5 sm:px-6 lg:px-8">
         {isUserPortal ? (
-          <div className="mt-6 grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
-            {renderUserSidebar(
-              'h-fit p-0 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:rounded-l-none lg:border-l-0 lg:-ml-8 lg:w-[calc(17rem+2rem)]'
-            )}
-            <section className="space-y-6">{renderUserPanel()}</section>
+          <div className="grid items-start gap-6 xl:grid-cols-[17.5rem_minmax(0,1fr)]">
+            {renderUserSidebar('h-fit p-0 xl:self-start')}
+            <div className="space-y-6">
+              {renderUserSectionIntro()}
+              <section className="space-y-6">{renderUserPanel()}</section>
+            </div>
           </div>
         ) : (
-          <section className="mt-6 space-y-6">{renderAppointmentCards()}</section>
+          <section className="space-y-6">
+            {renderHeroSection()}
+            <div className={`${panelClass} p-6`}>
+              <div className="flex flex-wrap items-center gap-2">
+                {canReveal ? (
+                  <button
+                    type="button"
+                    onClick={toggleIdentity}
+                    disabled={dataMaskingEnabled}
+                    className={`${ghostButtonClass} ${dataMaskingEnabled ? 'cursor-not-allowed opacity-60' : ''}`}
+                  >
+                    {dataMaskingEnabled ? 'Data masking is active in header' : showIdentity ? 'Hide identity' : 'View identity'}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {renderAppointmentSection()}
+          </section>
         )}
       </div>
     </WorkspaceCanvas>

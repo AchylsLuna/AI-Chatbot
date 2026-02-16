@@ -9,24 +9,27 @@ const getInitialTheme = (): ThemeMode => {
   return 'dark'
 }
 
-const useAppTheme = () => {
+const useAppTheme = (forceDark = false) => {
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme)
+  const activeTheme: ThemeMode = forceDark ? 'dark' : theme
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const root = document.documentElement
     root.classList.remove('theme-dark', 'theme-light')
-    root.classList.add(theme === 'dark' ? 'theme-dark' : 'theme-light')
+    root.classList.add(activeTheme === 'dark' ? 'theme-dark' : 'theme-light')
     document.body.classList.remove('theme-dark', 'theme-light')
-    document.body.classList.add(theme === 'dark' ? 'theme-dark' : 'theme-light')
-    window.localStorage.setItem('pulse-ledger-theme', theme)
-  }, [theme])
+    document.body.classList.add(activeTheme === 'dark' ? 'theme-dark' : 'theme-light')
+    if (!forceDark) {
+      window.localStorage.setItem('pulse-ledger-theme', theme)
+    }
+  }, [activeTheme, forceDark, theme])
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
   }
 
-  return { theme, toggleTheme }
+  return { theme: activeTheme, toggleTheme }
 }
 
 export default useAppTheme

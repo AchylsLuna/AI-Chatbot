@@ -15,7 +15,14 @@ import {
   validateAuthConfig,
 } from '../modules/auth/index.js'
 import { recordAppointmentOnChain } from '../modules/blockchain/index.js'
-import { assignRequestId, buildRequestContext, createRateLimiter, securityHeaders } from '../modules/security/index.js'
+import {
+  assignRequestId,
+  buildRequestContext,
+  createRateLimiter,
+  securityHeaders,
+  sanitizeAiJsonResponse,
+  sanitizeAiRequestBody,
+} from '../modules/security/index.js'
 import {
   generateTriageSummary,
   getFallbackSummary,
@@ -362,7 +369,13 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
 })
 
-app.post('/api/triage/summary', requireAuth, summaryLimiter, async (req, res) => {
+app.post(
+  '/api/triage/summary',
+  requireAuth,
+  summaryLimiter,
+  sanitizeAiRequestBody,
+  sanitizeAiJsonResponse,
+  async (req, res) => {
   const { symptoms } = req.body || {}
   if (!symptoms || typeof symptoms !== 'string') {
     return res.status(400).json({ error: 'Please describe your symptoms so we can help.' })
@@ -416,7 +429,8 @@ app.post('/api/triage/summary', requireAuth, summaryLimiter, async (req, res) =>
     })
     return res.json({ summary: signedSummary, elapsedMs, cached: false })
   }
-})
+  }
+)
 
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { username, password } = req.body || {}
@@ -532,7 +546,13 @@ app.post('/api/auth/signup', authLimiter, accessRequestLimiter, async (req, res)
 })
 
 app.get('/api/auth/session', requireAuth, (req, res) => {
-  res.json({ username: req.user.username, role: req.user.role })
+  res.json({
+    username: req.user.username,
+    role: req.user.role,
+    authMethod: req.user.authMethod,
+    mfa: Boolean(req.user.mfa),
+    sessionId: req.user.sessionId || null,
+  })
 })
 
 app.post('/api/access-requests', accessRequestLimiter, async (req, res) => {
@@ -722,7 +742,13 @@ app.patch(
   }
 )
 
-app.post('/api/reservations', maybeRequireAuth, bookingLimiter, async (req, res) => {
+app.post(
+  '/api/reservations',
+  maybeRequireAuth,
+  bookingLimiter,
+  sanitizeAiRequestBody,
+  sanitizeAiJsonResponse,
+  async (req, res) => {
   const { patientName, symptoms, requestedTime, summary } = req.body || {}
   if (
     !patientName ||
@@ -905,7 +931,8 @@ app.post('/api/reservations', maybeRequireAuth, bookingLimiter, async (req, res)
     ledgerEntry,
     triageIntegrity: signatureVerified ? 'verified' : 'recomputed',
   })
-})
+  }
+)
 
 app.get(
   '/api/ledger',

@@ -79,7 +79,7 @@ const LandingPage = ({
   }
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)]">
+    <div className="relative min-h-screen overflow-x-clip bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)]">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 agent-grid opacity-15" />
         <div className="absolute -top-48 left-[10%] h-80 w-80 rounded-full bg-[radial-gradient(circle_at_center,rgba(124,252,196,0.26),transparent_62%)] blur-3xl animate-drift-slow" />
@@ -87,7 +87,7 @@ const LandingPage = ({
         <div className="absolute bottom-[-120px] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,209,102,0.16),transparent_62%)] blur-3xl animate-float-slow" />
       </div>
 
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[color:var(--agent-bg)]/95 backdrop-blur">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[color:var(--agent-bg)]/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4">
           <button
             type="button"
@@ -114,7 +114,7 @@ const LandingPage = ({
             <button
               type="button"
               className="rounded-full bg-[color:var(--agent-accent)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5 hover:bg-[color:var(--agent-accent-strong)] sm:px-5"
-              onClick={() => onNavigate?.(isAuthenticated ? 'triage' : 'signup')}
+              onClick={() => onNavigate?.(isAuthenticated ? 'appointments' : 'signup')}
             >
               Get started
             </button>
@@ -122,7 +122,7 @@ const LandingPage = ({
         </div>
       </header>
 
-      <main className="relative z-10 pb-24">
+      <main className="relative z-10 pb-24 pt-[88px]">
         <section
           id="home"
           className="mx-auto grid w-full max-w-6xl gap-8 px-6 pb-16 pt-24 lg:grid-cols-[1.1fr_0.9fr] lg:items-center"
@@ -143,7 +143,7 @@ const LandingPage = ({
               <button
                 type="button"
                 className="rounded-full bg-[color:var(--agent-accent)] px-6 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5 hover:bg-[color:var(--agent-accent-strong)]"
-                onClick={() => onNavigate?.(isAuthenticated ? 'triage' : 'signup')}
+                onClick={() => onNavigate?.(isAuthenticated ? 'appointments' : 'signup')}
               >
                 Get started
               </button>
@@ -325,7 +325,7 @@ const LandingPage = ({
             </div>
 
             <div className="mt-10 border-t border-white/10 pt-6 text-center text-sm text-white/45">
-              &copy; 2024 HealthAI. All rights reserved.
+              BSIT3 - COMSEC - 01
             </div>
           </div>
         </footer>

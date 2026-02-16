@@ -27,6 +27,7 @@ type DashboardProps = {
   theme: 'light' | 'dark'
   onNavigate?: (page: AppPage) => void
   activePage: DashboardPage
+  dataMaskingEnabled: boolean
 }
 
 type ContextMode = 'patient' | 'department' | 'research'
@@ -49,28 +50,28 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   {
-    label: 'Home',
-    hint: 'Aggregated risk scores and critical alerts',
+    label: 'Population Health',
+    hint: 'Cohort-level patient risk and trend analytics',
     page: 'dashboard',
-    icon: HomeIcon,
+    icon: PopulationIcon,
   },
   {
-    label: 'Diagnostics',
-    hint: 'AI-assisted radiology and lab analysis',
-    page: 'analytics',
-    icon: DiagnosticsIcon,
+    label: 'Risk Alerts',
+    hint: 'AI-flagged emergencies and escalation queue',
+    page: 'care_alerts',
+    icon: RiskAlertIcon,
   },
   {
-    label: 'Predictive Analytics',
-    hint: 'Heatmaps of predicted admissions/discharges',
+    label: 'Resource Manager',
+    hint: 'Bed occupancy and staff-to-patient pressure',
     page: 'intake_monitoring',
-    icon: PredictiveIcon,
+    icon: ResourceIcon,
   },
   {
-    label: 'Patient Registry',
-    hint: 'Secure EHR access controls',
-    page: 'user_management',
-    icon: RegistryIcon,
+    label: 'Security Logs',
+    hint: 'Tamper-evident audit trail and access logs',
+    page: 'ledger_monitoring',
+    icon: AuditTrailIcon,
     roles: ['admin', 'system_admin'],
   },
   {
@@ -82,15 +83,15 @@ const navItems: NavItem[] = [
 ]
 
 const pageDescription: Record<DashboardPage, string> = {
-  dashboard: 'High-fidelity overview of active risk signals, interventions, and operational confidence.',
-  analytics: 'Diagnostics performance and trendline quality from current cohorts.',
+  dashboard: 'Population-level health trends with proactive risk forecasting.',
+  analytics: 'Diagnostics performance and benchmark quality across active cohorts.',
   clinical_reports: 'Clinical report stream with AI-assisted review checkpoints.',
-  care_alerts: 'Critical notifications requiring immediate clinical response.',
-  care_support: 'LLM support layer for medical literature and patient context.',
-  ledger_monitoring: 'Audit and integrity stream for immutable care records.',
-  intake_monitoring: 'Live prediction of admissions/discharges and bed pressure.',
-  security: 'Identity and compliance posture with encryption controls.',
-  user_management: 'Role-based access layer for registry and EHR permissions.',
+  care_alerts: 'Critical alert queue for AI-flagged emergencies and escalation.',
+  care_support: 'LLM support layer for literature lookup and patient context.',
+  ledger_monitoring: 'Security logs and immutable audit trail for data access.',
+  intake_monitoring: 'Resource manager for admissions, bed pressure, and staffing.',
+  security: 'Identity posture, encryption status, and least-privilege controls.',
+  user_management: 'Role-based access management for sensitive EHR modules.',
 }
 
 const contextDescription: Record<ContextMode, string> = {
@@ -165,6 +166,7 @@ const Dashboard = ({
   theme,
   onNavigate,
   activePage,
+  dataMaskingEnabled,
 }: DashboardProps) => {
   const [contextMode, setContextMode] = useState<ContextMode>('patient')
   const [showDeepData, setShowDeepData] = useState(false)
@@ -172,6 +174,7 @@ const Dashboard = ({
   const [approvedNudges, setApprovedNudges] = useState<string[]>([])
   const role = authUser?.role ?? null
   const canReveal = canRevealIdentity(role)
+  const shouldMaskIdentity = dataMaskingEnabled || !showIdentity
 
   const vitals = useMemo(() => buildVitals(reservations), [reservations])
   const visibleNavItems = useMemo(
@@ -225,7 +228,7 @@ const Dashboard = ({
           '"SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
-      <div className="grid gap-4 px-3 pb-6 pt-4 sm:px-5 lg:grid-cols-[280px_minmax(0,1fr)_330px] lg:px-8">
+      <div className="grid gap-4 px-3 pb-6 pt-4 sm:px-5 lg:grid-cols-[260px_minmax(0,1fr)_330px] lg:px-8">
         <aside className="relative overflow-hidden rounded-[30px] border border-[rgba(106,123,179,0.28)] bg-[linear-gradient(180deg,rgba(20,23,44,0.97),rgba(14,18,36,0.96))] p-4 shadow-[0_30px_70px_rgba(0,0,0,0.45)] lg:sticky lg:top-24 lg:h-[calc(100vh-7rem)] lg:self-start">
           <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-[radial-gradient(circle_at_center,rgba(90,215,255,0.28),transparent_72%)] blur-xl" />
           <div className="relative">
@@ -379,6 +382,7 @@ const Dashboard = ({
                 <button
                   type="button"
                   onClick={() => {
+                    if (dataMaskingEnabled) return
                     const next = !showIdentity
                     setShowIdentity(next)
                     void logAlertAction(
@@ -387,9 +391,10 @@ const Dashboard = ({
                       'dashboard_vitals'
                     )
                   }}
-                  className="agent-button-ghost"
+                  disabled={dataMaskingEnabled}
+                  className={`agent-button-ghost ${dataMaskingEnabled ? 'cursor-not-allowed opacity-60' : ''}`}
                 >
-                  {showIdentity ? 'Hide Identity' : 'View Identity'}
+                  {dataMaskingEnabled ? 'Masking active' : showIdentity ? 'Hide Identity' : 'View Identity'}
                 </button>
               )}
             </div>
@@ -414,10 +419,10 @@ const Dashboard = ({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-white">
-                          {showIdentity ? card.patient : maskPersonName(card.patient)}
+                          {shouldMaskIdentity ? maskPersonName(card.patient) : card.patient}
                         </p>
                         <p className="text-xs text-white/55">
-                          {showIdentity ? card.id : maskIdentifier(card.id)} | {card.ward}
+                          {shouldMaskIdentity ? maskIdentifier(card.id) : card.id} | {card.ward}
                         </p>
                       </div>
                       {card.anomaly && (
@@ -514,7 +519,7 @@ const Dashboard = ({
                     {vitals.map((row) => (
                       <tr key={row.id} className="border-t border-white/10 text-white/85">
                         <td className="px-4 py-3">
-                          {showIdentity ? row.patient : maskPersonName(row.patient)}
+                          {shouldMaskIdentity ? maskPersonName(row.patient) : row.patient}
                         </td>
                         <td className="px-4 py-3">{row.ward}</td>
                         <td className="px-4 py-3">{row.trend[row.trend.length - 1]}</td>
@@ -648,41 +653,40 @@ const Badge = ({ text }: { text: string }) => (
   </span>
 )
 
-function HomeIcon({ className = 'h-4 w-4' }: { className?: string }) {
+function PopulationIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M3 10.5 12 3l9 7.5" />
-      <path d="M6 9.5V21h12V9.5" />
+      <path d="M3 3v18h18" />
+      <path d="m6 15 4-4 3 3 5-5" />
     </svg>
   )
 }
 
-function DiagnosticsIcon({ className = 'h-4 w-4' }: { className?: string }) {
+function RiskAlertIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M4 4h16v16H4z" />
-      <path d="M8 14h2l2-4 2 6 2-2h2" />
+      <path d="m12 3 9 16H3z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
     </svg>
   )
 }
 
-function PredictiveIcon({ className = 'h-4 w-4' }: { className?: string }) {
+function ResourceIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M4 19h16" />
-      <path d="M6 15 10 11l3 2 5-6" />
-      <path d="M18 7h-3" />
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M12 7v6M9 10h6" />
+      <path d="M8 21v-4h8v4" />
     </svg>
   )
 }
 
-function RegistryIcon({ className = 'h-4 w-4' }: { className?: string }) {
+function AuditTrailIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M6 3h12v18H6z" />
-      <path d="M9 7h6" />
-      <path d="M9 11h6" />
-      <path d="M9 15h4" />
+      <path d="M12 3 4 7v6c0 5.2 3.3 8.2 8 10 4.7-1.8 8-4.8 8-10V7z" />
+      <path d="m9 12 2 2 4-4" />
     </svg>
   )
 }

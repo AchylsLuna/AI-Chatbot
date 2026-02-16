@@ -50,12 +50,16 @@ export type LedgerEntry = {
 }
 
 export type UserRole = 'user' | 'nurse' | 'admin' | 'system_admin'
+export type AuthProvider = 'local' | 'auth0'
 
 export type AuthSession = {
   token: string
   user: {
     username: string
     role: UserRole
+    authMethod?: string
+    mfa?: boolean
+    sessionId?: string | null
   }
 }
 

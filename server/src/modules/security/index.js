@@ -4,6 +4,7 @@ const DEFAULT_LIMITS = {
   windowMs: 60 * 1000,
   max: 120,
 }
+const TAG_REGEX = /<[^>]*>/g
 
 const getClientIp = (req) => {
   const forwarded = req.headers['x-forwarded-for']
@@ -89,4 +90,43 @@ export const createRateLimiter = (options = {}) => {
     hits.set(key, record)
     return next()
   }
+}
+
+const sanitizePlainText = (value) => {
+  if (typeof value !== 'string') return value
+  const withoutControls = [...value]
+    .filter((character) => {
+      const code = character.charCodeAt(0)
+      const isAsciiControl = code <= 31 || code === 127
+      const isC1Control = code >= 128 && code <= 159
+      return !isAsciiControl && !isC1Control
+    })
+    .join('')
+
+  return withoutControls.replace(TAG_REGEX, '').trim()
+}
+
+const sanitizeValue = (value) => {
+  if (typeof value === 'string') return sanitizePlainText(value)
+  if (Array.isArray(value)) return value.map((item) => sanitizeValue(item))
+  if (!value || typeof value !== 'object') return value
+
+  const clean = {}
+  for (const [key, item] of Object.entries(value)) {
+    clean[key] = sanitizeValue(item)
+  }
+  return clean
+}
+
+export const sanitizeAiRequestBody = (req, _res, next) => {
+  if (req.body && typeof req.body === 'object') {
+    req.body = sanitizeValue(req.body)
+  }
+  next()
+}
+
+export const sanitizeAiJsonResponse = (_req, res, next) => {
+  const originalJson = res.json.bind(res)
+  res.json = (payload) => originalJson(sanitizeValue(payload))
+  next()
 }

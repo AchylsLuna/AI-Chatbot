@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,37 +6,37 @@
 
 @layer base {
   :root {
-    --ink: #0f2c52;
-    --ocean: #0b6b67;
+    --ink: #0a192f;
+    --ocean: #64ffda;
     --sun: #f59e0b;
-    --sand: #f3efe6;
-    --mist: #e5eef9;
-    --mist-soft: rgba(229, 238, 249, 0.7);
-    --mist-faint: rgba(229, 238, 249, 0.4);
+    --sand: #f8fafc;
+    --mist: #d8e4f3;
+    --mist-soft: rgba(216, 228, 243, 0.72);
+    --mist-faint: rgba(216, 228, 243, 0.46);
     --cloud: #f8fafc;
-    --agent-bg: #f5f7fb;
-    --agent-surface: #ffffff;
-    --agent-surface-strong: #eef2f7;
-    --agent-line: rgba(15, 44, 82, 0.12);
-    --agent-muted: rgba(15, 44, 82, 0.7);
-    --agent-ink: #0f2c52;
-    --agent-accent: #4fd1c5;
-    --agent-accent-strong: #3bb4db;
+    --agent-bg: #081325;
+    --agent-surface: #0f1f3a;
+    --agent-surface-strong: #132846;
+    --agent-line: rgba(148, 173, 214, 0.26);
+    --agent-muted: rgba(205, 220, 243, 0.78);
+    --agent-ink: #f2f7ff;
+    --agent-accent: #64ffda;
+    --agent-accent-strong: #43eac6;
     --agent-warm: #f59e0b;
-    --agent-on-accent: #06231f;
-    --agent-on-light: #0f2c52;
-    --agent-overlay: rgba(15, 44, 82, 0.03);
-    --agent-overlay-strong: rgba(15, 44, 82, 0.06);
-    --grid-line: rgba(15, 44, 82, 0.08);
-    --card-border: rgba(15, 44, 82, 0.12);
-    --card-shadow: 0 28px 80px rgba(15, 44, 82, 0.14);
-    --card-shadow-soft: 0 20px 50px rgba(15, 44, 82, 0.1);
-    --auth-glow-1: rgba(79, 209, 197, 0.18);
-    --auth-glow-2: rgba(59, 180, 219, 0.16);
-    --auth-glow-3: rgba(15, 44, 82, 0.12);
-    --auth-vignette: rgba(15, 44, 82, 0.06);
-    font-family: 'Manrope', 'Segoe UI', system-ui, -apple-system, sans-serif;
-    color: var(--ink);
+    --agent-on-accent: #03261f;
+    --agent-on-light: #0a192f;
+    --agent-overlay: rgba(248, 250, 252, 0.04);
+    --agent-overlay-strong: rgba(248, 250, 252, 0.08);
+    --grid-line: rgba(148, 173, 214, 0.11);
+    --card-border: rgba(138, 163, 202, 0.36);
+    --card-shadow: 0 24px 80px rgba(3, 8, 20, 0.45);
+    --card-shadow-soft: 0 18px 52px rgba(3, 8, 20, 0.35);
+    --auth-glow-1: rgba(100, 255, 218, 0.2);
+    --auth-glow-2: rgba(100, 214, 255, 0.17);
+    --auth-glow-3: rgba(10, 25, 47, 0.3);
+    --auth-vignette: rgba(10, 25, 47, 0.2);
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--agent-ink);
     background-color: var(--agent-bg);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -49,6 +49,12 @@
     min-height: 100%;
     background-color: var(--agent-bg);
     color: var(--agent-ink);
+    overscroll-behavior-y: none;
+  }
+
+  #root {
+    min-height: 100%;
+    background-color: var(--agent-bg);
   }
 
   html {
@@ -61,57 +67,57 @@
 
   .theme-dark,
   .theme-agent {
-    --agent-bg: #050505;
-    --agent-surface: #0b0f16;
-    --agent-surface-strong: #111827;
-    --agent-line: rgba(255, 255, 255, 0.08);
-    --agent-muted: #a4adbd;
-    --agent-ink: #f4f6fb;
-    --agent-accent: #7cffc4;
-    --agent-accent-strong: #5ad7ff;
+    --agent-bg: #060f22;
+    --agent-surface: #0b1a33;
+    --agent-surface-strong: #102241;
+    --agent-line: rgba(139, 165, 207, 0.3);
+    --agent-muted: rgba(193, 211, 241, 0.78);
+    --agent-ink: #eef5ff;
+    --agent-accent: #64ffda;
+    --agent-accent-strong: #4deccf;
     --agent-warm: #ffd166;
-    --agent-on-accent: #04120d;
-    --agent-on-light: #0b0f16;
-    --agent-overlay: rgba(255, 255, 255, 0.03);
-    --agent-overlay-strong: rgba(255, 255, 255, 0.05);
-    --grid-line: rgba(255, 255, 255, 0.05);
-    --card-border: rgba(255, 255, 255, 0.08);
-    --card-shadow: 0 32px 90px rgba(0, 0, 0, 0.55);
-    --card-shadow-soft: 0 24px 60px rgba(0, 0, 0, 0.42);
-    --auth-glow-1: rgba(124, 255, 196, 0.18);
-    --auth-glow-2: rgba(90, 215, 255, 0.16);
-    --auth-glow-3: rgba(15, 23, 42, 0.4);
-    --auth-vignette: rgba(255, 255, 255, 0.06);
+    --agent-on-accent: #03261f;
+    --agent-on-light: #0a192f;
+    --agent-overlay: rgba(255, 255, 255, 0.035);
+    --agent-overlay-strong: rgba(255, 255, 255, 0.07);
+    --grid-line: rgba(170, 193, 232, 0.08);
+    --card-border: rgba(141, 166, 207, 0.33);
+    --card-shadow: 0 30px 84px rgba(2, 6, 16, 0.56);
+    --card-shadow-soft: 0 22px 58px rgba(2, 6, 16, 0.43);
+    --auth-glow-1: rgba(100, 255, 218, 0.2);
+    --auth-glow-2: rgba(93, 206, 255, 0.17);
+    --auth-glow-3: rgba(10, 25, 47, 0.4);
+    --auth-vignette: rgba(8, 18, 38, 0.42);
     background-color: var(--agent-bg);
     color: var(--agent-ink);
     color-scheme: dark;
   }
 
   .theme-light {
-    --agent-bg: #080d1c;
-    --agent-surface: #0f162a;
-    --agent-surface-strong: #16203a;
-    --agent-line: rgba(170, 197, 255, 0.2);
-    --agent-muted: rgba(184, 202, 233, 0.86);
-    --agent-ink: #edf3ff;
-    --agent-accent: #7cffc4;
-    --agent-accent-strong: #5ad7ff;
-    --agent-warm: #ffd166;
-    --agent-on-accent: #04120d;
-    --agent-on-light: #0b0f16;
-    --agent-overlay: rgba(255, 255, 255, 0.035);
-    --agent-overlay-strong: rgba(255, 255, 255, 0.07);
-    --grid-line: rgba(193, 211, 248, 0.08);
-    --card-border: rgba(158, 185, 238, 0.24);
-    --card-shadow: 0 32px 90px rgba(0, 0, 0, 0.5);
-    --card-shadow-soft: 0 24px 60px rgba(0, 0, 0, 0.38);
-    --auth-glow-1: rgba(124, 255, 196, 0.18);
-    --auth-glow-2: rgba(90, 215, 255, 0.16);
-    --auth-glow-3: rgba(15, 23, 42, 0.4);
-    --auth-vignette: rgba(255, 255, 255, 0.06);
+    --agent-bg: #f8fafc;
+    --agent-surface: rgba(255, 255, 255, 0.78);
+    --agent-surface-strong: rgba(244, 248, 253, 0.88);
+    --agent-line: rgba(10, 25, 47, 0.14);
+    --agent-muted: rgba(10, 25, 47, 0.68);
+    --agent-ink: #0a192f;
+    --agent-accent: #00c2a2;
+    --agent-accent-strong: #05b495;
+    --agent-warm: #f59e0b;
+    --agent-on-accent: #f8fafc;
+    --agent-on-light: #0a192f;
+    --agent-overlay: rgba(10, 25, 47, 0.03);
+    --agent-overlay-strong: rgba(10, 25, 47, 0.06);
+    --grid-line: rgba(10, 25, 47, 0.08);
+    --card-border: rgba(10, 25, 47, 0.14);
+    --card-shadow: 0 24px 58px rgba(10, 25, 47, 0.14);
+    --card-shadow-soft: 0 18px 42px rgba(10, 25, 47, 0.1);
+    --auth-glow-1: rgba(100, 255, 218, 0.16);
+    --auth-glow-2: rgba(86, 146, 255, 0.1);
+    --auth-glow-3: rgba(10, 25, 47, 0.1);
+    --auth-vignette: rgba(10, 25, 47, 0.04);
     background-color: var(--agent-bg);
     color: var(--agent-ink);
-    color-scheme: dark;
+    color-scheme: light;
   }
 }
 
@@ -169,7 +175,7 @@
 
   .page-title {
     margin-top: 0.5rem;
-    font-family: 'Space Grotesk', 'Manrope', sans-serif;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
     font-size: clamp(1.75rem, 2.4vw, 2.5rem);
     font-weight: 600;
     line-height: 1.15;

@@ -15,19 +15,12 @@ const AppLogoBadge = ({
       className={markClassName}
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="2.15"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M12 3v2.5" />
-      <path d="M9.2 5.5h5.6" />
-      <rect x="6" y="7" width="12" height="10" rx="3" />
-      <path d="M4.5 10.2V14" />
-      <path d="M19.5 10.2V14" />
-      <circle cx="9.8" cy="11.8" r="0.9" fill="currentColor" stroke="none" />
-      <circle cx="14.2" cy="11.8" r="0.9" fill="currentColor" stroke="none" />
-      <path d="M9.4 14.7h5.2" />
+      <path d="M5.5 12h3.2l2.1-3.1 2.7 6.2 1.9-3.1h3.1" />
     </svg>
   </div>
 )

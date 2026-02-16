@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import GlobalAssistantChat from './components/chat/GlobalAssistantChat'
 import AppHeader from './components/layout/AppHeader'
 import WorkspaceHeader from './components/layout/WorkspaceHeader'
@@ -49,9 +49,14 @@ const dashboardWorkspacePages: DashboardWorkspacePage[] = [
 
 function App() {
   const { currentPage, navigateToPage, navigateBack, isLanding, isAuthPage } = useAppRouting()
-  const { theme, toggleTheme } = useAppTheme()
+  const { theme, toggleTheme } = useAppTheme(isLanding || isAuthPage)
+  const [dataMaskingEnabled, setDataMaskingEnabled] = useState(true)
 
   const {
+    authProvider,
+    auth0Enabled,
+    isBiometricReady,
+    sessionStatus,
     apiReady,
     authUser,
     authError,
@@ -63,6 +68,7 @@ function App() {
     pendingOtpChallenge,
     handleCreateReservation,
     handleUpdateReservation,
+    handleProviderLogin,
     handleLogin,
     handleVerifyOtp,
     handleCancelOtp,
@@ -81,6 +87,13 @@ function App() {
   const showPublicHeader = !isLanding && !isAuthPage && !authUser && !isProtectedRoute
   const showWorkspaceHeader = Boolean(authUser) && !isAuthPage && currentPage !== 'landing'
 
+  useEffect(() => {
+    if (!authUser) return
+    if (authUser.role !== 'user') return
+    if (currentPage === 'appointments') return
+    navigateToPage('appointments', { replace: true })
+  }, [authUser, currentPage, navigateToPage])
+
   useScrollReveal(currentPage)
 
   const loginPage = isCheckingSession ? (
@@ -91,6 +104,9 @@ function App() {
       authError={authError}
       isAuthLoading={isAuthLoading}
       onLogin={handleLogin}
+      onProviderLogin={auth0Enabled ? () => handleProviderLogin() : undefined}
+      authProvider={authProvider}
+      isBiometricReady={isBiometricReady}
       onLogout={handleLogout}
       onNavigate={navigateToPage}
       onGoBack={() => navigateBack('landing')}
@@ -105,6 +121,9 @@ function App() {
       authError={authError}
       isAuthLoading={isAuthLoading}
       onLogin={handleLogin}
+      onProviderLogin={auth0Enabled ? () => handleProviderLogin('doctor_dashboard') : undefined}
+      authProvider={authProvider}
+      isBiometricReady={isBiometricReady}
       onLogout={handleLogout}
       onNavigate={navigateToPage}
       onGoBack={() => navigateBack('landing')}
@@ -209,6 +228,7 @@ function App() {
               onUpdateReservation={handleUpdateReservation}
               theme={theme}
               onToggleTheme={toggleTheme}
+              dataMaskingEnabled={dataMaskingEnabled}
             />,
             'Appointments workspace'
           )
@@ -229,6 +249,7 @@ function App() {
               onNavigate={navigateToPage}
               onLogout={handleLogout}
               onUpdateReservation={handleUpdateReservation}
+              dataMaskingEnabled={dataMaskingEnabled}
             />,
             "Doctor's dashboard"
           )
@@ -261,6 +282,7 @@ function App() {
               theme={theme}
               onNavigate={navigateToPage}
               activePage={currentPage}
+              dataMaskingEnabled={dataMaskingEnabled}
             />,
             'Clinical dashboard'
           )
@@ -284,7 +306,7 @@ function App() {
         )
       } else {
         pageContent = withWorkspaceBoundary(
-          <AdminDashboard authUser={authUser} />,
+          <AdminDashboard authUser={authUser} onNavigate={navigateToPage} />,
           'Admin dashboard'
         )
       }
@@ -348,10 +370,19 @@ function App() {
             onLogout={handleLogout}
             theme={theme}
             onToggleTheme={toggleTheme}
+            dataMaskingEnabled={dataMaskingEnabled}
+            onToggleDataMasking={() => setDataMaskingEnabled((prev) => !prev)}
+            securityStatus={{
+              encryption: 'TLS 1.3 + AES-256-GCM',
+              session: sessionStatus,
+              provider: authProvider,
+              mfa: Boolean(authUser.mfa),
+              biometricReady: isBiometricReady,
+            }}
           />
         )}
 
-        <main className={showPublicHeader || showWorkspaceHeader ? 'pt-20' : ''}>{pageContent}</main>
+        <main>{pageContent}</main>
         <GlobalAssistantChat
           key={`global-chat-${authUser?.username ?? 'guest'}-${authUser?.role ?? 'guest'}`}
           isIdentified={Boolean(authUser)}

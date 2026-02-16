@@ -34,6 +34,7 @@ const SYMPTOM_KEYWORDS = [
 ]
 const DISCLAIMER =
   'This recommendation is guidance only. Not a medical diagnosis. For emergencies, contact local services.'
+const TAG_REGEX = /<[^>]*>/g
 
 export const normalizeDepartment = (value, fallback) => {
   if (typeof value !== 'string') return fallback
@@ -58,6 +59,22 @@ export const isValidSymptoms = (value) => {
   if (wordCount < 2) return false
   if (cleaned.length < 8) return false
   return true
+}
+
+const removeControlChars = (value) =>
+  [...value]
+    .filter((character) => {
+      const code = character.charCodeAt(0)
+      const isAsciiControl = code <= 31 || code === 127
+      const isC1Control = code >= 128 && code <= 159
+      return !isAsciiControl && !isC1Control
+    })
+    .join('')
+
+const sanitizeText = (value) => {
+  if (typeof value !== 'string') return ''
+  const normalized = removeControlChars(value).replace(TAG_REGEX, '').trim()
+  return normalized
 }
 
 const safeParseJson = (value) => {
@@ -151,7 +168,7 @@ const decisionTreeTriage = (text) => {
 
 const buildFallbackSummary = (symptomsText, decision) => {
   const resolvedDecision = decision || decisionTreeTriage(symptomsText)
-  const cleanedSymptoms = symptomsText?.trim()
+  const cleanedSymptoms = sanitizeText(symptomsText)
   const symptoms = cleanedSymptoms || 'No symptoms provided yet.'
   const keywordHint = resolvedDecision.matchedKeywords?.length
     ? ` based on ${resolvedDecision.matchedKeywords.slice(0, 3).join(', ')}`
@@ -184,8 +201,9 @@ const buildPrompt = (symptoms) => {
 }
 
 export const generateTriageSummary = async (symptomsText) => {
-  const decision = decisionTreeTriage(symptomsText)
-  const fallback = buildFallbackSummary(symptomsText, decision)
+  const safeSymptomsInput = sanitizeText(symptomsText)
+  const decision = decisionTreeTriage(safeSymptomsInput)
+  const fallback = buildFallbackSummary(safeSymptomsInput, decision)
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return fallback
 
@@ -214,7 +232,7 @@ export const generateTriageSummary = async (symptomsText) => {
           },
           {
             role: 'user',
-            content: buildPrompt(symptomsText),
+            content: buildPrompt(safeSymptomsInput),
           },
         ],
       }),
@@ -235,12 +253,12 @@ export const generateTriageSummary = async (symptomsText) => {
   if (!parsed) return fallback
 
   const summaryRaw =
-    typeof parsed.summary === 'string' && parsed.summary.trim()
-      ? parsed.summary.trim()
+    typeof parsed.summary === 'string' && sanitizeText(parsed.summary)
+      ? sanitizeText(parsed.summary)
       : fallback.summary
   const symptoms =
-    typeof parsed.symptoms === 'string' && parsed.symptoms.trim()
-      ? parsed.symptoms.trim()
+    typeof parsed.symptoms === 'string' && sanitizeText(parsed.symptoms)
+      ? sanitizeText(parsed.symptoms)
       : fallback.symptoms
   const summary = summaryRaw.includes('Decision Tree')
     ? summaryRaw

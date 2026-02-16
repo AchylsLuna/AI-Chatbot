@@ -22,6 +22,20 @@ const PAGE_ROUTES: Record<AppPage, string> = {
   signup: '/signup',
 }
 
+const LEGACY_ROUTE_ALIASES: Record<string, AppPage> = {
+  '/doctor_dashboard': 'doctor_dashboard',
+  '/admin_login': 'admin_login',
+  '/forgot_password': 'forgot_password',
+  '/dashboard/clinical_reports': 'clinical_reports',
+  '/dashboard/care_alerts': 'care_alerts',
+  '/dashboard/care_support': 'care_support',
+  '/dashboard/ledger_monitoring': 'ledger_monitoring',
+  '/dashboard/intake_monitoring': 'intake_monitoring',
+  '/dashboard/user_management': 'user_management',
+  '/doctor': 'doctor_dashboard',
+  '/admin/login': 'admin_login',
+}
+
 const getBasePrefix = () => {
   const base = import.meta.env.BASE_URL || '/'
   return base === '/' ? '' : base.replace(/\/$/, '')
@@ -57,7 +71,11 @@ export const normalizePath = (path: string) => {
 
 export const hasKnownRoute = (path: string) => {
   const normalized = normalizePath(path)
-  return Object.values(PAGE_ROUTES).some(
+  const isCanonicalRoute = Object.values(PAGE_ROUTES).some(
+    (route) => normalizePath(route) === normalized
+  )
+  if (isCanonicalRoute) return true
+  return Object.keys(LEGACY_ROUTE_ALIASES).some(
     (route) => normalizePath(route) === normalized
   )
 }
@@ -67,5 +85,10 @@ export const resolvePageFromPath = (path: string): AppPage => {
   const match = (Object.entries(PAGE_ROUTES) as Array<[AppPage, string]>).find(
     ([, route]) => normalizePath(route) === normalized
   )
-  return match?.[0] ?? 'landing'
+  if (match?.[0]) return match[0]
+
+  const aliasMatch = Object.entries(LEGACY_ROUTE_ALIASES).find(
+    ([route]) => normalizePath(route) === normalized
+  )
+  return aliasMatch?.[1] ?? 'landing'
 }

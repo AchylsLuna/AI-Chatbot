@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { UserRole } from '../../types/triage'
 
 type ChatMessage = {
@@ -11,6 +11,25 @@ type GlobalAssistantChatProps = {
   isIdentified?: boolean
   userRole?: UserRole | null
 }
+
+const RobotLogo = ({ className = 'h-5 w-5' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="5" y="8" width="14" height="11" rx="3" />
+    <path d="M12 4v4" />
+    <circle cx="9" cy="13" r="1" />
+    <circle cx="15" cy="13" r="1" />
+    <path d="M9 16h6" />
+  </svg>
+)
 
 const quickSupportPrompts = [
   'Introduce the system',
@@ -174,6 +193,7 @@ const GlobalAssistantChat = ({
   const [liftedFromFooter, setLiftedFromFooter] = useState(false)
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const messagesViewportRef = useRef<HTMLDivElement | null>(null)
   const nextMessageIdRef = useRef(1)
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -182,8 +202,6 @@ const GlobalAssistantChat = ({
       text: buildIntroReply({ isIdentified, userRole }),
     },
   ])
-
-  const latestMessages = useMemo(() => messages.slice(-8), [messages])
 
   useEffect(() => {
     const handleOpenChat = () => {
@@ -198,6 +216,21 @@ const GlobalAssistantChat = ({
       window.removeEventListener('healix:open-care-chat', handleOpenChat)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isOpen) return
+    requestAnimationFrame(() => {
+      inputRef.current?.focus()
+    })
+  }, [isOpen])
+
+  useEffect(() => {
+    const viewport = messagesViewportRef.current
+    if (!viewport || !isOpen) return
+    requestAnimationFrame(() => {
+      viewport.scrollTop = viewport.scrollHeight
+    })
+  }, [isOpen, messages])
 
   useEffect(() => {
     const footer = document.getElementById('site-footer')
@@ -266,9 +299,14 @@ const GlobalAssistantChat = ({
       }`}
     >
       {isOpen && (
-        <div className="w-[min(92vw,22rem)] rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-4 shadow-[0_20px_50px_rgba(10,20,38,0.35)] backdrop-blur">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-semibold text-white">AI Assistant</p>
+        <div className="flex h-[min(78vh,40rem)] w-[min(94vw,24rem)] flex-col overflow-hidden rounded-[30px] border border-white/15 bg-[linear-gradient(170deg,rgba(8,18,40,0.96),rgba(11,24,48,0.95))] shadow-[0_24px_60px_rgba(0,0,0,0.46)] backdrop-blur-xl">
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <p className="inline-flex items-center gap-2 text-sm font-semibold text-white">
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-cyan-300/15 text-cyan-200">
+                <RobotLogo className="h-4 w-4" />
+              </span>
+              AI Assistant
+            </p>
             <button
               type="button"
               onClick={() => setIsOpen(false)}
@@ -278,62 +316,73 @@ const GlobalAssistantChat = ({
             </button>
           </div>
 
-          <div className="max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-white/5 p-3">
-            {latestMessages.map((message) => (
-              <div
+          <div
+            ref={messagesViewportRef}
+            className="flex-1 space-y-3 overflow-y-auto px-3 py-3"
+          >
+            {messages.map((message) => (
+              <article
                 key={message.id}
-                className={`rounded-xl px-3 py-2 text-xs ${
+                className={`max-w-[84%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                   message.sender === 'user'
-                    ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
-                    : 'bg-white/10 text-white/80'
-                } whitespace-pre-line`}
+                    ? 'ml-auto rounded-br-md bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
+                    : 'mr-auto rounded-bl-md border border-white/10 bg-white/10 text-white/85'
+                }`}
               >
                 {message.text}
-              </div>
+              </article>
             ))}
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {quickSupportPrompts.map((prompt) => (
+          <div className="border-t border-white/10 bg-[rgba(7,16,34,0.72)] px-3 py-3">
+            <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1">
+              {quickSupportPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => sendPresetPrompt(prompt)}
+                  className="shrink-0 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold text-white/75 transition hover:border-white/35 hover:text-white"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-end gap-2">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    sendMessage()
+                  }
+                }}
+                placeholder="Type your message..."
+                className="flex-1 rounded-2xl border border-white/15 bg-[rgba(20,33,61,0.68)] px-4 py-3 text-sm text-white placeholder:text-white/45 outline-none transition focus:border-cyan-200/70 focus:ring-2 focus:ring-cyan-300/20"
+              />
               <button
-                key={prompt}
                 type="button"
-                onClick={() => sendPresetPrompt(prompt)}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold text-white/75 transition hover:border-white/25 hover:text-white"
+                onClick={sendMessage}
+                className="rounded-2xl bg-[color:var(--agent-accent)] px-5 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
               >
-                {prompt}
+                Send
               </button>
-            ))}
+            </div>
           </div>
-
-          <div className="mt-3 flex gap-2">
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  sendMessage()
-                }
-              }}
-              placeholder="Ask anything..."
-              className="agent-input flex-1"
-            />
-            <button type="button" onClick={sendMessage} className="agent-button">
-              Send
-            </button>
-          </div>
-
         </div>
       )}
 
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="rounded-full bg-[color:var(--agent-accent)] px-5 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] shadow-[0_14px_30px_rgba(79,209,197,0.45)] transition hover:-translate-y-0.5 hover:bg-[color:var(--agent-accent-strong)]"
+        aria-label={isOpen ? 'Close AI chat' : 'Open AI chat'}
+        className="group inline-flex h-[82px] w-[82px] items-center justify-center rounded-full bg-[radial-gradient(circle_at_32%_24%,rgba(19,46,88,0.68),rgba(8,18,40,0.95))] p-[12px] text-cyan-100 shadow-[0_16px_34px_rgba(12,28,56,0.58)] transition hover:-translate-y-0.5"
       >
-        {isOpen ? 'Hide AI Chat' : 'AI Chat'}
+        <span className="grid h-full w-full place-items-center rounded-full bg-[radial-gradient(circle_at_36%_28%,rgba(100,255,218,0.24),rgba(59,154,184,0.2)_52%,rgba(9,30,56,0.72)_100%)] text-cyan-200">
+          <RobotLogo className="h-6 w-6" />
+        </span>
       </button>
     </div>
   )
