@@ -199,7 +199,7 @@ const verifyAuth0Token = async (token) => {
   if (!username || !ALLOWED_ROLES.includes(role)) {
     throw new Error('Invalid Auth0 token claims')
   }
-  if (isClinicalRole && !mfa) {
+  if (REQUIRE_STAFF_OTP && isClinicalRole && !mfa) {
     throw new Error('Clinical Auth0 session must include MFA')
   }
 
@@ -643,7 +643,7 @@ export const requireAuth = async (req, res, next) => {
     if (!username || !ALLOWED_ROLES.includes(role)) {
       return res.status(401).json({ error: 'Invalid token claims' })
     }
-    if (isClinicalRole && !mfa) {
+    if (REQUIRE_STAFF_OTP && isClinicalRole && !mfa) {
       return res.status(401).json({ error: 'MFA token required for this role' })
     }
 
