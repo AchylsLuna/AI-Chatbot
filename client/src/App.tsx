@@ -71,7 +71,7 @@ function App() {
     navigateToPage('doctor_dashboard', { replace: true })
   }, [authUser, currentPage, navigateToPage])
 
-  useScrollReveal(currentPage)
+  useScrollReveal(`${currentPage}-${isCheckingSession}-${authUser?.role ?? 'guest'}`)
 
   const loginPage = isCheckingSession ? (
     <AuthLoadingCard label="Checking session..." />
@@ -247,6 +247,7 @@ function App() {
         pageContent = withWorkspaceBoundary(
           <AdminDashboard
             authUser={authUser}
+            reservations={reservations}
             onNavigate={navigateToPage}
             onLogout={handleLogout}
             sessionStatus={sessionStatus}

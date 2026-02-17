@@ -12,10 +12,7 @@ type AccessDeniedCardProps = {
 export const AuthLoadingCard = ({ label }: AuthLoadingCardProps) => (
   <div className="min-h-screen pb-20">
     <div className="mx-auto w-full max-w-6xl px-6 py-10">
-      <div
-        className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 text-sm text-white/70 shadow-2xl shadow-black/40"
-        data-reveal
-      >
+      <div className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 text-sm text-white/70 shadow-2xl shadow-black/40">
         {label}
       </div>
     </div>
@@ -30,10 +27,7 @@ export const AccessDeniedCard = ({
 }: AccessDeniedCardProps) => (
   <div className="min-h-screen pb-20">
     <div className="mx-auto w-full max-w-4xl px-6 py-14">
-      <div
-        className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-8 shadow-2xl shadow-black/40"
-        data-reveal
-      >
+      <div className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-8 shadow-2xl shadow-black/40">
         <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
           Access blocked
         </p>
