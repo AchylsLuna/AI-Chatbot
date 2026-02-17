@@ -2,18 +2,8 @@ import type { AppPage } from '../types/navigation'
 
 const PAGE_ROUTES: Record<AppPage, string> = {
   landing: '/',
-  triage: '/triage',
   appointments: '/appointments',
   doctor_dashboard: '/doctor-dashboard',
-  dashboard: '/dashboard',
-  analytics: '/dashboard/analytics',
-  clinical_reports: '/dashboard/clinical-reports',
-  care_alerts: '/dashboard/care-alerts',
-  care_support: '/dashboard/care-support',
-  ledger_monitoring: '/dashboard/ledger-monitoring',
-  intake_monitoring: '/dashboard/intake-monitoring',
-  security: '/dashboard/security',
-  user_management: '/dashboard/user-management',
   admin: '/admin',
   admin_login: '/admin-login',
   login: '/login',
@@ -23,15 +13,25 @@ const PAGE_ROUTES: Record<AppPage, string> = {
 }
 
 const LEGACY_ROUTE_ALIASES: Record<string, AppPage> = {
+  '/triage': 'appointments',
+  '/dashboard': 'doctor_dashboard',
+  '/dashboard/analytics': 'doctor_dashboard',
+  '/dashboard/clinical-reports': 'doctor_dashboard',
+  '/dashboard/care-alerts': 'doctor_dashboard',
+  '/dashboard/care-support': 'doctor_dashboard',
+  '/dashboard/ledger-monitoring': 'doctor_dashboard',
+  '/dashboard/intake-monitoring': 'doctor_dashboard',
+  '/dashboard/security': 'doctor_dashboard',
+  '/dashboard/user-management': 'doctor_dashboard',
   '/doctor_dashboard': 'doctor_dashboard',
   '/admin_login': 'admin_login',
   '/forgot_password': 'forgot_password',
-  '/dashboard/clinical_reports': 'clinical_reports',
-  '/dashboard/care_alerts': 'care_alerts',
-  '/dashboard/care_support': 'care_support',
-  '/dashboard/ledger_monitoring': 'ledger_monitoring',
-  '/dashboard/intake_monitoring': 'intake_monitoring',
-  '/dashboard/user_management': 'user_management',
+  '/dashboard/clinical_reports': 'doctor_dashboard',
+  '/dashboard/care_alerts': 'doctor_dashboard',
+  '/dashboard/care_support': 'doctor_dashboard',
+  '/dashboard/ledger_monitoring': 'doctor_dashboard',
+  '/dashboard/intake_monitoring': 'doctor_dashboard',
+  '/dashboard/user_management': 'doctor_dashboard',
   '/doctor': 'doctor_dashboard',
   '/admin/login': 'admin_login',
 }
@@ -71,6 +71,8 @@ export const normalizePath = (path: string) => {
 
 export const hasKnownRoute = (path: string) => {
   const normalized = normalizePath(path)
+  if (normalized === '/dashboard' || normalized.startsWith('/dashboard/')) return true
+
   const isCanonicalRoute = Object.values(PAGE_ROUTES).some(
     (route) => normalizePath(route) === normalized
   )
@@ -82,6 +84,10 @@ export const hasKnownRoute = (path: string) => {
 
 export const resolvePageFromPath = (path: string): AppPage => {
   const normalized = normalizePath(path)
+  if (normalized === '/dashboard' || normalized.startsWith('/dashboard/')) {
+    return 'doctor_dashboard'
+  }
+
   const match = (Object.entries(PAGE_ROUTES) as Array<[AppPage, string]>).find(
     ([, route]) => normalizePath(route) === normalized
   )

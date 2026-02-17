@@ -1,4 +1,4 @@
-import type { LedgerEntry, Reservation } from '../types/triage'
+import type { LedgerEntry, Reservation } from '../types'
 
 export const fallbackReservations: Reservation[] = [
   {

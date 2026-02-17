@@ -8,8 +8,7 @@ import type {
   Reservation,
   ReservationDraft,
   SignupDraft,
-  TriageSummary,
-} from '../types/triage'
+} from '../types'
 import {
   aiAlertAuditResponseSchema,
   accessRequestsResponseSchema,
@@ -22,7 +21,6 @@ import {
   loginOtpChallengeSchema,
   parseApiSchema,
   reservationsResponseSchema,
-  triageSummaryResponseSchema,
 } from '../schemas/apiSchemas'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5174/api'
@@ -147,19 +145,6 @@ export const api = {
     const payload = await handleResponse(response)
     const data = parseApiSchema(appointmentResponseSchema, payload, 'update appointment')
     return data.appointment
-  },
-  generateTriageSummary: async (
-    symptoms: string,
-    signal?: AbortSignal
-  ): Promise<{ summary: TriageSummary; elapsedMs: number }> => {
-    const response = await request(`${API_BASE}/triage/summary`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symptoms }),
-      signal,
-    })
-    const payload = await handleResponse(response)
-    return parseApiSchema(triageSummaryResponseSchema, payload, 'triage summary')
   },
   getAccessRequests: async (): Promise<AccessRequest[]> => {
     const payload = await handleResponse(await request(`${API_BASE}/access-requests`, withAuth()))

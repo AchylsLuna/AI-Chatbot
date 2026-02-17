@@ -112,11 +112,6 @@ export const appointmentResponseSchema = z.object({
   appointment: reservationSchema,
 })
 
-export const triageSummaryResponseSchema = z.object({
-  summary: triageSummarySchema,
-  elapsedMs: z.coerce.number().int().nonnegative(),
-})
-
 export const accessRequestsResponseSchema = z.object({
   requests: z.array(accessRequestSchema),
 })

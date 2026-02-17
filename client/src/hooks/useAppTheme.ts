@@ -3,10 +3,10 @@ import { useEffect, useState } from 'react'
 type ThemeMode = 'light' | 'dark'
 
 const getInitialTheme = (): ThemeMode => {
-  if (typeof window === 'undefined') return 'dark'
+  if (typeof window === 'undefined') return 'light'
   const stored = window.localStorage.getItem('pulse-ledger-theme')
   if (stored === 'light' || stored === 'dark') return stored
-  return 'dark'
+  return 'light'
 }
 
 const useAppTheme = (forceDark = false) => {

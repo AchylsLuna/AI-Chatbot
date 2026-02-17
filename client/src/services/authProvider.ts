@@ -1,6 +1,6 @@
 import type { Auth0Client, RedirectLoginOptions, User } from '@auth0/auth0-spa-js'
 import type { AppPage } from '../types/navigation'
-import type { AuthProvider, AuthSession, UserRole } from '../types/triage'
+import type { AuthProvider, AuthSession, UserRole } from '../types'
 
 const AUTH_PROVIDER = String(import.meta.env.VITE_AUTH_PROVIDER || 'local').toLowerCase()
 const AUTH0_DOMAIN = String(import.meta.env.VITE_AUTH0_DOMAIN || '').trim()

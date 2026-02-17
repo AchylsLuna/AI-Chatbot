@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { LedgerEntry, Reservation } from '../types/triage'
+import type { LedgerEntry, Reservation } from '../types'
 
 type SecureHealthStore = {
   reservations: Reservation[]

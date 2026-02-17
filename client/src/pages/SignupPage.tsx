@@ -2,7 +2,7 @@ import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import { api } from '../services/api'
 import type { AppPage } from '../types/navigation'
-import type { AuthSession, SignupDraft } from '../types/triage'
+import type { AuthSession, SignupDraft } from '../types'
 
 type SignupPageProps = {
   onNavigate?: (page: AppPage) => void
@@ -50,11 +50,11 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
     <AuthSplitLayout>
       {signupSession ? (
         <div className="space-y-4">
-          <h2 className="text-2xl font-semibold text-white">Account created</h2>
-          <p className="text-sm text-white/60">
+          <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Account created</h2>
+          <p className="text-sm text-[color:var(--agent-muted)]">
             Your account is ready. Sign in and verify OTP to continue.
           </p>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+          <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4 text-sm text-[color:var(--agent-muted)]">
             <p>Username: {signupSession.user.username}</p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -81,7 +81,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
           <button
             type="button"
             onClick={() => (onGoBack ? onGoBack() : onNavigate?.('login'))}
-            className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-white/60 transition hover:text-white"
+            className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
           >
             <svg
               viewBox="0 0 24 24"
@@ -97,8 +97,8 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             Back
           </button>
 
-          <h2 className="text-2xl font-semibold text-white">Create your account</h2>
-          <p className="mt-2 text-sm text-white/60">Start your AI-powered health journey today</p>
+          <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Create your account</h2>
+          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">Start your AI-powered health journey today</p>
 
           <form
             className="mt-6 space-y-4"
@@ -147,7 +147,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             }}
           >
             <div className="relative">
-              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-white/40">
+              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
                 <svg
                   viewBox="0 0 24 24"
                   className="h-4 w-4"
@@ -171,7 +171,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             </div>
 
             <div className="relative">
-              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-white/40">
+              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
                 <svg
                   viewBox="0 0 24 24"
                   className="h-4 w-4"
@@ -196,7 +196,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             </div>
 
             <div className="relative">
-              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-white/40">
+              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
                 <svg
                   viewBox="0 0 24 24"
                   className="h-4 w-4"
@@ -226,7 +226,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 transition hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--agent-muted-soft)] transition hover:text-[color:var(--agent-ink)]"
               >
                 {showPassword ? (
                   <svg
@@ -263,7 +263,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             {hasPasswordInteracted && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-white/60">Password strength</span>
+                  <span className="text-[color:var(--agent-muted)]">Password strength</span>
                   <span
                     className={`font-semibold ${
                       passwordStrength.label === 'Strong'
@@ -292,14 +292,14 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                     />
                   ))}
                 </div>
-                <p className="text-[11px] text-white/50">
+                <p className="text-[11px] text-[color:var(--agent-muted-soft)]">
                   Use at least 8 characters with uppercase, lowercase, and number.
                 </p>
               </div>
             )}
 
             <div className="relative">
-              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-white/40">
+              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
                 <svg
                   viewBox="0 0 24 24"
                   className="h-4 w-4"
@@ -336,7 +336,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
               {isSubmitting ? 'Creating...' : 'Create Account'}
             </button>
 
-            <label className="flex items-start gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/70">
+            <label className="flex items-start gap-2 rounded-xl border border-[color:var(--card-border)] bg-white/[0.03] px-3 py-2 text-xs text-[color:var(--agent-muted)]">
               <input
                 type="checkbox"
                 checked={acceptedTerms}
@@ -377,7 +377,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
 
             {submitError && <p className="text-xs font-semibold text-rose-300">{submitError}</p>}
 
-            <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-white/60">
+            <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-[color:var(--agent-muted)]">
               <span>Already have an account?</span>
               <button
                 type="button"
@@ -393,27 +393,27 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             <div className="fixed inset-0 z-[70] grid place-items-center bg-black/55 p-4">
               <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-[color:var(--agent-surface)] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
                 <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-base font-semibold text-white">
+                  <h3 className="text-base font-semibold text-[color:var(--agent-ink)]">
                     {legalModal === 'terms' ? 'Terms and Conditions' : 'Privacy Policy'}
                   </h3>
                   <button
                     type="button"
                     onClick={() => setLegalModal(null)}
-                    className="text-xs font-semibold text-white/60 transition hover:text-white"
+                    className="text-xs font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
                   >
                     Close
                   </button>
                 </div>
 
                 {legalModal === 'terms' ? (
-                  <div className="mt-3 space-y-2 text-xs text-white/75">
+                  <div className="mt-3 space-y-2 text-xs text-[color:var(--agent-ink)]/75">
                     <p>1. This platform provides guidance tools and scheduling workflows only.</p>
                     <p>2. Emergency cases should be handled through local emergency services.</p>
                     <p>3. Users must keep account credentials secure and confidential.</p>
                     <p>4. Role-based access rules apply to all dashboards and records.</p>
                   </div>
                 ) : (
-                  <div className="mt-3 space-y-2 text-xs text-white/75">
+                  <div className="mt-3 space-y-2 text-xs text-[color:var(--agent-ink)]/75">
                     <p>1. We process account and booking data for clinical workflow support.</p>
                     <p>2. Access is protected through role controls and session security checks.</p>
                     <p>3. Sensitive identifiers may be masked depending on security settings.</p>

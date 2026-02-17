@@ -37,7 +37,7 @@ const ForgotPasswordPage = ({ onNavigate, onGoBack }: ForgotPasswordPageProps) =
       <button
         type="button"
         onClick={() => (onGoBack ? onGoBack() : onNavigate?.('login'))}
-        className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-white/60 transition hover:text-white"
+        className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
       >
         <svg
           viewBox="0 0 24 24"
@@ -55,13 +55,13 @@ const ForgotPasswordPage = ({ onNavigate, onGoBack }: ForgotPasswordPageProps) =
 
       {submitted ? (
         <div>
-          <h2 className="text-2xl font-semibold text-white">Check your inbox</h2>
-          <p className="mt-2 text-sm text-white/60">
-            If an account exists for <span className="font-semibold text-white">{email}</span>,
+          <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Check your inbox</h2>
+          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+            If an account exists for <span className="font-semibold text-[color:var(--agent-ink)]">{email}</span>,
             password reset instructions were sent.
           </p>
 
-          <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+          <div className="mt-5 rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4 text-sm text-[color:var(--agent-muted)]">
             Reset links expire for security. If you do not receive an email soon, try again.
           </div>
 
@@ -82,14 +82,14 @@ const ForgotPasswordPage = ({ onNavigate, onGoBack }: ForgotPasswordPageProps) =
         </div>
       ) : (
         <div>
-          <h2 className="text-2xl font-semibold text-white">Forgot password</h2>
-          <p className="mt-2 text-sm text-white/60">
+          <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Forgot password</h2>
+          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
             Enter your account email and we will send reset instructions.
           </p>
 
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             <div className="relative">
-              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-white/40">
+              <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
                 <svg
                   viewBox="0 0 24 24"
                   className="h-4 w-4"
@@ -123,7 +123,7 @@ const ForgotPasswordPage = ({ onNavigate, onGoBack }: ForgotPasswordPageProps) =
               <button
                 type="button"
                 onClick={() => onNavigate?.('login')}
-                className="text-xs font-semibold text-white/60 transition hover:text-white"
+                className="text-xs font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
               >
                 Back to login
               </button>

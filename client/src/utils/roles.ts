@@ -1,5 +1,5 @@
 import type { AppPage } from '../types/navigation'
-import type { UserRole } from '../types/triage'
+import type { UserRole } from '../types'
 
 const roleLabels: Record<UserRole, string> = {
   user: 'User',
@@ -13,6 +13,12 @@ export const formatRoleLabel = (role?: string | null) => {
   const normalized = role as UserRole
   if (roleLabels[normalized]) return roleLabels[normalized]
   return role.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+export const getWorkspaceRoleLabel = (role?: UserRole | null) => {
+  if (!role) return 'Unknown'
+  if (role === 'user') return 'User'
+  return 'Admin'
 }
 
 export const getDefaultPageForRole = (role?: UserRole | null): AppPage => {

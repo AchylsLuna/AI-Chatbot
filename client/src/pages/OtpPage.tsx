@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
-import type { LoginOtpChallenge } from '../types/triage'
+import type { LoginOtpChallenge } from '../types'
 
 type OtpPageProps = {
   challenge: LoginOtpChallenge | null
@@ -37,7 +37,7 @@ const OtpPage = ({
         <button
           type="button"
           onClick={onCancelOtp}
-          className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-white/60 transition hover:text-white"
+          className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
         >
           <svg
             viewBox="0 0 24 24"
@@ -56,14 +56,14 @@ const OtpPage = ({
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--agent-accent)]">
           OTP Verification
         </p>
-        <h2 className="mt-3 text-3xl font-semibold text-white">Enter one-time code</h2>
-        <p className="mt-2 text-sm text-white/60">
+        <h2 className="mt-3 text-3xl font-semibold text-[color:var(--agent-ink)]">Enter one-time code</h2>
+        <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
           {challenge
             ? `We generated a code for ${challenge.username}.`
             : 'Start from login to request a one-time code.'}
         </p>
         {challenge && (
-          <p className="mt-2 text-xs text-white/50">
+          <p className="mt-2 text-xs text-[color:var(--agent-muted-soft)]">
             Code expires at {expiryLabel || challenge.expiresAt}.
           </p>
         )}

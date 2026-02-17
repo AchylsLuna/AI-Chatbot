@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
-import type { AuthProvider, AuthSession } from '../types/triage'
+import type { AuthProvider, AuthSession } from '../types'
 import { formatRoleLabel } from '../utils/roles'
 
 const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
@@ -29,7 +29,6 @@ const AdminLoginPage = ({
   isBiometricReady = false,
   onLogout,
   onNavigate,
-  onGoBack,
 }: AdminLoginPageProps) => {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -39,34 +38,13 @@ const AdminLoginPage = ({
   const hasAdminLoginAccess = authUser
     ? authUser.role === 'nurse' || authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
-  const hasAdminDashboardAccess = authUser
-    ? authUser.role === 'admin' || authUser.role === 'system_admin'
+  const hasAdminWorkspaceAccess = authUser
+    ? authUser.role === 'nurse' || authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
 
   return (
-    <AuthSplitLayout layout="center">
-      <div className="mx-auto w-full max-w-md rounded-3xl agent-card p-6 sm:p-8">
-        <div className="mb-6 flex justify-start">
-          <button
-            type="button"
-            onClick={() => (onGoBack ? onGoBack() : onNavigate?.('landing'))}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-white/60 transition hover:text-white"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-            Back to home
-          </button>
-        </div>
-
+    <AuthSplitLayout layout="center" centerBorderless>
+      <div className="mx-auto w-full max-w-md rounded-3xl bg-[color:var(--agent-surface)] p-6 sm:p-8">
         <div className="text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center text-[color:var(--agent-accent)]">
             <svg
@@ -85,16 +63,16 @@ const AdminLoginPage = ({
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--agent-accent)]">
             Restricted Access
           </p>
-          <h2 className="mt-3 text-3xl font-semibold text-white">Admin Login</h2>
-          <p className="mt-2 text-sm text-white/60">
+          <h2 className="mt-3 text-3xl font-semibold text-[color:var(--agent-ink)]">Admin Login</h2>
+          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
             Use Super Admin, Admin (Doctor), or Nurse account to continue.
           </p>
         </div>
 
         {authUser ? (
           <div className="mt-6 space-y-4 text-center">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-              Signed in as <span className="font-semibold text-white">{authUser.username}</span> (
+            <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4 text-sm text-[color:var(--agent-muted)]">
+              Signed in as <span className="font-semibold text-[color:var(--agent-ink)]">{authUser.username}</span> (
               {formatRoleLabel(authUser.role)}).
             </div>
 
@@ -107,14 +85,14 @@ const AdminLoginPage = ({
                   <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button w-full">
                     Open Doctor Dashboard
                   </button>
-                  {hasAdminDashboardAccess && (
+                  {hasAdminWorkspaceAccess && (
                     <button onClick={() => onNavigate?.('admin')} className="agent-button-ghost w-full">
-                      Open Admin Dashboard
+                      Open Admin Workspace
                     </button>
                   )}
                   <button
                     onClick={onLogout}
-                    className={`agent-button-ghost w-full ${hasAdminDashboardAccess ? 'sm:col-span-2' : 'sm:col-span-1'}`}
+                    className={`agent-button-ghost w-full ${hasAdminWorkspaceAccess ? 'sm:col-span-2' : 'sm:col-span-1'}`}
                   >
                     Sign out
                   </button>
@@ -153,12 +131,12 @@ const AdminLoginPage = ({
             <div className="space-y-2">
               <label
                 htmlFor="admin-login-username"
-                className="text-xs font-semibold uppercase tracking-[0.1em] text-white/60"
+                className="text-xs font-semibold uppercase tracking-[0.1em] text-[color:var(--agent-muted)]"
               >
                 Admin email
               </label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-white/40">
+                <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
                   <svg
                     viewBox="0 0 24 24"
                     className="h-4 w-4"
@@ -191,12 +169,12 @@ const AdminLoginPage = ({
             <div className="space-y-2">
               <label
                 htmlFor="admin-login-password"
-                className="text-xs font-semibold uppercase tracking-[0.1em] text-white/60"
+                className="text-xs font-semibold uppercase tracking-[0.1em] text-[color:var(--agent-muted)]"
               >
                 Password
               </label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-white/40">
+                <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
                   <svg
                     viewBox="0 0 24 24"
                     className="h-4 w-4"
@@ -226,7 +204,7 @@ const AdminLoginPage = ({
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 transition hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--agent-muted-soft)] transition hover:text-[color:var(--agent-ink)]"
                 >
                   {showPassword ? (
                     <svg
@@ -272,7 +250,7 @@ const AdminLoginPage = ({
               disabled={isAuthLoading}
               className="agent-button w-full disabled:cursor-not-allowed"
             >
-              {isAuthLoading ? 'Requesting OTP...' : 'Continue to OTP'}
+              {isAuthLoading ? 'Signing in...' : 'Sign in'}
             </button>
 
             {onProviderLogin ? (
@@ -287,7 +265,7 @@ const AdminLoginPage = ({
             ) : null}
 
             {authProvider === 'auth0' ? (
-              <p className="text-center text-[11px] text-white/55">
+              <p className="text-center text-[11px] text-[color:var(--agent-muted)]">
                 Enterprise SSO active{isBiometricReady ? ' with biometric hook support.' : '.'}
               </p>
             ) : null}

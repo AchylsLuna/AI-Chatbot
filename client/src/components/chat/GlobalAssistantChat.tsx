@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { UserRole } from '../../types/triage'
+import type { UserRole } from '../../types'
 
 type ChatMessage = {
   id: string
@@ -56,7 +56,7 @@ const buildIntroReply = (context: { isIdentified: boolean; userRole?: UserRole |
   return [
     'Welcome to AI Health Care.',
     identityLine,
-    'This system helps with AI-guided triage, appointment booking, appointment tracking, and role-based dashboards.',
+    'This system helps with appointment booking, appointment tracking, and role-based dashboards.',
     'Ask me: "How do I book an appointment?" or "How do I use the system?"',
   ].join(' ')
 }
@@ -69,9 +69,8 @@ const buildBookingReply = (context: { isIdentified: boolean }) => {
   return [
     accessLine,
     'Requirements: patient full name, clear symptoms, and preferred schedule.',
-    'Steps: 1) Open Book Appointment/Triage. 2) Enter symptoms in guided chat.',
-    '3) Review recommendation and confidence. 4) Enter patient name and requested time.',
-    '5) Submit booking, then check status in Appointments.',
+    'Steps: 1) Open Appointments. 2) Enter booking details and requested schedule.',
+    '3) Submit booking and review current status updates in the appointments view.',
     'For emergencies, contact local emergency services immediately.',
   ].join(' ')
 }
@@ -83,7 +82,7 @@ const buildSystemGuideReply = (context: { isIdentified: boolean; userRole?: User
 
   return [
     roleHint,
-    'System flow: Landing -> Login -> OTP -> Book Appointment -> Appointments.',
+    'System flow: Landing -> Login -> Appointments.',
     'Staff roles can also access Doctor/Admin dashboards based on permissions.',
     'Use top navigation for quick page access and use AI Chat anytime for help.',
   ].join(' ')
@@ -122,7 +121,7 @@ const buildReply = (
       'booking',
       'book now',
       'requirements',
-      'triage steps',
+      'booking steps',
     ])
   ) {
     return buildBookingReply(context)
@@ -166,11 +165,11 @@ const buildReply = (
     return `${guestHint}${roleHint}Compliance Shield indicates HIPAA/GDPR status. Signed-in users get full operational security context.`
   }
 
-  if (normalized.includes('appointment') || normalized.includes('book') || normalized.includes('triage')) {
-    return `${guestHint}Open Triage to book an appointment, then use Appointments to track status. Booking actions require login.`
+  if (normalized.includes('appointment') || normalized.includes('book')) {
+    return `${guestHint}Open Appointments to create and track bookings. Booking actions require login.`
   }
   if (normalized.includes('otp') || normalized.includes('code')) {
-    return `${guestHint}Login uses OTP: enter email and password, then verify the 6-digit code.`
+    return `${guestHint}OTP is currently optional in this build. Standard sign-in uses email and password.`
   }
   if (normalized.includes('admin')) {
     return `${guestHint}Admin Login supports Super Admin, Admin (Doctor), and Nurse accounts.`
@@ -179,10 +178,10 @@ const buildReply = (
     return `${guestHint}Doctor's Dashboard is available for Nurse, Admin, and Super Admin after Admin Login.`
   }
   if (normalized.includes('login') || normalized.includes('register') || normalized.includes('sign up')) {
-    return `${guestHint}Register first, then Login and verify OTP to access protected pages.`
+    return `${guestHint}Register first, then sign in to access protected pages.`
   }
 
-  return `${guestHint}${roleHint}I can introduce the system, explain booking requirements/steps, and guide navigation across appointments, triage, login/OTP, and dashboard modules.`
+  return `${guestHint}${roleHint}I can introduce the system, explain booking requirements/steps, and guide navigation across appointments, login, and dashboard modules.`
 }
 
 const GlobalAssistantChat = ({
@@ -212,8 +211,10 @@ const GlobalAssistantChat = ({
     }
 
     window.addEventListener('healix:open-care-chat', handleOpenChat)
+    window.addEventListener('ai-health-care:open-assistant', handleOpenChat)
     return () => {
       window.removeEventListener('healix:open-care-chat', handleOpenChat)
+      window.removeEventListener('ai-health-care:open-assistant', handleOpenChat)
     }
   }, [])
 
@@ -222,6 +223,21 @@ const GlobalAssistantChat = ({
     requestAnimationFrame(() => {
       inputRef.current?.focus()
     })
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleEscape)
+    return () => {
+      window.removeEventListener('keydown', handleEscape)
+    }
   }, [isOpen])
 
   useEffect(() => {
@@ -294,93 +310,105 @@ const GlobalAssistantChat = ({
 
   return (
     <div
-      className={`fixed right-5 z-50 flex flex-col items-end gap-3 transition-all ${
-        liftedFromFooter ? 'bottom-24' : 'bottom-5'
+      className={`fixed right-2 z-50 flex max-w-[calc(100vw-1rem)] flex-col items-end gap-2 transition-[bottom] duration-200 sm:right-4 sm:max-w-[calc(100vw-2rem)] ${
+        liftedFromFooter ? 'bottom-20 sm:bottom-24' : 'bottom-3 sm:bottom-5'
       }`}
     >
-      {isOpen && (
-        <div className="flex h-[min(78vh,40rem)] w-[min(94vw,24rem)] flex-col overflow-hidden rounded-[30px] border border-white/15 bg-[linear-gradient(170deg,rgba(8,18,40,0.96),rgba(11,24,48,0.95))] shadow-[0_24px_60px_rgba(0,0,0,0.46)] backdrop-blur-xl">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-            <p className="inline-flex items-center gap-2 text-sm font-semibold text-white">
-              <span className="grid h-7 w-7 place-items-center rounded-full bg-cyan-300/15 text-cyan-200">
-                <RobotLogo className="h-4 w-4" />
-              </span>
-              AI Assistant
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="text-xs font-semibold text-white/60 transition hover:text-white"
-            >
-              Close
-            </button>
+      <div
+        aria-hidden={!isOpen}
+        className={`origin-bottom-right flex flex-col overflow-hidden rounded-[26px] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] shadow-[var(--card-shadow)] backdrop-blur-xl transition-all duration-200 ${
+          isOpen
+            ? 'pointer-events-auto mb-1 h-[min(72vh,38.5rem)] w-[min(26rem,calc(100vw-1rem))] translate-y-0 opacity-100'
+            : 'pointer-events-none h-0 w-0 translate-y-2 opacity-0'
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-[color:var(--card-border)] px-4 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-9 w-9 place-items-center rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-accent)]">
+              <RobotLogo className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-[color:var(--agent-ink)]">AI Assistant</p>
+              <p className="mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--agent-muted)]">
+                <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.9)]" />
+                Online
+              </p>
+            </div>
           </div>
 
-          <div
-            ref={messagesViewportRef}
-            className="flex-1 space-y-3 overflow-y-auto px-3 py-3"
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-xs font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-overlay-strong)] hover:text-[color:var(--agent-ink)]"
           >
-            {messages.map((message) => (
-              <article
-                key={message.id}
-                className={`max-w-[84%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                  message.sender === 'user'
-                    ? 'ml-auto rounded-br-md bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
-                    : 'mr-auto rounded-bl-md border border-white/10 bg-white/10 text-white/85'
-                }`}
+            Close
+          </button>
+        </div>
+
+        <div
+          ref={messagesViewportRef}
+          className="flex-1 space-y-3 overflow-y-auto px-3.5 py-3.5 sm:px-4"
+        >
+          {messages.map((message) => (
+            <article
+              key={message.id}
+              className={`max-w-[90%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed sm:max-w-[86%] ${
+                message.sender === 'user'
+                  ? 'ml-auto rounded-br-md bg-[linear-gradient(140deg,var(--agent-accent),var(--agent-accent-strong))] text-[color:var(--agent-on-accent)]'
+                  : 'mr-auto rounded-bl-md border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] text-[color:var(--agent-ink)]'
+              }`}
+            >
+              {message.text}
+            </article>
+          ))}
+        </div>
+
+        <div className="border-t border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] px-3.5 py-3.5">
+          <div className="mb-3 flex flex-wrap gap-2">
+            {quickSupportPrompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => sendPresetPrompt(prompt)}
+                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)]"
               >
-                {message.text}
-              </article>
+                {prompt}
+              </button>
             ))}
           </div>
 
-          <div className="border-t border-white/10 bg-[rgba(7,16,34,0.72)] px-3 py-3">
-            <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1">
-              {quickSupportPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => sendPresetPrompt(prompt)}
-                  className="shrink-0 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold text-white/75 transition hover:border-white/35 hover:text-white"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-end gap-2">
-              <input
-                ref={inputRef}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    sendMessage()
-                  }
-                }}
-                placeholder="Type your message..."
-                className="flex-1 rounded-2xl border border-white/15 bg-[rgba(20,33,61,0.68)] px-4 py-3 text-sm text-white placeholder:text-white/45 outline-none transition focus:border-cyan-200/70 focus:ring-2 focus:ring-cyan-300/20"
-              />
-              <button
-                type="button"
-                onClick={sendMessage}
-                className="rounded-2xl bg-[color:var(--agent-accent)] px-5 py-3 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
-              >
-                Send
-              </button>
-            </div>
+          <div className="flex items-end gap-2">
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  sendMessage()
+                }
+              }}
+              placeholder="Type your message..."
+              className="min-w-0 flex-1 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3.5 py-2.5 text-sm text-[color:var(--agent-ink)] placeholder:text-[color:var(--agent-muted-soft)] outline-none transition focus:border-[color:var(--agent-accent)] focus:ring-2 focus:ring-[color:var(--agent-accent-soft)]"
+            />
+            <button
+              type="button"
+              onClick={sendMessage}
+              className="shrink-0 rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
+            >
+              Send
+            </button>
           </div>
         </div>
-      )}
+      </div>
 
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-label={isOpen ? 'Close AI chat' : 'Open AI chat'}
-        className="group inline-flex h-[82px] w-[82px] items-center justify-center rounded-full bg-[radial-gradient(circle_at_32%_24%,rgba(19,46,88,0.68),rgba(8,18,40,0.95))] p-[12px] text-cyan-100 shadow-[0_16px_34px_rgba(12,28,56,0.58)] transition hover:-translate-y-0.5"
+        className="group inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-[9px] text-[color:var(--agent-accent)] shadow-[var(--card-shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-[var(--card-shadow)] sm:h-[74px] sm:w-[74px] sm:p-[11px]"
       >
-        <span className="grid h-full w-full place-items-center rounded-full bg-[radial-gradient(circle_at_36%_28%,rgba(100,255,218,0.24),rgba(59,154,184,0.2)_52%,rgba(9,30,56,0.72)_100%)] text-cyan-200">
+        <span className="grid h-full w-full place-items-center rounded-full bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-accent)]">
           <RobotLogo className="h-6 w-6" />
         </span>
       </button>

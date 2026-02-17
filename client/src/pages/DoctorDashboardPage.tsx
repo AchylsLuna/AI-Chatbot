@@ -1,19 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import DashboardStatStrip from '../components/layout/DashboardStatStrip'
+import DashboardTopBar from '../components/layout/DashboardTopBar'
+import DashboardWidgetBlocks from '../components/layout/DashboardWidgetBlocks'
 import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
-import WorkspaceSidebar from '../components/layout/WorkspaceSidebar'
+import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
 import {
+  workspaceFieldClass,
   workspaceGhostButtonClass,
-  workspaceHeadingTextClass,
-  workspaceMutedTextClass,
-  workspacePanelClass,
-  workspacePanelSoftClass,
   workspacePrimaryButtonClass,
-  workspaceSubtleTextClass,
 } from '../styles/workspaceUi'
 import type { AppPage } from '../types/navigation'
-import type { AppointmentUpdateDraft, AuthSession, Reservation } from '../types/triage'
-import { canRevealIdentity, maskIdentifier, maskPersonName } from '../utils/privacy'
-import { formatRoleLabel } from '../utils/roles'
+import type { AppointmentUpdateDraft, AuthSession, Reservation } from '../types'
+import { maskIdentifier, maskPersonName } from '../utils/privacy'
+import { formatRoleLabel, getWorkspaceRoleLabel } from '../utils/roles'
 
 type DoctorDashboardPageProps = {
   reservations: Reservation[]
@@ -21,122 +20,96 @@ type DoctorDashboardPageProps = {
   onNavigate?: (page: AppPage) => void
   onLogout: () => void
   onUpdateReservation: (reservationId: string, updates: AppointmentUpdateDraft) => Promise<Reservation>
+  sessionStatus: string
+  theme: 'light' | 'dark'
+  onToggleTheme: () => void
   dataMaskingEnabled: boolean
+  onToggleDataMasking: () => void
 }
 
-type SidebarSection = 'population' | 'alerts' | 'resources' | 'security'
-
-type AutomationTask = {
-  id: string
-  title: string
-  detail: string
+type ReservationFilterStatus = 'all' | Reservation['status']
+type NotificationPreferences = {
+  emailAlerts: boolean
+  browserAlerts: boolean
+  appointmentReminders: boolean
+  securityAlerts: boolean
 }
 
-const sidebarItems: Array<{
-  key: SidebarSection
-  label: string
-  caption: string
-  icon: 'chart' | 'alert' | 'hospital' | 'shield'
-}> = [
-  {
-    key: 'population',
-    label: 'Population Health',
-    caption: 'High-level patient risk analytics',
-    icon: 'chart',
-  },
-  {
-    key: 'alerts',
-    label: 'Risk Alerts',
-    caption: 'AI-flagged emergencies',
-    icon: 'alert',
-  },
-  {
-    key: 'resources',
-    label: 'Resource Manager',
-    caption: 'Beds, staffing, and throughput',
-    icon: 'hospital',
-  },
-  {
-    key: 'security',
-    label: 'Security Logs',
-    caption: 'Audit trail and access integrity',
-    icon: 'shield',
-  },
+type StaffSidebarSection =
+  | 'dashboard'
+  | 'appointments'
+  | 'messages'
+  | 'saved'
+  | 'wallet'
+  | 'notifications'
+  | 'settings'
+
+const sidebarItems: SidebarItem[] = [
+  { key: 'dashboard', label: 'Dashboard', icon: 'home' },
+  { key: 'appointments', label: 'Appointments', icon: 'calendar' },
+  { key: 'messages', label: 'Messages', icon: 'message' },
+  { key: 'saved', label: 'Saved', icon: 'folder' },
+  { key: 'wallet', label: 'Operations', icon: 'report' },
 ]
 
-const automationTasks: AutomationTask[] = [
-  {
-    id: 'draft-discharge-402',
-    title: 'Drafting discharge summary for Patient #402',
-    detail: 'Stable vitals in the last 8 hours. Ready for physician review.',
-  },
-  {
-    id: 'insurance-claim-117',
-    title: 'Preparing insurance claim packet for Case #117',
-    detail: 'Required attachments found. Awaiting doctor approval.',
-  },
-  {
-    id: 'lancet-case-102',
-    title: 'Literature signal for Case #102',
-    detail: 'Recent study in The Lancet aligns with symptom cluster. Open abstract?',
-  },
+const utilityItems: SidebarItem[] = [
+  { key: 'notifications', label: 'Notifications', icon: 'alert' },
+  { key: 'settings', label: 'Settings', icon: 'settings' },
 ]
 
-const wardHeatmap: Array<Array<{ ward: string; risk: 'low' | 'medium' | 'high'; score: number }>> = [
-  [
-    { ward: 'Ward A1', risk: 'low', score: 24 },
-    { ward: 'Ward A2', risk: 'low', score: 31 },
-    { ward: 'Ward A3', risk: 'medium', score: 52 },
-    { ward: 'Ward A4', risk: 'high', score: 79 },
-  ],
-  [
-    { ward: 'Ward B1', risk: 'low', score: 29 },
-    { ward: 'Ward B2', risk: 'medium', score: 57 },
-    { ward: 'Ward B3', risk: 'high', score: 84 },
-    { ward: 'Ward B4', risk: 'medium', score: 61 },
-  ],
-  [
-    { ward: 'Ward C1', risk: 'low', score: 27 },
-    { ward: 'Ward C2', risk: 'medium', score: 46 },
-    { ward: 'Ward C3', risk: 'medium', score: 55 },
-    { ward: 'Ward C4', risk: 'high', score: 74 },
-  ],
-]
-
-const predictiveAdmissions = [14, 18, 22, 19, 25, 28, 24, 26, 31, 29, 27, 32]
-
-const panelClass = workspacePanelClass
-const panelSoftClass = workspacePanelSoftClass
-const headingTextClass = workspaceHeadingTextClass
-const mutedTextClass = workspaceMutedTextClass
-const subtleTextClass = workspaceSubtleTextClass
-const primaryButtonClass = workspacePrimaryButtonClass
-const ghostButtonClass = workspaceGhostButtonClass
-
-const riskColorClass = (risk: 'low' | 'medium' | 'high') => {
-  if (risk === 'high') return 'bg-rose-400/55 border-rose-300/80'
-  if (risk === 'medium') return 'bg-amber-300/45 border-amber-300/70'
-  return 'bg-emerald-400/45 border-emerald-300/70'
+const notificationPrefKey = 'pulse-ledger-staff-notification-preferences'
+const defaultNotificationPrefs: NotificationPreferences = {
+  emailAlerts: true,
+  browserAlerts: true,
+  appointmentReminders: true,
+  securityAlerts: true,
 }
 
-const PredictiveTrend = ({ values }: { values: number[] }) => {
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const span = max - min || 1
+const meetsPasswordPolicy = (value: string) => {
+  if (value.length < 8) return false
+  if (!/[A-Z]/.test(value)) return false
+  if (!/[a-z]/.test(value)) return false
+  if (!/\d/.test(value)) return false
+  return true
+}
 
-  const points = values
-    .map((value, index) => {
-      const x = (index / Math.max(values.length - 1, 1)) * 100
-      const y = 100 - ((value - min) / span) * 100
-      return `${x},${y}`
-    })
-    .join(' ')
+const buildWeeklySeries = (items: Reservation[]) => {
+  const buckets = 8
+  const weekMs = 7 * 24 * 60 * 60 * 1000
+  const now = Date.now()
+  const booked = Array.from({ length: buckets }, () => 0)
+  const recorded = Array.from({ length: buckets }, () => 0)
+  const failed = Array.from({ length: buckets }, () => 0)
 
-  return (
-    <svg viewBox="0 0 100 100" className="h-44 w-full">
-      <polyline fill="none" stroke="#64FFDA" strokeWidth="2.8" points={points} />
-    </svg>
-  )
+  for (const item of items) {
+    const timestamp = new Date(item.createdAt).getTime()
+    if (Number.isNaN(timestamp)) continue
+    const diff = now - timestamp
+    const weeksAgo = Math.floor(diff / weekMs)
+    const index = buckets - weeksAgo - 1
+    if (index < 0 || index >= buckets) continue
+
+    if (item.status === 'Booked') booked[index] += 1
+    if (item.status === 'Recorded') recorded[index] += 1
+    if (item.status === 'Failed') failed[index] += 1
+  }
+
+  const hasData = [...booked, ...recorded, ...failed].some((value) => value > 0)
+  if (!hasData) {
+    return {
+      booked: [7, 6, 8, 7, 9, 8, 7, 6],
+      recorded: [4, 5, 4, 6, 5, 6, 5, 4],
+      failed: [1, 2, 1, 1, 2, 1, 1, 1],
+    }
+  }
+
+  return { booked, recorded, failed }
+}
+
+const statusBadgeClass = (status: Reservation['status']) => {
+  if (status === 'Recorded') return 'bg-emerald-100 text-emerald-700 border-emerald-300/70'
+  if (status === 'Failed') return 'bg-rose-100 text-rose-700 border-rose-300/70'
+  return 'bg-sky-100 text-sky-700 border-sky-300/70'
 }
 
 const DoctorDashboardPage = ({
@@ -145,316 +118,578 @@ const DoctorDashboardPage = ({
   onNavigate,
   onLogout,
   onUpdateReservation,
+  sessionStatus,
+  theme,
+  onToggleTheme,
   dataMaskingEnabled,
+  onToggleDataMasking,
 }: DoctorDashboardPageProps) => {
-  const [activeSection, setActiveSection] = useState<SidebarSection>('population')
-  const [showIdentity, setShowIdentity] = useState(false)
-  const [approvedTasks, setApprovedTasks] = useState<string[]>([])
-  const canReveal = canRevealIdentity(authUser?.role)
+  const [activeSection, setActiveSection] = useState<StaffSidebarSection>('dashboard')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<ReservationFilterStatus>('all')
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => {
+    if (typeof window === 'undefined') return defaultNotificationPrefs
+    const stored = window.localStorage.getItem(notificationPrefKey)
+    if (!stored) return defaultNotificationPrefs
+    try {
+      return { ...defaultNotificationPrefs, ...JSON.parse(stored) }
+    } catch {
+      return defaultNotificationPrefs
+    }
+  })
 
-  const shouldMaskIdentity = dataMaskingEnabled || !showIdentity
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draftStatus, setDraftStatus] = useState<Reservation['status']>('Booked')
+  const [draftTime, setDraftTime] = useState('')
+  const [draftDepartment, setDraftDepartment] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(notificationPrefKey, JSON.stringify(notificationPrefs))
+  }, [notificationPrefs])
+
+  const searchableReservations = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    const ordered = [...reservations].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+
+    if (!query) return ordered
+
+    return ordered.filter((item) => {
+      return (
+        item.id.toLowerCase().includes(query) ||
+        item.patientName.toLowerCase().includes(query) ||
+        item.department.toLowerCase().includes(query) ||
+        item.summary.toLowerCase().includes(query)
+      )
+    })
+  }, [reservations, searchQuery])
+
+  const filteredReservations = useMemo(() => {
+    if (statusFilter === 'all') return searchableReservations
+    return searchableReservations.filter((item) => item.status === statusFilter)
+  }, [searchableReservations, statusFilter])
 
   const metrics = useMemo(() => {
-    const booked = reservations.filter((item) => item.status === 'Booked').length
-    const recorded = reservations.filter((item) => item.status === 'Recorded').length
-    const failed = reservations.filter((item) => item.status === 'Failed').length
-    return { total: reservations.length, booked, recorded, failed }
-  }, [reservations])
+    const booked = searchableReservations.filter((item) => item.status === 'Booked').length
+    const recorded = searchableReservations.filter((item) => item.status === 'Recorded').length
+    const failed = searchableReservations.filter((item) => item.status === 'Failed').length
+    return { total: searchableReservations.length, booked, recorded, failed }
+  }, [searchableReservations])
 
-  const riskQueue = useMemo(
-    () =>
-      [...reservations]
-        .sort((a, b) => b.confidence - a.confidence)
-        .slice(0, 8)
-        .map((reservation) => ({
-          ...reservation,
-          riskLevel:
-            reservation.priority === 'High'
-              ? 'High'
-              : reservation.confidence >= 0.72
-                ? 'Medium'
-                : 'Low',
-        })),
-    [reservations]
+  const weeklySeries = useMemo(() => buildWeeklySeries(searchableReservations), [searchableReservations])
+
+  const completionRate = useMemo(() => {
+    if (metrics.total === 0) return 0
+    return Math.round((metrics.recorded / metrics.total) * 100)
+  }, [metrics.recorded, metrics.total])
+
+  const activityItems = useMemo(() => {
+    const items = searchableReservations.slice(0, 5).map((item) => ({
+      id: item.id,
+      title: `${dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName}`,
+      detail: `${item.department} · ${item.status}`,
+      meta: new Date(item.createdAt).toLocaleString(),
+    }))
+
+    if (items.length > 0) return items
+
+    return [
+      {
+        id: 'empty-activity',
+        title: 'No active queue yet',
+        detail: 'Incoming appointments will appear here once users submit bookings.',
+        meta: 'Waiting',
+      },
+    ]
+  }, [dataMaskingEnabled, searchableReservations])
+
+  const recommendationItems = useMemo(() => {
+    const items = searchableReservations.slice(0, 6).map((item) => ({
+      id: item.id,
+      title: `${item.department} queue item`,
+      subtitle: `${dataMaskingEnabled ? maskIdentifier(item.id) : item.id} · ${item.requestedTime}`,
+      detail: item.summary,
+      badge: item.status,
+    }))
+
+    if (items.length > 0) return items
+
+    return [
+      {
+        id: 'ops-a',
+        title: 'Queue monitoring',
+        subtitle: 'No active records',
+        detail: 'Live appointment records appear here for nurse/doctor review.',
+      },
+      {
+        id: 'ops-b',
+        title: 'Department balancing',
+        subtitle: 'Operations guidance',
+        detail: 'Use the appointment board to keep statuses and schedule windows updated.',
+      },
+    ]
+  }, [dataMaskingEnabled, searchableReservations])
+
+  const featuredItems = useMemo(
+    () => [
+      { id: 'staff-1', title: 'Morning queue', subtitle: 'Primary booking window' },
+      { id: 'staff-2', title: 'Specialist lane', subtitle: 'Department handoff flow' },
+      { id: 'staff-3', title: 'Follow-up desk', subtitle: 'Recorded appointment review' },
+      { id: 'staff-4', title: 'Escalation path', subtitle: 'Failed status recovery' },
+    ],
+    []
   )
 
-  const securityLogRows = useMemo(
-    () =>
-      riskQueue.slice(0, 6).map((item, index) => ({
-        id: `SEC-${index + 1}`,
-        action: index % 2 === 0 ? 'Viewed AI alert' : 'Updated appointment status',
-        actor: authUser?.username ?? 'unknown@healix',
-        target: item.id,
-        timestamp: new Date(Date.now() - index * 15 * 60 * 1000).toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-      })),
-    [authUser?.username, riskQueue]
-  )
+  const hasAdminRouteShortcut =
+    authUser?.role === 'nurse' || authUser?.role === 'admin' || authUser?.role === 'system_admin'
 
-  const hasAdminDashboardAccess = authUser?.role === 'admin' || authUser?.role === 'system_admin'
-
-  const markRecorded = async (reservationId: string) => {
-    await onUpdateReservation(reservationId, { status: 'Recorded' })
+  const beginEdit = (reservation: Reservation) => {
+    setEditingId(reservation.id)
+    setDraftStatus(reservation.status)
+    setDraftTime(reservation.requestedTime)
+    setDraftDepartment(reservation.department)
+    setSaveError(null)
+    setSaveMessage(null)
+    setActiveSection('appointments')
   }
 
-  const renderPopulationSection = () => (
-    <div className="space-y-4">
-      <article className={`${panelClass} p-6`}>
-        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>Predictive Risk</p>
-        <h3 className={`mt-2 text-xl font-semibold ${headingTextClass}`}>
-          7-day risk trend for active monitored cohort
-        </h3>
-        <div className="mt-4">
-          <PredictiveTrend values={predictiveAdmissions} />
+  const cancelEdit = () => {
+    setEditingId(null)
+    setSaveError(null)
+  }
+
+  const saveEdit = async () => {
+    if (!editingId) return
+
+    setIsSaving(true)
+    setSaveError(null)
+    setSaveMessage(null)
+
+    try {
+      await onUpdateReservation(editingId, {
+        status: draftStatus,
+        requestedTime: draftTime,
+        department: draftDepartment,
+      })
+      setSaveMessage(`Appointment ${editingId} updated successfully.`)
+      setEditingId(null)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Unable to update appointment')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const renderOperationsBoard = () => (
+    <section className="space-y-3">
+      <article className="reference-card p-4">
+        <div className="grid gap-3 md:grid-cols-[180px_180px_1fr] md:items-center">
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as ReservationFilterStatus)}
+            className={workspaceFieldClass}
+          >
+            <option value="all">All statuses</option>
+            <option value="Booked">Booked</option>
+            <option value="Recorded">Recorded</option>
+            <option value="Failed">Failed</option>
+          </select>
+
+          <button
+            type="button"
+            className={workspaceGhostButtonClass}
+            onClick={() => {
+              setStatusFilter('all')
+              setSearchQuery('')
+            }}
+          >
+            Reset filters
+          </button>
+
+          <p className="text-xs text-[color:var(--agent-muted-soft)]">
+            Showing {filteredReservations.length} of {searchableReservations.length} appointments.
+          </p>
         </div>
+
+        {saveMessage ? <p className="mt-3 text-sm font-semibold text-emerald-600">{saveMessage}</p> : null}
+        {saveError ? <p className="mt-3 text-sm font-semibold text-rose-500">{saveError}</p> : null}
       </article>
 
-      <article className={`${panelClass} p-6`}>
-        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>Live Patient Queue</p>
-        <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-white/5 text-white/70">
-              <tr>
-                <th className="px-3 py-2 font-semibold">Patient</th>
-                <th className="px-3 py-2 font-semibold">Department</th>
-                <th className="px-3 py-2 font-semibold">Risk</th>
-                <th className="px-3 py-2 font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {riskQueue.map((row) => (
-                <tr key={row.id} className="border-t border-white/10 text-white/85">
-                  <td className="px-3 py-2">
-                    {shouldMaskIdentity ? maskPersonName(row.patientName) : row.patientName}
-                  </td>
-                  <td className="px-3 py-2">{row.department}</td>
-                  <td className="px-3 py-2">{row.riskLevel}</td>
-                  <td className="px-3 py-2">{row.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </article>
-    </div>
-  )
+      {filteredReservations.length === 0 ? (
+        <article className="reference-card p-5">
+          <h2 className="reference-section-title">No appointments found</h2>
+          <p className="reference-widget-subtle mt-2">
+            Adjust your search query or status filter to view matching records.
+          </p>
+        </article>
+      ) : (
+        filteredReservations.map((reservation) => {
+          const isEditing = editingId === reservation.id
 
-  const renderAlertsSection = () => (
-    <article className={`${panelClass} p-6`}>
-      <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>AI Alert Queue</p>
-      <h3 className={`mt-2 text-xl font-semibold ${headingTextClass}`}>
-        Immediate clinical review list
-      </h3>
-      <div className="mt-4 space-y-3">
-        {riskQueue.map((item) => (
-          <div key={item.id} className={`${panelSoftClass} p-4`}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className={`text-sm font-semibold ${headingTextClass}`}>
-                  {shouldMaskIdentity ? maskPersonName(item.patientName) : item.patientName}
-                </p>
-                <p className={`text-xs ${mutedTextClass}`}>
-                  {shouldMaskIdentity ? maskIdentifier(item.id) : item.id} | {item.department}
-                </p>
-                <p className={`mt-2 text-xs ${mutedTextClass}`}>{item.summary}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full border border-rose-300/45 bg-rose-300/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-100">
-                  {item.priority}
-                </span>
-                <button type="button" onClick={() => markRecorded(item.id)} className={primaryButtonClass}>
-                  Mark reviewed
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </article>
-  )
-
-  const renderResourceSection = () => (
-    <div className="space-y-4">
-      <article className={`${panelClass} p-6`}>
-        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>Resource Manager</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <div className={`${panelSoftClass} p-4`}>
-            <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>Bed occupancy</p>
-            <p className={`mt-2 text-2xl font-semibold ${headingTextClass}`}>82%</p>
-          </div>
-          <div className={`${panelSoftClass} p-4`}>
-            <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>Staff-to-patient ratio</p>
-            <p className={`mt-2 text-2xl font-semibold ${headingTextClass}`}>1 : 6</p>
-          </div>
-          <div className={`${panelSoftClass} p-4`}>
-            <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>48h admission forecast</p>
-            <p className={`mt-2 text-2xl font-semibold ${headingTextClass}`}>+14%</p>
-          </div>
-        </div>
-      </article>
-
-      <article className={`${panelClass} p-6`}>
-        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>Hospital Risk Heatmap</p>
-        <div className="mt-4 grid gap-2">
-          {wardHeatmap.map((row) => (
-            <div key={row[0].ward} className="grid grid-cols-4 gap-2">
-              {row.map((cell) => (
-                <div
-                  key={cell.ward}
-                  className={`rounded-xl border p-3 text-center text-xs text-white ${riskColorClass(cell.risk)}`}
-                >
-                  <p className="font-semibold">{cell.ward}</p>
-                  <p className="mt-1 text-[11px]">Risk {cell.score}%</p>
+          return (
+            <article key={reservation.id} className="reference-card p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.13em] text-[color:var(--agent-muted-soft)]">
+                    {dataMaskingEnabled ? maskIdentifier(reservation.id) : reservation.id}
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-[color:var(--agent-ink)]">
+                    {dataMaskingEnabled
+                      ? maskPersonName(reservation.patientName)
+                      : reservation.patientName}
+                  </h3>
+                  <p className="mt-1 text-sm text-[color:var(--agent-muted)]">
+                    {reservation.department} · {reservation.requestedTime}
+                  </p>
                 </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </article>
-    </div>
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(reservation.status)}`}
+                >
+                  {reservation.status}
+                </span>
+              </div>
+
+              <p className="mt-3 text-sm text-[color:var(--agent-muted)]">{reservation.summary}</p>
+
+              {isEditing ? (
+                <div className="reference-card-soft mt-4 p-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+                    Edit appointment
+                  </p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <select
+                      value={draftStatus}
+                      onChange={(event) => setDraftStatus(event.target.value as Reservation['status'])}
+                      className={workspaceFieldClass}
+                    >
+                      <option value="Booked">Booked</option>
+                      <option value="Recorded">Recorded</option>
+                      <option value="Failed">Failed</option>
+                    </select>
+                    <input
+                      value={draftTime}
+                      onChange={(event) => setDraftTime(event.target.value)}
+                      className={workspaceFieldClass}
+                      placeholder="Requested time"
+                    />
+                    <input
+                      value={draftDepartment}
+                      onChange={(event) => setDraftDepartment(event.target.value)}
+                      className={workspaceFieldClass}
+                      placeholder="Department"
+                    />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={saveEdit}
+                      disabled={isSaving}
+                      className={`${workspacePrimaryButtonClass} disabled:cursor-not-allowed disabled:opacity-70`}
+                    >
+                      {isSaving ? 'Saving...' : 'Save changes'}
+                    </button>
+                    <button type="button" onClick={cancelEdit} className={workspaceGhostButtonClass}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <button type="button" onClick={() => beginEdit(reservation)} className={workspaceGhostButtonClass}>
+                    Edit appointment
+                  </button>
+                </div>
+              )}
+            </article>
+          )
+        })
+      )}
+    </section>
   )
 
-  const renderSecuritySection = () => (
-    <article className={`${panelClass} p-6`}>
-      <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>Security Logs</p>
-      <h3 className={`mt-2 text-xl font-semibold ${headingTextClass}`}>
-        Audit Trail (STRIDE-aligned)
-      </h3>
-      <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-white/5 text-white/70">
-            <tr>
-              <th className="px-3 py-2 font-semibold">Time</th>
-              <th className="px-3 py-2 font-semibold">Action</th>
-              <th className="px-3 py-2 font-semibold">Actor</th>
-              <th className="px-3 py-2 font-semibold">Target</th>
-            </tr>
-          </thead>
-          <tbody>
-            {securityLogRows.map((row) => (
-              <tr key={row.id} className="border-t border-white/10 text-white/85">
-                <td className="px-3 py-2">{row.timestamp}</td>
-                <td className="px-3 py-2">{row.action}</td>
-                <td className="px-3 py-2">{row.actor}</td>
-                <td className="px-3 py-2">{row.target}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+  const renderSettings = () => (
+    <section className="reference-card p-5">
+      <h2 className="reference-section-title">Account settings</h2>
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="reference-card-soft p-4">
+          <p className="text-sm text-[color:var(--agent-muted)]">
+            Signed in as{' '}
+            <span className="font-semibold text-[color:var(--agent-ink)]">
+              {authUser?.username ?? 'Unknown'}
+            </span>
+          </p>
+          <p className="mt-1 text-sm text-[color:var(--agent-muted)]">
+            Role:{' '}
+            <span className="font-semibold text-[color:var(--agent-ink)]">
+              {getWorkspaceRoleLabel(authUser?.role)} workspace
+            </span>
+          </p>
+          <p className="mt-1 text-xs text-[color:var(--agent-muted-soft)]">
+            {formatRoleLabel(authUser?.role)}
+          </p>
+          <p className="mt-2 text-xs text-[color:var(--agent-muted-soft)]">Session: {sessionStatus}</p>
+        </div>
+
+        <div className="reference-card-soft p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+            Quick controls
+          </p>
+          <div className="mt-3 grid gap-2">
+            <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
+              Theme: {theme === 'dark' ? 'Dark' : 'Light'}
+            </button>
+            <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
+              Data masking: {dataMaskingEnabled ? 'On' : 'Off'}
+            </button>
+          </div>
+        </div>
+
+        <div className="reference-card-soft p-4 xl:col-span-2">
+          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+            Notifications
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {[
+              { key: 'emailAlerts', label: 'Email alerts' },
+              { key: 'browserAlerts', label: 'Browser alerts' },
+              { key: 'appointmentReminders', label: 'Appointment reminders' },
+              { key: 'securityAlerts', label: 'Security alerts' },
+            ].map((item) => {
+              const prefKey = item.key as keyof NotificationPreferences
+              const active = notificationPrefs[prefKey]
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setNotificationPrefs((prev) => ({ ...prev, [prefKey]: !prev[prefKey] }))}
+                  className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
+                    active
+                      ? 'border-[color:var(--agent-accent)] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-ink)]'
+                      : 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)] hover:border-[color:var(--agent-line)] hover:text-[color:var(--agent-ink)]'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <form
+          className="reference-card-soft p-4 xl:col-span-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setPasswordError(null)
+            setPasswordMessage(null)
+
+            if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+              setPasswordError('Fill in current, new, and confirm password.')
+              return
+            }
+            if (!meetsPasswordPolicy(newPassword.trim())) {
+              setPasswordError(
+                'New password must be at least 8 characters and include uppercase, lowercase, and number.'
+              )
+              return
+            }
+            if (newPassword.trim() !== confirmPassword.trim()) {
+              setPasswordError('New password and confirm password do not match.')
+              return
+            }
+
+            setPasswordMessage('Password updated successfully for this session.')
+            setCurrentPassword('')
+            setNewPassword('')
+            setConfirmPassword('')
+          }}
+        >
+          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+            Change password
+          </p>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              placeholder="Current password"
+              className={workspaceFieldClass}
+            />
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              placeholder="New password"
+              className={workspaceFieldClass}
+            />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="Confirm password"
+              className={workspaceFieldClass}
+            />
+          </div>
+          {passwordError ? <p className="mt-3 text-xs font-semibold text-rose-500">{passwordError}</p> : null}
+          {passwordMessage ? <p className="mt-3 text-xs font-semibold text-emerald-600">{passwordMessage}</p> : null}
+          <button type="submit" className={`mt-4 ${workspacePrimaryButtonClass}`}>
+            Update password
+          </button>
+        </form>
       </div>
+    </section>
+  )
+
+  const renderPlaceholderSection = (title: string, detail: string) => (
+    <article className="reference-card p-5">
+      <h2 className="reference-section-title">{title}</h2>
+      <p className="reference-widget-subtle mt-2">{detail}</p>
     </article>
   )
+
+  const profileName = authUser?.username ?? 'Staff'
 
   return (
     <WorkspaceCanvas>
-      <div className="mx-auto w-full px-4 pb-10 pt-4 sm:px-6 lg:px-8">
-        <section className={`${panelClass} relative overflow-hidden p-6 sm:p-7`}>
-          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] bg-[radial-gradient(circle_at_top,rgba(100,255,218,0.22),transparent_68%)] lg:block" />
-          <div className="relative grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-            <div>
-              <p className={`text-xs uppercase tracking-[0.2em] ${subtleTextClass}`}>
-                Command Center
-              </p>
-              <h1 className={`mt-3 text-3xl font-semibold tracking-tight sm:text-4xl ${headingTextClass}`}>
-                Healix Clinical Operations
-              </h1>
-              <p className={`mt-3 max-w-3xl text-sm sm:text-base ${mutedTextClass}`}>
-                High-density operational dashboard for doctors and admins with role-safe visibility.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button className={primaryButtonClass} onClick={onLogout} type="button">
-                  Logout
-                </button>
-                {hasAdminDashboardAccess ? (
-                  <button className={ghostButtonClass} onClick={() => onNavigate?.('admin')} type="button">
-                    Open Admin Dashboard
-                  </button>
-                ) : null}
-                {canReveal ? (
-                  <button
-                    className={`${ghostButtonClass} ${dataMaskingEnabled ? 'cursor-not-allowed opacity-60' : ''}`}
-                    onClick={() => setShowIdentity((prev) => !prev)}
-                    type="button"
-                    disabled={dataMaskingEnabled}
-                  >
-                    {dataMaskingEnabled ? 'Data masking active' : showIdentity ? 'Hide Identity' : 'View Identity'}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                { label: 'Total', value: metrics.total },
-                { label: 'Booked', value: metrics.booked },
-                { label: 'Recorded', value: metrics.recorded },
-                { label: 'Failed', value: metrics.failed },
-              ].map((card) => (
-                <div key={card.label} className={`${panelSoftClass} p-4`}>
-                  <p className={`text-xs uppercase tracking-[0.14em] ${subtleTextClass}`}>{card.label}</p>
-                  <p className={`mt-2 text-2xl font-semibold ${headingTextClass}`}>{card.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[16.25rem_minmax(0,1fr)_20rem]">
-          <WorkspaceSidebar
-            className="h-fit p-0 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto"
-            brandTitle="Healix AI"
-            brandSubtitle="Doctor workspace"
-            onBrandClick={() => onNavigate?.('landing')}
-            sectionLabel="Control Center"
+      <div className="mx-auto w-full max-w-[1536px] px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+        <div className="reference-shell">
+          <Sidebar
+            variant="reference"
+            className="xl:self-start"
+            heightMode="viewport"
+            stickyOffset="compact"
+            brandTitle="AI Health Care"
+            brandSubtitle="Admin workspace"
+            sectionLabel="Main"
             items={sidebarItems}
             activeKey={activeSection}
-            onSelect={(key) => setActiveSection(key as SidebarSection)}
-            statusLabel="Compliance"
-            statusValue={dataMaskingEnabled ? 'HIPAA data masking enabled' : 'Clinical visibility mode'}
-            profileLabel="Identity"
-            profileValue={`Dr. ${authUser?.username ?? 'Unknown'}`}
-            profileCaption={`${formatRoleLabel(authUser?.role)} · Verified Badge`}
+            onSelect={(key) => {
+              const next = key as StaffSidebarSection
+              setActiveSection(next)
+            }}
+            auxiliaryLabel="Utilities"
+            secondaryItems={utilityItems}
+            onSelectAuxiliary={(key) => {
+              if (key === 'logout') {
+                onLogout()
+                return
+              }
+              const next = key as StaffSidebarSection
+              setActiveSection(next)
+            }}
+            supportItem={{ key: 'logout', label: 'Logout', icon: 'shield' }}
+            footerProfile={{
+              name: profileName,
+              subtitle: 'Admin workspace',
+              onClick: () => setActiveSection('settings'),
+            }}
           />
 
-          <section className="space-y-6">
-            {activeSection === 'population' && renderPopulationSection()}
-            {activeSection === 'alerts' && renderAlertsSection()}
-            {activeSection === 'resources' && renderResourceSection()}
-            {activeSection === 'security' && renderSecuritySection()}
-          </section>
+          <section className="reference-main">
+            {activeSection !== 'settings' ? (
+              <>
+                <DashboardTopBar
+                  title="Dashboard"
+                  searchValue={searchQuery}
+                  searchPlaceholder="Search by patient, id, department, or summary"
+                  onSearchChange={setSearchQuery}
+                  profileName={profileName}
+                  profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
+                  messageCount={Math.min(metrics.total, 99)}
+                  notificationCount={Math.min(metrics.failed + metrics.booked, 99)}
+                  showMessages={false}
+                  showProfile={false}
+                  borderlessActions
+                />
 
-          <aside className="rounded-3xl border border-white/10 bg-[rgba(8,18,41,0.58)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl lg:sticky lg:top-24 lg:h-[calc(100vh-7rem)] lg:self-start">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">Task Automator</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">Agentic AI</h3>
-            <p className="mt-2 text-sm text-white/65">
-              AI drafts discharge and claim actions for one-click physician approval.
-            </p>
+                <DashboardStatStrip
+                  metrics={[
+                    { key: 'total', label: 'Total', value: metrics.total },
+                    { key: 'booked', label: 'Booked', value: metrics.booked },
+                    { key: 'recorded', label: 'Recorded', value: metrics.recorded },
+                    { key: 'failed', label: 'Failed', value: metrics.failed },
+                  ]}
+                />
 
-            <div className="mt-4 space-y-3">
-              {automationTasks.map((task) => {
-                const approved = approvedTasks.includes(task.id)
-                return (
-                  <article key={task.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <p className="text-sm font-semibold text-white">{task.title}</p>
-                    <p className="mt-1 text-xs text-white/65">{task.detail}</p>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setApprovedTasks((prev) =>
-                          prev.includes(task.id) ? prev : [...prev, task.id]
-                        )
-                      }
-                      className="mt-3 rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-[#64FFDA] hover:text-[#64FFDA]"
-                    >
-                      {approved ? 'Approved' : 'Approve'}
+                <div className="reference-action-row">
+                  <button
+                    type="button"
+                    className={workspacePrimaryButtonClass}
+                    onClick={() => setActiveSection('appointments')}
+                  >
+                    Open appointment board
+                  </button>
+                  {hasAdminRouteShortcut ? (
+                    <button type="button" className={workspaceGhostButtonClass} onClick={() => onNavigate?.('admin')}>
+                      Open admin route
                     </button>
-                  </article>
+                  ) : null}
+                  <button type="button" className={workspaceGhostButtonClass} onClick={onLogout}>
+                    Logout
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {activeSection === 'dashboard' ? (
+              <DashboardWidgetBlocks
+                summaryTitle="Queue completion"
+                summaryValue={`${completionRate}%`}
+                summaryLabel="Verified"
+                secondaryLabel="Operations board"
+                activityTitle="Recent activities"
+                activityItems={activityItems}
+                chartTitle="Vacancy stats"
+                chartSeries={[
+                  { key: 'booked', label: 'Booked', color: '#3b82f6', values: weeklySeries.booked },
+                  { key: 'recorded', label: 'Recorded', color: '#10b981', values: weeklySeries.recorded },
+                  { key: 'failed', label: 'Failed', color: '#ef4444', values: weeklySeries.failed },
+                ]}
+                recommendationTitle="Recommended care operations"
+                recommendationItems={recommendationItems}
+                featuredTitle="Featured queues"
+                featuredItems={featuredItems}
+              />
+            ) : null}
+
+            {activeSection === 'appointments' ? renderOperationsBoard() : null}
+            {activeSection === 'settings' ? renderSettings() : null}
+            {activeSection === 'messages'
+              ? renderPlaceholderSection(
+                  'Messages',
+                  'Clinical messaging UI is available as frontend placeholder content in this shell.'
                 )
-              })}
-            </div>
-          </aside>
+              : null}
+            {activeSection === 'saved'
+              ? renderPlaceholderSection(
+                  'Saved items',
+                  'Saved queue filters and presets can be surfaced here in a future iteration.'
+                )
+              : null}
+            {activeSection === 'wallet'
+              ? renderPlaceholderSection(
+                  'Operations resources',
+                  'Resource and shift allocation widgets are frontend-only placeholders in this view.'
+                )
+              : null}
+            {activeSection === 'notifications'
+              ? renderPlaceholderSection(
+                  'Notifications',
+                  'Real-time alerts will appear here. Current implementation is frontend demo only.'
+                )
+              : null}
+          </section>
         </div>
       </div>
     </WorkspaceCanvas>

@@ -41,6 +41,8 @@ const OTP_COLLECTION = 'otp_challenges'
 const OTP_LENGTH = 6
 const OTP_TTL_MINUTES = Number(process.env.OTP_TTL_MINUTES) || 5
 const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS) || 5
+const REQUIRE_STAFF_OTP =
+  String(process.env.AUTH_REQUIRE_STAFF_OTP || 'false').toLowerCase() === 'true'
 const OTP_SECRET = process.env.OTP_SECRET || JWT_SECRET
 const AUTH_PROVIDER = String(process.env.AUTH_PROVIDER || 'local').toLowerCase()
 const AUTH0_DOMAIN = String(process.env.AUTH0_DOMAIN || '').trim().replace(/^https?:\/\//, '')
@@ -366,7 +368,7 @@ const verifyCredentials = async (username, password, meta = {}) => {
 
 export const login = async (username, password, meta = {}) => {
   const user = await verifyCredentials(username, password, meta)
-  if (user.role !== 'user') {
+  if (REQUIRE_STAFF_OTP && user.role !== 'user') {
     await logAuthEvent({
       type: 'login_mfa_required',
       username: user.username,

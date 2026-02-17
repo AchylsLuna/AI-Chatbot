@@ -1,4 +1,4 @@
-import type { UserRole } from '../types/triage'
+import type { UserRole } from '../types'
 
 const maskWord = (word: string) => {
   if (!word) return ''

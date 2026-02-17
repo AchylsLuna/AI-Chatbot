@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
-import type { AuthProvider, AuthSession } from '../types/triage'
+import type { AuthProvider, AuthSession } from '../types'
 import { getDefaultPageForRole } from '../utils/roles'
 
 const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
@@ -41,9 +41,7 @@ const LoginPage = ({
       ? 'Go to appointments'
       : homePage === 'doctor_dashboard'
         ? "Go to doctor's dashboard"
-        : homePage === 'triage'
-          ? 'Go to triage'
-          : 'Go to dashboard'
+        : 'Go to dashboard'
 
   return (
     <AuthSplitLayout>
@@ -51,7 +49,7 @@ const LoginPage = ({
         <button
           type="button"
           onClick={() => (onGoBack ? onGoBack() : onNavigate?.('landing'))}
-          className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-white/60 transition hover:text-white"
+          className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
         >
           <svg
             viewBox="0 0 24 24"
@@ -67,14 +65,14 @@ const LoginPage = ({
           Back
         </button>
 
-        <h2 className="text-2xl font-semibold text-white">Welcome back</h2>
-        <p className="mt-2 text-sm text-white/60">Sign in, then verify OTP to continue.</p>
+        <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Welcome back</h2>
+        <p className="mt-2 text-sm text-[color:var(--agent-muted)]">Sign in to continue.</p>
       </div>
 
       {authUser ? (
         <div className="mt-6 space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-            Signed in as <span className="font-semibold text-white">{authUser.username}</span>.
+          <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4 text-sm text-[color:var(--agent-muted)]">
+            Signed in as <span className="font-semibold text-[color:var(--agent-ink)]">{authUser.username}</span>.
           </div>
           <div className="flex flex-wrap gap-3">
             <button onClick={onLogout} className="agent-button-ghost">
@@ -99,7 +97,7 @@ const LoginPage = ({
           }}
         >
           <div className="relative">
-            <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-white/40">
+            <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
               <svg
                 viewBox="0 0 24 24"
                 className="h-4 w-4"
@@ -127,7 +125,7 @@ const LoginPage = ({
           </div>
 
           <div className="relative">
-            <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-white/40">
+            <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
               <svg
                 viewBox="0 0 24 24"
                 className="h-4 w-4"
@@ -155,7 +153,7 @@ const LoginPage = ({
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 transition hover:text-white"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--agent-muted-soft)] transition hover:text-[color:var(--agent-ink)]"
             >
               {showPassword ? (
                 <svg
@@ -200,7 +198,7 @@ const LoginPage = ({
           </div>
 
           <button type="submit" disabled={isAuthLoading} className="agent-button w-full disabled:cursor-not-allowed">
-            {isAuthLoading ? 'Requesting OTP...' : 'Continue to OTP'}
+            {isAuthLoading ? 'Signing in...' : 'Sign in'}
           </button>
 
           {onProviderLogin ? (
@@ -215,7 +213,7 @@ const LoginPage = ({
           ) : null}
 
           {authProvider === 'auth0' ? (
-            <p className="text-center text-[11px] text-white/55">
+            <p className="text-center text-[11px] text-[color:var(--agent-muted)]">
               Secure SSO mode is active{isBiometricReady ? ' with biometric hooks ready.' : '.'}
             </p>
           ) : null}
@@ -224,7 +222,7 @@ const LoginPage = ({
             <p className="text-xs font-semibold text-rose-300">{formError ?? authError}</p>
           )}
 
-          <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-white/60">
+          <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-[color:var(--agent-muted)]">
             <span>Don't have an account?</span>
             <button
               type="button"
