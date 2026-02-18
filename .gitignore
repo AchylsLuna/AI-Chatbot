@@ -1,3 +1,5 @@
 .env
 node_modules
 dist
+audit_logs_backup.zip.enc
+restored_logs.zip

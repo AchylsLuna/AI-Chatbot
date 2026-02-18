@@ -10,6 +10,7 @@ import {
 } from '../Controllers/UserController.js';
 import {
     getAllUsers,
+    downloadAuditBackup,
 } from '../Controllers/adminController.js';
 import {
     createAppointment,
@@ -143,5 +144,11 @@ router.get('/users',
     authorizeRoles('admin', 'doctor'),
     getAllUsers
 )
+
+router.get('/admin/audit-logs/download', 
+    authMiddleware, 
+    authorizeRoles('admin'), 
+    downloadAuditBackup
+);
 
 export default router;
