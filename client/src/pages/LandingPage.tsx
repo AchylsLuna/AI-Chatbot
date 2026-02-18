@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import type { AppPage } from '../types/navigation'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import type { Reservation } from '../types'
 import AppLogoBadge from '../components/branding/AppLogoBadge'
 
@@ -7,6 +8,7 @@ type LandingPageProps = {
   onNavigate?: (page: AppPage) => void
   latestReservation?: Reservation
   isAuthenticated?: boolean
+  onLogout?: () => void
 }
 
 type LandingSectionId = 'overview' | 'details' | 'contact'
@@ -44,6 +46,7 @@ const LandingPage = ({
   onNavigate,
   latestReservation,
   isAuthenticated = false,
+  onLogout,
 }: LandingPageProps) => {
   const [activeSection, setActiveSection] = useState<LandingSectionId>('overview')
   const [fullName, setFullName] = useState('')
@@ -170,29 +173,33 @@ const LandingPage = ({
           </nav>
 
           <div className="order-2 flex flex-wrap items-center gap-2 md:order-3 md:justify-self-end">
-            {!isAuthenticated && (
-              <button
-                type="button"
-                onClick={() => onNavigate?.('admin_login')}
-                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
-              >
-                Staff Login
-              </button>
+            {!isAuthenticated ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('admin_login')}
+                  className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
+                >
+                  Staff Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('login')}
+                  className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('signup')}
+                  className="rounded-full bg-[color:var(--agent-accent)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
+                >
+                  Sign up
+                </button>
+              </>
+            ) : (
+              <LogoutControls onLogout={onLogout} />
             )}
-            <button
-              type="button"
-              onClick={() => onNavigate?.('login')}
-              className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate?.('signup')}
-              className="rounded-full bg-[color:var(--agent-accent)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
-            >
-              Sign up
-            </button>
           </div>
         </div>
       </header>
@@ -364,3 +371,32 @@ const LandingPage = ({
 }
 
 export default LandingPage
+
+function LogoutControls({ onLogout }: { onLogout?: () => void }) {
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setShowConfirm(true)}
+        className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
+      >
+        Logout
+      </button>
+
+      <ConfirmModal
+        open={showConfirm}
+        title="Confirm logout"
+        message="Are you sure you want to logout?"
+        confirmLabel="Logout"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          setShowConfirm(false)
+          onLogout?.()
+        }}
+        onCancel={() => setShowConfirm(false)}
+      />
+    </>
+  )
+}

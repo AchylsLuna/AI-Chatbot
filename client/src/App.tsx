@@ -73,9 +73,7 @@ function App() {
 
   useScrollReveal(`${currentPage}-${isCheckingSession}-${authUser?.role ?? 'guest'}`)
 
-  const loginPage = isCheckingSession ? (
-    <AuthLoadingCard label="Checking session..." />
-  ) : (
+  const loginPage = (
     <LoginPage
       authUser={authUser}
       authError={authError}
@@ -90,9 +88,7 @@ function App() {
     />
   )
 
-  const adminLoginPage = isCheckingSession ? (
-    <AuthLoadingCard label="Checking admin session..." />
-  ) : (
+  const adminLoginPage = (
     <AdminLoginPage
       authUser={authUser}
       authError={authError}

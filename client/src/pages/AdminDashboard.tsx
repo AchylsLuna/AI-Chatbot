@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
 import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
 import SidebarAccountCard from '../components/layout/SidebarAccountCard'
@@ -224,6 +225,36 @@ const AdminDashboard = ({
 }: AdminDashboardProps) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('user_management')
   const [searchQuery, setSearchQuery] = useState('')
+  // Auto-logout after 15 minutes of inactivity (900000 ms)
+  const INACTIVITY_MS = 15 * 60 * 1000
+  const timerRef = useRef<number | null>(null)
+
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+
+  const resetInactivityTimer = () => {
+    if (timerRef.current) window.clearTimeout(timerRef.current)
+    // @ts-ignore - window.setTimeout returns number in browser
+    timerRef.current = window.setTimeout(() => {
+      setShowLogoutConfirm(false)
+      // auto logout after inactivity
+      onLogout()
+    }, INACTIVITY_MS)
+  }
+
+  useEffect(() => {
+    resetInactivityTimer()
+    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart']
+    const handler = () => resetInactivityTimer()
+    for (const ev of events) window.addEventListener(ev, handler)
+    return () => {
+      for (const ev of events) window.removeEventListener(ev, handler)
+      if (timerRef.current) window.clearTimeout(timerRef.current)
+    }
+  }, [onLogout])
+
+  const confirmAndLogout = () => {
+    setShowLogoutConfirm(true)
+  }
 
   const userItems = useMemo<AdminUserSummaryItem[]>(() => {
     const orderedReservations = [...reservations].sort(
@@ -474,7 +505,7 @@ const AdminDashboard = ({
             supportItem={{ key: 'logout', label: 'Logout', icon: 'shield' }}
             onSelectAuxiliary={(key) => {
               if (key === 'logout') {
-                onLogout()
+                confirmAndLogout()
                 return
               }
               if (key === 'doctor_dashboard') {
@@ -496,11 +527,7 @@ const AdminDashboard = ({
                   dataMaskingEnabled={dataMaskingEnabled}
                   onToggleDataMasking={onToggleDataMasking}
                 />
-                <button
-                  type="button"
-                  className={`${workspaceGhostButtonClass} w-full`}
-                  onClick={onLogout}
-                >
+                <button type="button" className={`${workspaceGhostButtonClass} w-full`} onClick={confirmAndLogout}>
                   Logout
                 </button>
               </div>
@@ -524,12 +551,25 @@ const AdminDashboard = ({
                   >
                     Open appointment board
                   </button>
-                  <button type="button" className={workspaceGhostButtonClass} onClick={onLogout}>
+                  <button type="button" className={workspaceGhostButtonClass} onClick={confirmAndLogout}>
                     Logout
                   </button>
                 </>
               }
               metrics={activeMeta.metrics}
+            />
+
+            <ConfirmModal
+              open={showLogoutConfirm}
+              title="Confirm logout"
+              message="Are you sure you want to logout now?"
+              confirmLabel="Logout"
+              cancelLabel="Cancel"
+              onConfirm={() => {
+                setShowLogoutConfirm(false)
+                onLogout()
+              }}
+              onCancel={() => setShowLogoutConfirm(false)}
             />
 
             {activeSection === 'user_management' ? (

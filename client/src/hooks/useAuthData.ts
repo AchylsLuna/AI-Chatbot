@@ -324,7 +324,18 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setAuthError(null)
     setIsAuthLoading(true)
     try {
-      const session = await api.login(username, password)
+      const result = await api.login(username, password)
+
+      // If server returned an OTP challenge, set it and navigate to OTP flow
+      if ((result as any)?.challengeId) {
+        const challenge = result as unknown as LoginOtpChallenge & { targetPage?: AppPage | null }
+        setPendingOtpChallenge({ ...challenge, targetPage: targetPage ?? postLoginPage ?? null })
+        navigateToPage('otp')
+        return
+      }
+
+      // Otherwise it's an auth session
+      const session = result as unknown as AuthSession
       const resolvedTargetPage = targetPage ?? postLoginPage ?? null
       finalizeAuthenticatedSession(session, resolvedTargetPage)
     } catch (error) {

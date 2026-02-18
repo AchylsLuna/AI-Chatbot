@@ -23,7 +23,7 @@ import {
   reservationsResponseSchema,
 } from '../schemas/apiSchemas'
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5174/api'
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api'
 let authToken: string | null = null
 const NETWORK_ERROR_MESSAGE =
   'Cannot reach API server. Start the backend and verify your API URL.'
@@ -35,7 +35,12 @@ export const setAuthToken = (token: string | null) => {
 const handleResponse = async (response: Response): Promise<unknown> => {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error?.error || 'Request failed')
+    // prefer common error shapes
+    const message =
+      (error && (error.message || error.error)) ||
+      (Array.isArray(error?.errors) && error.errors.map((e: any) => e.msg || e.message).join('; ')) ||
+      'Request failed'
+    throw new Error(message)
   }
   return response.json() as Promise<unknown>
 }
@@ -57,14 +62,39 @@ const request = async (url: string, init?: RequestInit) => {
 }
 
 export const api = {
-  login: async (username: string, password: string): Promise<AuthSession> => {
-    const response = await request(`${API_BASE}/auth/login`, {
+  login: async (username: string, password: string): Promise<AuthSession | LoginOtpChallenge> => {
+    const response = await request(`${API_BASE}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ email: username, password }),
     })
     const payload = await handleResponse(response)
-    return parseApiSchema(authSessionSchema, payload, 'login')
+
+    // Server returns an OTP challenge when 2FA is required
+    if ((payload as any)?.requires2FA) {
+      const challenge: LoginOtpChallenge = {
+        challengeId: (payload as any).userId,
+        username,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        expiresInSeconds: 10 * 60,
+        otpPreview: undefined,
+      }
+      return parseApiSchema(loginOtpChallengeSchema, challenge, 'OTP challenge')
+    }
+
+    // Otherwise expect a full auth session (token + user)
+    // Map server user shape to client schema if necessary
+    const mapped = {
+      token: (payload as any).token,
+      user: {
+        username: (payload as any).user?.email ?? username,
+        role: (payload as any).user?.role ?? 'user',
+        authMethod: (payload as any).user?.authMethod ?? undefined,
+        mfa: (payload as any).user?.mfa ?? undefined,
+        sessionId: (payload as any).user?.sessionId ?? undefined,
+      },
+    }
+    return parseApiSchema(authSessionSchema, mapped, 'login')
   },
   requestOtpChallenge: async (username: string, password: string): Promise<LoginOtpChallenge> => {
     const response = await request(`${API_BASE}/auth/otp/request`, {
@@ -76,25 +106,48 @@ export const api = {
     return parseApiSchema(loginOtpChallengeSchema, payload, 'OTP challenge')
   },
   verifyOtpLogin: async (challengeId: string, code: string): Promise<AuthSession> => {
-    const response = await request(`${API_BASE}/auth/otp/verify`, {
+    // Server expects { userId, otp }
+    const response = await request(`${API_BASE}/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ challengeId, code }),
+      body: JSON.stringify({ userId: challengeId, otp: code }),
     })
     const payload = await handleResponse(response)
-    return parseApiSchema(authSessionSchema, payload, 'OTP verification')
+
+    // Map server response to client authSession shape
+    const mapped = {
+      token: (payload as any).token,
+      user: {
+        username: (payload as any).user?.email ?? (payload as any).user?.username,
+        role: (payload as any).user?.role ?? 'user',
+        authMethod: (payload as any).user?.authMethod ?? undefined,
+        mfa: (payload as any).user?.mfa ?? undefined,
+        sessionId: (payload as any).user?.sessionId ?? undefined,
+      },
+    }
+    return parseApiSchema(authSessionSchema, mapped, 'OTP verification')
   },
   signup: async (draft: SignupDraft): Promise<AuthSession> => {
-    const response = await request(`${API_BASE}/auth/signup`, {
+    const safeEmail = draft.email ?? draft.username ?? ''
+    const safeFullName = draft.fullName ?? ''
+    const firstName = safeFullName.split(' ')[0] || (safeEmail.split('@')[0] || '')
+    const lastName = safeFullName.split(' ').slice(1).join(' ') || 'User'
+
+    const response = await request(`${API_BASE}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(draft),
+      body: JSON.stringify({
+        email: safeEmail,
+        password: draft.password,
+        firstName,
+        lastName,
+      }),
     })
     const payload = await handleResponse(response)
-    return parseApiSchema(authSessionSchema, payload, 'signup')
+    return payload as unknown as AuthSession
   },
   getSession: async (): Promise<AuthSession['user']> => {
-    const response = await request(`${API_BASE}/auth/session`, withAuth())
+    const response = await request(`${API_BASE}/session`, withAuth())
     const payload = await handleResponse(response)
     return parseApiSchema(authUserSchema, payload, 'session')
   },
@@ -102,6 +155,23 @@ export const api = {
     const payload = await handleResponse(await request(`${API_BASE}/reservations`, withAuth()))
     const data = parseApiSchema(reservationsResponseSchema, payload, 'reservations')
     return data.reservations
+  },
+  getUserSettings: async (): Promise<{ notifications: { email: boolean; sms: boolean; push: boolean } }> => {
+    const response = await request(`${API_BASE}/users/me/settings`, withAuth())
+    const payload = await handleResponse(response as Response)
+    return (payload as any).settings ?? { notifications: { email: true, sms: false, push: true } }
+  },
+  updateUserSettings: async (settings: any) => {
+    const response = await request(
+      `${API_BASE}/users/me/settings`,
+      withAuth({
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings }),
+      })
+    )
+    const payload = await handleResponse(response as Response)
+    return (payload as any).settings
   },
   getAppointments: async (): Promise<Reservation[]> => {
     const payload = await handleResponse(await request(`${API_BASE}/appointments`, withAuth()))
@@ -116,14 +186,16 @@ export const api = {
   createReservation: async (
     draft: ReservationDraft
   ): Promise<{ reservation: Reservation; ledgerEntry: LedgerEntry }> => {
-    const response = await request(`${API_BASE}/reservations`, withAuth({
+    const response = await request(`${API_BASE}/appointments`, withAuth({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        patientName: draft.patientName,
-        symptoms: draft.symptoms,
-        requestedTime: draft.requestedTime,
-        summary: draft.summary,
+        // map client reservation draft to server appointment fields
+        scheduledDate: draft.requestedTime,
+        department: draft.summary.department,
+        reason: draft.summary.summary,
+        // include a lightweight clinical note
+        note: draft.summary.summary,
       }),
     }))
 

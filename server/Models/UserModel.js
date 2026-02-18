@@ -44,6 +44,14 @@ const UserSchema = new mongoose.Schema(
             type: Date,
             select: false
         }
+        ,
+        settings: {
+            notifications: {
+                email: { type: Boolean, default: true },
+                sms: { type: Boolean, default: false },
+                push: { type: Boolean, default: true },
+            },
+        }
     },
 );
 UserSchema.methods.setPassword = async function (password) {

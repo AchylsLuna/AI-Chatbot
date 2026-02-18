@@ -4,6 +4,9 @@ import {
     login,
     logout,
     verifyOTP,
+    getSettings,
+    updateSettings,
+    debugUser,
 } from '../Controllers/UserController.js';
 import {
     getAllUsers,
@@ -12,6 +15,7 @@ import {
     createAppointment,
 } from '../Controllers/AppointmentsController.js';
 import authMiddleware from '../Middleware/authMiddleware.js';
+import User from '../Models/UserModel.js';
 import { loginLimiter } from '../Middleware/rateLimiter.js';
 import { authorizeRoles } from '../Middleware/rbacMiddleware.js';
 import { body, validationResult } from 'express-validator';
@@ -58,15 +62,63 @@ router.post('/verify-otp',
 
 router.post('/logout', authMiddleware, logout);
 
+// Session introspection - return minimal user info for client
+router.get('/session', authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user?.id || req.user?._id
+        if (!userId) return res.status(401).json({ message: 'Invalid session' })
+        const user = await User.findById(userId)
+        if (!user) return res.status(404).json({ message: 'User not found' })
+
+        return res.json({ username: user.email, role: user.role })
+    } catch (error) {
+        console.error('Session lookup failed', error)
+        return res.status(500).json({ message: 'Session lookup failed' })
+    }
+})
+
+// User settings
+router.get('/users/me/settings', authMiddleware, getSettings)
+router.put('/users/me/settings',
+    authMiddleware,
+    [
+        body('settings').optional().isObject(),
+        body('settings.notifications.email').optional().isBoolean(),
+        body('settings.notifications.sms').optional().isBoolean(),
+        body('settings.notifications.push').optional().isBoolean(),
+    ],
+    validate,
+    updateSettings
+)
+
+// DEBUG route - local only
+router.get('/debug/user', async (req, res, next) => {
+    try {
+        const controller = await import('../Controllers/UserController.js')
+        return controller.debugUser(req, res, next)
+    } catch (err) {
+        next(err)
+    }
+})
+
 // Appointment Routes
+router.get('/appointments', authMiddleware, async (req, res, next) => {
+    // delegate to controller
+    try {
+        const controllerModule = await import('../Controllers/AppointmentsController.js')
+        return controllerModule.getAppointments(req, res, next)
+    } catch (err) {
+        next(err)
+    }
+})
 router.post('/appointments', 
     authMiddleware,
     authorizeRoles('user'), 
     [
-        body('doctorId').isMongoId().withMessage('Invalid Doctor ID'),
+        body('doctorId').optional().isMongoId().withMessage('Invalid Doctor ID'),
         body('scheduledDate').isISO8601().toDate().withMessage('Invalid Date'),
         body('department').trim().notEmpty().escape(),
-        body('reason').trim().notEmpty().escape()
+        body('reason').optional().trim().escape()
     ],
     validate,
     createAppointment

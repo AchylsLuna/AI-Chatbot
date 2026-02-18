@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import DashboardStatStrip from '../components/layout/DashboardStatStrip'
 import DashboardTopBar from '../components/layout/DashboardTopBar'
 import DashboardWidgetBlocks from '../components/layout/DashboardWidgetBlocks'
@@ -151,6 +152,36 @@ const DoctorDashboardPage = ({
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+
+  // Auto-logout after 15 minutes of inactivity
+  const INACTIVITY_MS = 15 * 60 * 1000
+  const timerRef = useRef<number | null>(null)
+
+  const resetInactivityTimer = () => {
+    if (timerRef.current) window.clearTimeout(timerRef.current)
+    // @ts-ignore
+    timerRef.current = window.setTimeout(() => {
+      // auto logout after inactivity
+      onLogout()
+    }, INACTIVITY_MS)
+  }
+
+  useEffect(() => {
+    resetInactivityTimer()
+    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart']
+    const handler = () => resetInactivityTimer()
+    for (const ev of events) window.addEventListener(ev, handler)
+    return () => {
+      for (const ev of events) window.removeEventListener(ev, handler)
+      if (timerRef.current) window.clearTimeout(timerRef.current)
+    }
+  }, [onLogout])
+
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+
+  const confirmAndLogout = () => {
+    setShowLogoutConfirm(true)
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -582,7 +613,7 @@ const DoctorDashboardPage = ({
             secondaryItems={utilityItems}
             onSelectAuxiliary={(key) => {
               if (key === 'logout') {
-                onLogout()
+                confirmAndLogout()
                 return
               }
               const next = key as StaffSidebarSection
@@ -635,7 +666,7 @@ const DoctorDashboardPage = ({
                       Open admin route
                     </button>
                   ) : null}
-                  <button type="button" className={workspaceGhostButtonClass} onClick={onLogout}>
+                  <button type="button" className={workspaceGhostButtonClass} onClick={confirmAndLogout}>
                     Logout
                   </button>
                 </div>
@@ -662,6 +693,19 @@ const DoctorDashboardPage = ({
                 featuredItems={featuredItems}
               />
             ) : null}
+
+            <ConfirmModal
+              open={showLogoutConfirm}
+              title="Confirm logout"
+              message="Are you sure you want to logout now?"
+              confirmLabel="Logout"
+              cancelLabel="Cancel"
+              onConfirm={() => {
+                setShowLogoutConfirm(false)
+                onLogout()
+              }}
+              onCancel={() => setShowLogoutConfirm(false)}
+            />
 
             {activeSection === 'appointments' ? renderOperationsBoard() : null}
             {activeSection === 'settings' ? renderSettings() : null}

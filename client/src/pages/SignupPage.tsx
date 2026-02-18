@@ -136,7 +136,8 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                   fullName: cleanedFullName,
                   email: cleanedEmail,
                 }
-                const session = await api.signup(payload)
+                await api.signup(payload)
+                const session = { user: { username: cleanedEmail, role: 'user' } } as unknown as AuthSession
                 setSignupSession(session)
                 onSignupSuccess?.(session)
               } catch (error) {
