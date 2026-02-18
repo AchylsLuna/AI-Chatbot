@@ -34,12 +34,24 @@ export const setAuthToken = (token: string | null) => {
 
 const handleResponse = async (response: Response): Promise<unknown> => {
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    // prefer common error shapes
-    const message =
-      (error && (error.message || error.error)) ||
-      (Array.isArray(error?.errors) && error.errors.map((e: any) => e.msg || e.message).join('; ')) ||
-      'Request failed'
+    // Try JSON first
+    const errorJson = await response.json().catch(() => null)
+    let message: string | null = null
+    if (errorJson) {
+      if (typeof errorJson === 'string') message = errorJson
+      else message = (errorJson && (errorJson.message || errorJson.error)) || null
+      if (!message && Array.isArray((errorJson as any)?.errors)) {
+        message = (errorJson as any).errors.map((e: any) => e.msg || e.message).join('; ')
+      }
+    }
+
+    // fallback to text if JSON didn't provide a message
+    if (!message) {
+      const text = await response.text().catch(() => '')
+      if (text) message = text
+    }
+
+    if (!message) message = 'Request failed'
     throw new Error(message)
   }
   return response.json() as Promise<unknown>
@@ -239,5 +251,14 @@ export const api = {
     const payload = await handleResponse(response)
     const data = parseApiSchema(aiAlertAuditResponseSchema, payload, 'AI alert audit')
     return data.ok
+  },
+  logout: async (): Promise<boolean> => {
+    const response = await request(`${API_BASE}/logout`, withAuth({ method: 'POST' }))
+    try {
+      await handleResponse(response as Response)
+      return true
+    } catch (err) {
+      return false
+    }
   },
 }

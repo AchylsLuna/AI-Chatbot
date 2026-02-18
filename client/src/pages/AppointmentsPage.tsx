@@ -10,6 +10,7 @@ import {
   workspacePrimaryButtonClass,
 } from '../styles/workspaceUi'
 import type { AppPage } from '../types/navigation'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import type { AuthSession, Reservation } from '../types'
 import { maskIdentifier, maskPersonName } from '../utils/privacy'
 import { formatRoleLabel, getWorkspaceRoleLabel } from '../utils/roles'
@@ -18,6 +19,7 @@ type AppointmentsPageProps = {
   reservations: Reservation[]
   authUser: AuthSession['user'] | null
   onNavigate?: (page: AppPage) => void
+  onLogout?: () => void
   sessionStatus: string
   theme: 'light' | 'dark'
   onToggleTheme: () => void
@@ -117,6 +119,7 @@ const AppointmentsPage = ({
   onToggleTheme,
   dataMaskingEnabled,
   onToggleDataMasking,
+  onLogout,
 }: AppointmentsPageProps) => {
   const [activeSection, setActiveSection] = useState<UserSidebarSection>('dashboard')
   const [searchQuery, setSearchQuery] = useState('')
@@ -142,6 +145,8 @@ const AppointmentsPage = ({
     if (typeof window === 'undefined') return
     window.localStorage.setItem(notificationPrefKey, JSON.stringify(notificationPrefs))
   }, [notificationPrefs])
+
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   const sortedReservations = useMemo(
     () =>
@@ -513,6 +518,13 @@ const AppointmentsPage = ({
                   >
                     Account settings
                   </button>
+                  <button
+                    type="button"
+                    className={workspaceGhostButtonClass}
+                    onClick={() => setShowLogoutConfirm(true)}
+                  >
+                    Logout
+                  </button>
                 </div>
 
                 <DashboardWidgetBlocks
@@ -544,6 +556,18 @@ const AppointmentsPage = ({
                   'Alerts and updates will surface here. This panel is frontend-only for now.'
                 )
               : null}
+            <ConfirmModal
+              open={showLogoutConfirm}
+              title="Confirm logout"
+              message="Are you sure you want to logout?"
+              confirmLabel="Logout"
+              cancelLabel="Cancel"
+              onConfirm={() => {
+                setShowLogoutConfirm(false)
+                onLogout?.()
+              }}
+              onCancel={() => setShowLogoutConfirm(false)}
+            />
           </section>
         </div>
       </div>

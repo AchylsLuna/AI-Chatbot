@@ -89,10 +89,40 @@ export async function logout(req, res) {
         const token = req.cookies?.token || (req.headers.authorization || '').replace(/^Bearer\s+/, '') || null;
         if (token) {
             try {
+                // find session to get userId for audit logging
+                const session = await Sessions.findOne({ token });
+                if (session) {
+                    // create audit log for logout
+                    try {
+                        await AuditLog.create({
+                            userId: session.userId,
+                            action: 'LOGOUT',
+                            details: `User logged out (session ended)`,
+                            ipAddress: req.ip,
+                            userAgent: req.headers['user-agent']
+                        });
+                    } catch (logErr) {
+                        console.warn('Failed to write logout audit log', logErr);
+                    }
+                }
+
                 await Sessions.deleteOne({ token });
             } catch (e) {
                 // non-fatal, continue to clear cookie
                 console.warn('Failed to remove session record', e);
+            }
+        } else if (req.user?.id) {
+            // If no token but request was authenticated and has user info, log logout
+            try {
+                await AuditLog.create({
+                    userId: req.user.id,
+                    action: 'LOGOUT',
+                    details: `User logged out`,
+                    ipAddress: req.ip,
+                    userAgent: req.headers['user-agent']
+                });
+            } catch (logErr) {
+                console.warn('Failed to write logout audit log', logErr);
             }
         }
 

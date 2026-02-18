@@ -162,6 +162,7 @@ function App() {
           onNavigate={navigateToPage}
           latestReservation={latestReservation}
           isAuthenticated={Boolean(authUser)}
+          onLogout={handleLogout}
         />
       )
       break
@@ -181,6 +182,7 @@ function App() {
                 reservations={reservations}
                 authUser={authUser}
                 onNavigate={navigateToPage}
+                onLogout={handleLogout}
                 sessionStatus={sessionStatus}
                 theme={theme}
                 onToggleTheme={toggleTheme}

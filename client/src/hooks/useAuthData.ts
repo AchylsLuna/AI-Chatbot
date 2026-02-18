@@ -381,10 +381,21 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     navigateToPage(getDefaultPageForRole(session.user.role))
   }
 
-  const handleLogout = () => {
+  const handleLogout = async (target?: 'login' | 'landing' | 'admin_login') => {
+    const prevRole = authUser?.role
     if (auth0Enabled) {
       void logoutAuth0Session()
     }
+
+    // Inform server to destroy session when possible
+    try {
+      if (authProvider === 'local') {
+        await api.logout()
+      }
+    } catch (err) {
+      console.warn('Server logout failed', err)
+    }
+
     setAuthTokenState(null)
     setAuthUser(null)
     setAuthError(null)
@@ -393,6 +404,24 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setPendingOtpChallenge(null)
     setApiReady(false)
     setPostLoginPage(null)
+
+    // Determine where to navigate after logout
+    if (target) {
+      navigateToPage(target)
+      return
+    }
+
+    if (prevRole === 'user') {
+      navigateToPage('login')
+      return
+    }
+
+    if (prevRole) {
+      // Any staff/admin role -> admin login
+      navigateToPage('admin_login')
+      return
+    }
+
     navigateToPage('landing')
   }
 
