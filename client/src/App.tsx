@@ -18,6 +18,7 @@ import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import OtpPage from './pages/OtpPage'
 import SignupPage from './pages/SignupPage'
+import ConfirmModal from './components/ui/ConfirmModal'
 
 type ProtectedPage = 'appointments' | 'doctor_dashboard'
 
@@ -45,6 +46,9 @@ function App() {
     handleCancelOtp,
     handleSignupSuccess,
     handleLogout,
+    idleWarningOpen,
+    idleRemainingSeconds,
+    acknowledgeIdle,
   } = useAuthData({ currentPage, navigateToPage })
 
   const isProtectedRoute =
@@ -316,6 +320,25 @@ function App() {
       )}
 
       <div className="relative z-10">
+        <ConfirmModal
+          open={Boolean(idleWarningOpen)}
+          title="Session timeout warning"
+          message={
+            idleRemainingSeconds > 0
+              ? `You've been idle. You will be logged out in ${Math.floor(
+                  idleRemainingSeconds / 60
+                )}:${String(idleRemainingSeconds % 60).padStart(2, '0')}.`
+              : "You've been idle. You will be logged out soon."
+          }
+          confirmLabel="Stay signed in"
+          cancelLabel="Logout now"
+          onConfirm={() => {
+            acknowledgeIdle()
+          }}
+          onCancel={() => {
+            void handleLogout()
+          }}
+        />
         {showPublicHeader && (
           <AppHeader theme={theme} onToggleTheme={toggleTheme} onNavigate={navigateToPage} />
         )}

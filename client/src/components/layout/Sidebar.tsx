@@ -365,16 +365,16 @@ const Sidebar = ({
             {footerProfile ? (
               <button
                 type="button"
-                className="reference-sidebar-profile"
+                className="reference-sidebar-profile flex items-center gap-3 w-full"
                 onClick={footerProfile.onClick}
                 disabled={!footerProfile.onClick}
               >
-                <span className="reference-sidebar-profile-avatar">
+                <span className="reference-sidebar-profile-avatar shrink-0">
                   {footerProfile.avatarText ?? renderProfileInitials(footerProfile.name)}
                 </span>
-                <span className="min-w-0 text-left">
-                  <span className="reference-sidebar-profile-subtitle">{footerProfile.subtitle}</span>
-                  <span className="reference-sidebar-profile-name">{footerProfile.name}</span>
+                <span className="min-w-0 text-left overflow-hidden">
+                  <span className="reference-sidebar-profile-subtitle block truncate">{footerProfile.subtitle}</span>
+                  <span className="reference-sidebar-profile-name block truncate">{footerProfile.name}</span>
                 </span>
                 <span className="reference-sidebar-chevron" aria-hidden="true">
                   ›
@@ -536,8 +536,8 @@ const Sidebar = ({
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
                 {profileLabel ?? 'Profile'}
               </p>
-              <p className="mt-1.5 text-sm font-semibold text-[color:var(--agent-ink)]">{profileValue}</p>
-              {profileCaption ? <p className="text-xs text-[color:var(--agent-muted)]">{profileCaption}</p> : null}
+              <p className="mt-1.5 text-sm font-semibold text-[color:var(--agent-ink)] truncate">{profileValue}</p>
+              {profileCaption ? <p className="text-xs text-[color:var(--agent-muted)] truncate">{profileCaption}</p> : null}
             </div>
           ) : null}
 

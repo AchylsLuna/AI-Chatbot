@@ -15,9 +15,9 @@ import {
     createAppointment,
 } from '../Controllers/AppointmentsController.js';
 import authMiddleware from '../Middleware/authMiddleware.js';
+import { authorizeRoles } from '../Middleware/rbacMiddleware.js';
 import User from '../Models/UserModel.js';
 import { loginLimiter } from '../Middleware/rateLimiter.js';
-import { authorizeRoles } from '../Middleware/rbacMiddleware.js';
 import { body, validationResult } from 'express-validator';
 
 const router = Router();
@@ -123,6 +123,19 @@ router.post('/appointments',
     validate,
     createAppointment
 );
+
+// Admin-triggered archive (manual)
+router.post('/admin/archive/appointments', authMiddleware, authorizeRoles('admin'), async (req, res, next) => {
+    try {
+        const { default: archiveService } = await import('../Utils/archiveService.js')
+        const days = req.body?.days ? Number(req.body.days) : undefined
+        const dryRun = req.body?.dry === true
+        const result = await archiveService.archiveOldAppointments({ olderThanDays: days, dryRun })
+        return res.json({ ok: true, result })
+    } catch (err) {
+        next(err)
+    }
+})
 
 //ADMIN Routes
 router.get('/users',

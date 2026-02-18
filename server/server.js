@@ -14,27 +14,29 @@ const config = {
     PORT: process.env.PORT || 5000,
     MONGO_URI: process.env.MONGO_URI,
     ORIGIN: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
-    DB_NAME: 'hospital_ai_blockchain'
-}
+    DB_NAME: 'hospital_ai_blockchain',
+};
 
-if (!config.MONGO_URI){
+if (!config.MONGO_URI) {
     console.error('MONGO_URI is not defined');
     process.exit(1);
 }
 
-//Security headers (Auto X-XSS-Protection)
+// Security headers
 app.use(helmet());
 
-app.use(cors({
-    origin: config.ORIGIN,
-    credentials:true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-}))
+app.use(
+    cors({
+        origin: config.ORIGIN,
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    })
+);
 
-app.use(express.json({limit: '10kb'}));
+app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 
-//Data Sanitization
+// Data sanitization
 app.use(mongoSanitize());
 
 app.use('/api', router);
@@ -45,13 +47,12 @@ app.use((err, req, res, next) => {
     res.status(statusCode).json({
         success: false,
         message: err.message || 'Internal Server Error',
-    })
-}) 
-
+    });
+});
 
 const startServer = async () => {
     try {
-        await mongoose.connect(config.MONGO_URI, { dbName: config.DB_NAME});
+        await mongoose.connect(config.MONGO_URI, { dbName: config.DB_NAME });
         console.log('Connected to DB');
 
         app.listen(config.PORT, '0.0.0.0', () => {
@@ -61,6 +62,6 @@ const startServer = async () => {
         console.error('Failed to connect to DB: ', error);
         process.exit(1);
     }
-}
+};
 
 startServer();

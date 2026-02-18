@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { requiresAuth } from '../config/accessControl'
 import { fallbackLedger, fallbackReservations } from '../config/fallbackData'
 import { api, setAuthToken } from '../services/api'
@@ -63,6 +63,8 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     (LoginOtpChallenge & { targetPage?: AppPage | null }) | null
   >(null)
   const [isBiometricReady, setIsBiometricReady] = useState(false)
+  const [idleWarningOpen, setIdleWarningOpen] = useState(false)
+  const [idleRemainingSeconds, setIdleRemainingSeconds] = useState<number>(0)
 
   const clearLocalTokenStorage = useCallback(() => {
     if (authProvider === 'local') {
@@ -89,6 +91,97 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   useEffect(() => {
     setAuthToken(authToken)
   }, [authToken])
+
+  // Idle/session timeout handling
+  const WARNING_MS = 5 * 60 * 1000 // 10 minutes
+  const LOGOUT_MS = 10 * 60 * 1000 // 15 minutes
+  const warningTimerRef = useRef<number | null>(null)
+  const logoutTimerRef = useRef<number | null>(null)
+  const countdownIntervalRef = useRef<number | null>(null)
+  const logoutRef = useRef<(() => Promise<void>) | null>(null)
+
+  const clearIdleTimers = useCallback(() => {
+    if (warningTimerRef.current) {
+      window.clearTimeout(warningTimerRef.current)
+      warningTimerRef.current = null
+    }
+    if (logoutTimerRef.current) {
+      window.clearTimeout(logoutTimerRef.current)
+      logoutTimerRef.current = null
+    }
+    if (countdownIntervalRef.current) {
+      window.clearInterval(countdownIntervalRef.current)
+      countdownIntervalRef.current = null
+    }
+    setIdleWarningOpen(false)
+    setIdleRemainingSeconds(0)
+  }, [])
+
+  const startIdleTimers = useCallback(() => {
+    clearIdleTimers()
+    // schedule warning and logout
+    warningTimerRef.current = window.setTimeout(() => {
+      // show warning and start 5-minute countdown
+      const remaining = Math.floor((LOGOUT_MS - WARNING_MS) / 1000)
+      setIdleRemainingSeconds(remaining)
+      setIdleWarningOpen(true)
+      // interval to decrement
+      countdownIntervalRef.current = window.setInterval(() => {
+        setIdleRemainingSeconds((prev) => {
+          if (prev <= 1) return 0
+          return prev - 1
+        })
+      }, 1000)
+    }, WARNING_MS)
+
+    logoutTimerRef.current = window.setTimeout(() => {
+      // auto logout
+      clearIdleTimers()
+      void (logoutRef.current ? logoutRef.current() : Promise.resolve())
+    }, LOGOUT_MS)
+  }, [clearIdleTimers])
+
+
+  const activityHandler = useCallback(() => {
+    if (!authUser) return
+    // if warning is visible, don't automatically close here — user must click Stay signed in
+    if (idleWarningOpen) return
+    startIdleTimers()
+  }, [authUser, idleWarningOpen, startIdleTimers])
+
+  const acknowledgeIdle = useCallback(async () => {
+    // user wants to stay signed in
+    setIdleWarningOpen(false)
+    setIdleRemainingSeconds(0)
+    if (countdownIntervalRef.current) {
+      window.clearInterval(countdownIntervalRef.current)
+      countdownIntervalRef.current = null
+    }
+    try {
+      // ping server to refresh session (best-effort)
+      await api.getSession()
+    } catch (err) {
+      // ignore errors
+    }
+    startIdleTimers()
+  }, [startIdleTimers])
+
+  // wire activity listeners when authenticated
+  useEffect(() => {
+    if (!authUser) {
+      clearIdleTimers()
+      return
+    }
+    // start fresh timers
+    startIdleTimers()
+
+    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll']
+    events.forEach((ev) => window.addEventListener(ev, activityHandler))
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, activityHandler))
+      clearIdleTimers()
+    }
+  }, [authUser, activityHandler, clearIdleTimers, startIdleTimers])
 
   useEffect(() => {
     if (!authToken) {
@@ -425,6 +518,11 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     navigateToPage('landing')
   }
 
+  // keep a ref to the latest logout handler for timers defined earlier
+  useEffect(() => {
+    logoutRef.current = handleLogout
+  }, [handleLogout])
+
   const isCheckingSession = Boolean(
     !authUser &&
       ((authToken && (isAuthLoading || !apiReady)) || (auth0Enabled && isAuthLoading))
@@ -460,6 +558,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     handleCancelOtp,
     handleSignupSuccess,
     handleLogout,
+    idleWarningOpen,
+    idleRemainingSeconds,
+    acknowledgeIdle,
   }
 }
 
