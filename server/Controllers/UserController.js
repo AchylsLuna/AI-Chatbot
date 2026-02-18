@@ -28,7 +28,7 @@ export async function register(req, res) {
         const user = new User({
             email: email,
             firstName: firstName,
-            lastName: firstName,
+            lastName: lastName,
         });
         await user.setPassword(password);
         await user.save();
@@ -42,7 +42,7 @@ export async function register(req, res) {
 
 export async function login(req, res) {
     try{
-        console.log("Login request body:", req.body);
+        console.log("Login request body:", req.body.email);
         const {email, password} = req.body;
 
         if(!email || !password) {
@@ -151,7 +151,9 @@ export async function verifyOTP(req, res) {
             ipAddress: req.ip || req.connection.remoteAddress,
             userAgent: req.headers['user-agent']
         });
-        
+
+        console.log("[Successful Login]:", req.body.email);
+
         return res.status(200).json({
             message: "Login successful.",
             token,

@@ -1,0 +1,10 @@
+export type AppPage =
+  | 'landing'
+  | 'appointments'
+  | 'doctor_dashboard'
+  | 'admin'
+  | 'admin_login'
+  | 'login'
+  | 'otp'
+  | 'forgot_password'
+  | 'signup'
