@@ -10,6 +10,11 @@ const UserSchema = new mongoose.Schema(
             lowercase: true,
             trim: true,
         },
+        googleId: {
+            type: String,
+            unique: true,
+            sparse: true // Allows null/undefined values for non-Google users
+        },
         firstName: {
             type: String,
             required: true,
@@ -34,7 +39,7 @@ const UserSchema = new mongoose.Schema(
         },
         passwordHashed: {
             type: String,
-            required: true,
+            required: false,
         },
         otp: {
             type: String,

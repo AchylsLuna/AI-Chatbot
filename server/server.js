@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet'; //security headers
 import mongoSanitize from 'express-mongo-sanitize'; //Anti-NoSQL injection
+import passport from 'passport'; // [NEW]
+import './Config/passport.js'; // [NEW] Import the config we just made
 
 import router from './Routes/Routes.js';
 
@@ -35,6 +37,9 @@ app.use(
 
 app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
+
+// Initialize Passport
+app.use(passport.initialize());
 
 // Data sanitization
 app.use(mongoSanitize());

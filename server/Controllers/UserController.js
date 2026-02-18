@@ -268,3 +268,53 @@ export async function debugUser(req, res) {
         return res.status(500).json({ message: 'Debug failed' })
     }
 }
+
+export async function googleCallback(req, res) {
+    try {
+        // Passport already put the user in req.user
+        const user = req.user; 
+
+        if (!user) {
+            return res.redirect('/login-failed');
+        }
+
+        // 1. Generate Token
+        const token = jwt.sign(
+            { id: user._id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        // 2. Create Session (This makes logout work!)
+        await Sessions.create({
+            userId: user._id,
+            token: token
+        });
+
+        // 3. [NEW] Audit Log
+        await AuditLog.create({
+            userId: user._id,
+            action: "LOGIN_GOOGLE",
+            details: `User ${user.email} logged in via Google OAuth.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        });
+
+        // 4. Set Cookie
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        // 5. Redirect to Frontend
+        // Use an env var for the frontend URL so it works in production too
+        const clientUrl = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+        return res.redirect(`${clientUrl}/appointments`);
+
+    } catch (error) {
+        console.error("Google Auth Error:", error);
+        return res.redirect('/login-failed');
+    }
+}

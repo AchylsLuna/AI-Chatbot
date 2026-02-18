@@ -7,6 +7,7 @@ import {
     getSettings,
     updateSettings,
     debugUser,
+    googleCallback,
 } from '../Controllers/UserController.js';
 import {
     getAllUsers,
@@ -20,6 +21,8 @@ import { authorizeRoles } from '../Middleware/rbacMiddleware.js';
 import User from '../Models/UserModel.js';
 import { loginLimiter } from '../Middleware/rateLimiter.js';
 import { body, validationResult } from 'express-validator';
+import passport from 'passport';
+
 
 const router = Router();
 
@@ -31,6 +34,16 @@ const validate = (req, res, next) => {
     next();
 }
 
+// Google Login Trigger
+router.get('/auth/google', 
+    passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+// Google Callback
+router.get('/auth/google/callback', 
+    passport.authenticate('google', { session: false, failureRedirect: '/login-failed' }),
+    googleCallback 
+);
 
 // User Routes
 router.post('/register',
@@ -150,5 +163,6 @@ router.get('/admin/audit-logs/download',
     authorizeRoles('admin'), 
     downloadAuditBackup
 );
+
 
 export default router;
