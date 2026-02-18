@@ -35,6 +35,8 @@ type SidebarProps = {
   variant?: 'default' | 'dashboard' | 'reference'
   heightMode?: 'content' | 'viewport'
   stickyOffset?: 'compact' | 'header'
+  isCollapsed?: boolean
+  onToggleCollapse?: () => void
   showBrand?: boolean
   brandTitle: string
   brandSubtitle: string
@@ -186,6 +188,8 @@ const Sidebar = ({
   variant = 'default',
   heightMode = 'content',
   stickyOffset = 'compact',
+  isCollapsed = false,
+  onToggleCollapse,
   showBrand = true,
   brandTitle,
   brandSubtitle,
@@ -238,12 +242,15 @@ const Sidebar = ({
     mode: 'default' | 'dashboard' | 'reference'
   ) => {
     if (mode === 'reference') {
+      const collapsedLabel = isCollapsed ? item.label : undefined
       return (
         <button
           key={item.key}
           type="button"
           onClick={onClick}
           className={`reference-sidebar-item ${isActive ? 'is-active' : ''}`}
+          title={collapsedLabel}
+          aria-label={collapsedLabel}
         >
           <span className="reference-sidebar-icon" aria-hidden="true">
             <SidebarGlyph icon={item.icon} />
@@ -311,15 +318,42 @@ const Sidebar = ({
 
   if (variant === 'reference') {
     return (
-      <aside className={`reference-sidebar ${referenceViewportClass} ${className ?? ''}`}>
-        {showBrand ? (
-          <button type="button" onClick={onBrandClick} className="reference-sidebar-brand">
-            <AppLogoBadge className="h-10 w-10" />
-            <div>
-              <p className="reference-sidebar-brand-title">{brandTitle}</p>
-              <p className="reference-sidebar-brand-subtitle">{brandSubtitle}</p>
-            </div>
-          </button>
+      <aside
+        className={`reference-sidebar ${isCollapsed ? 'is-collapsed' : ''} ${referenceViewportClass} ${className ?? ''}`}
+      >
+        {showBrand || onToggleCollapse ? (
+          <div className="reference-sidebar-brand-row">
+            {showBrand ? (
+              <button type="button" onClick={onBrandClick} className="reference-sidebar-brand">
+                <AppLogoBadge className="reference-sidebar-logo h-10 w-10" />
+                <div>
+                  <p className="reference-sidebar-brand-title">{brandTitle}</p>
+                  {brandSubtitle ? <p className="reference-sidebar-brand-subtitle">{brandSubtitle}</p> : null}
+                </div>
+              </button>
+            ) : (
+              <div />
+            )}
+            {onToggleCollapse ? (
+              <button
+                type="button"
+                className="reference-sidebar-collapse-toggle"
+                onClick={onToggleCollapse}
+                aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {isCollapsed ? (
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m8 5 5 5-5 5" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m12 5-5 5 5 5" />
+                  </svg>
+                )}
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         {mainItems.length > 0 ? (
@@ -368,6 +402,8 @@ const Sidebar = ({
                 className="reference-sidebar-profile"
                 onClick={footerProfile.onClick}
                 disabled={!footerProfile.onClick}
+                title={isCollapsed ? footerProfile.name : undefined}
+                aria-label={isCollapsed ? footerProfile.name : undefined}
               >
                 <span className="reference-sidebar-profile-avatar">
                   {footerProfile.avatarText ?? renderProfileInitials(footerProfile.name)}
@@ -403,7 +439,7 @@ const Sidebar = ({
               <AppLogoBadge className="h-10 w-10" />
               <div>
                 <p className="text-base font-semibold text-[color:var(--agent-ink)]">{brandTitle}</p>
-                <p className="text-xs text-[color:var(--agent-muted)]">{brandSubtitle}</p>
+                {brandSubtitle ? <p className="text-xs text-[color:var(--agent-muted)]">{brandSubtitle}</p> : null}
               </div>
             </div>
           </button>
@@ -491,7 +527,7 @@ const Sidebar = ({
             <AppLogoBadge className="h-9 w-9" />
             <div>
               <p className="text-sm font-semibold text-[color:var(--agent-ink)]">{brandTitle}</p>
-              <p className="text-xs text-[color:var(--agent-muted)]">{brandSubtitle}</p>
+              {brandSubtitle ? <p className="text-xs text-[color:var(--agent-muted)]">{brandSubtitle}</p> : null}
             </div>
           </div>
         </button>

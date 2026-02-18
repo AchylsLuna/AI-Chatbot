@@ -29,11 +29,23 @@ const AppHeader = ({ theme, onToggleTheme, onNavigate }: AppHeaderProps) => (
         <button onClick={onToggleTheme} className={navButtonClass}>
           {theme === 'dark' ? 'Light mode' : 'Dark mode'}
         </button>
+        <button onClick={() => onNavigate('landing')} className={navButtonClass}>
+          Landing
+        </button>
         <button onClick={() => onNavigate('appointments')} className={navButtonClass}>
           Appointments
         </button>
+        <button onClick={() => onNavigate('doctor_dashboard')} className={navButtonClass}>
+          Doctor Dashboard
+        </button>
+        <button onClick={() => onNavigate('admin')} className={navButtonClass}>
+          Admin
+        </button>
         <button onClick={() => onNavigate('login')} className={navButtonClass}>
           Login
+        </button>
+        <button onClick={() => onNavigate('admin_login')} className={navButtonClass}>
+          Admin Login
         </button>
         <button
           onClick={() => onNavigate('signup')}

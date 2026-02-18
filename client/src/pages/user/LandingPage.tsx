@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
-import type { AppPage } from '../types/navigation'
-import type { Reservation } from '../types'
-import AppLogoBadge from '../components/branding/AppLogoBadge'
+import type { AppPage } from '../../types/navigation'
+import type { Reservation } from '../../types'
+import AppLogoBadge from '../../components/branding/AppLogoBadge'
 
 type LandingPageProps = {
   onNavigate?: (page: AppPage) => void
@@ -170,15 +170,6 @@ const LandingPage = ({
           </nav>
 
           <div className="order-2 flex flex-wrap items-center gap-2 md:order-3 md:justify-self-end">
-            {!isAuthenticated && (
-              <button
-                type="button"
-                onClick={() => onNavigate?.('admin_login')}
-                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
-              >
-                Staff Login
-              </button>
-            )}
             <button
               type="button"
               onClick={() => onNavigate?.('login')}

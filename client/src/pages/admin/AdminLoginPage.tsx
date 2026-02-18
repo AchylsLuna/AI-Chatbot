@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import AuthSplitLayout from '../components/auth/AuthSplitLayout'
-import type { AppPage } from '../types/navigation'
-import type { AuthProvider, AuthSession } from '../types'
-import { formatRoleLabel } from '../utils/roles'
+import AuthSplitLayout from '../../components/auth/AuthSplitLayout'
+import type { AppPage } from '../../types/navigation'
+import type { AuthProvider, AuthSession } from '../../types'
+import { formatRoleLabel } from '../../utils/roles'
 
 const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
 

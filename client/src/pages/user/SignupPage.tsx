@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import AuthSplitLayout from '../components/auth/AuthSplitLayout'
-import { api } from '../services/api'
-import type { AppPage } from '../types/navigation'
-import type { AuthSession, SignupDraft } from '../types'
+import AuthSplitLayout from '../../components/auth/AuthSplitLayout'
+import type { AppPage } from '../../types/navigation'
+import type { AuthSession } from '../../types'
 
 type SignupPageProps = {
   onNavigate?: (page: AppPage) => void
@@ -102,10 +101,10 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
 
           <form
             className="mt-6 space-y-4"
-            onSubmit={async (event) => {
+            onSubmit={(event) => {
               event.preventDefault()
               const cleanedFullName = fullName.trim()
-              const cleanedEmail = email.trim()
+              const cleanedEmail = email.trim().toLowerCase()
               const cleanedPassword = password.trim()
               const cleanedConfirmPassword = confirmPassword.trim()
 
@@ -129,21 +128,19 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
               }
               setIsSubmitting(true)
               setSubmitError(null)
-              try {
-                const payload: SignupDraft = {
+              const session: AuthSession = {
+                token: `demo-signup-token-${Date.now()}`,
+                user: {
                   username: cleanedEmail,
-                  password: cleanedPassword,
-                  fullName: cleanedFullName,
-                  email: cleanedEmail,
-                }
-                const session = await api.signup(payload)
-                setSignupSession(session)
-                onSignupSuccess?.(session)
-              } catch (error) {
-                setSubmitError(error instanceof Error ? error.message : 'Submission failed')
-              } finally {
-                setIsSubmitting(false)
+                  role: 'user',
+                  authMethod: 'demo-signup',
+                  mfa: false,
+                  sessionId: `demo-signup-session-${Date.now()}`,
+                },
               }
+              setSignupSession(session)
+              setIsSubmitting(false)
+              onSignupSuccess?.(session)
             }}
           >
             <div className="relative">

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import AuthSplitLayout from '../components/auth/AuthSplitLayout'
-import type { AppPage } from '../types/navigation'
-import type { LoginOtpChallenge } from '../types'
+import AuthSplitLayout from '../../components/auth/AuthSplitLayout'
+import type { AppPage } from '../../types/navigation'
+import type { LoginOtpChallenge } from '../../types'
 
 type OtpPageProps = {
   challenge: LoginOtpChallenge | null

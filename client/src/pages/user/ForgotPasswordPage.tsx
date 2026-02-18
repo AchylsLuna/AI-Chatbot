@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import AuthSplitLayout from '../components/auth/AuthSplitLayout'
-import type { AppPage } from '../types/navigation'
+import AuthSplitLayout from '../../components/auth/AuthSplitLayout'
+import type { AppPage } from '../../types/navigation'
 
 type ForgotPasswordPageProps = {
   onNavigate?: (page: AppPage) => void
