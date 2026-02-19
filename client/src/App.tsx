@@ -1,241 +1,156 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import GlobalAssistantChat from './components/chat/GlobalAssistantChat'
+import AppHeader from './components/layout/AppHeader'
+import WorkspaceHeader from './components/layout/WorkspaceHeader'
 import AppErrorBoundary from './components/states/AppErrorBoundary'
-import { canAccessPage, getAuthRedirectPage } from './config/accessControl'
-import { doctorNurseAssignments, fallbackReservations } from './config/fallbackData'
-import { isLegacyDashboardPath } from './config/routing'
+import { AccessDeniedCard, AuthLoadingCard } from './components/states/RouteGuardCards'
+import { canAccessPage } from './config/accessControl'
+import useAuthData from './hooks/useAuthData'
 import useAppRouting from './hooks/useAppRouting'
 import useScrollReveal from './hooks/useScrollReveal'
 import useAppTheme from './hooks/useAppTheme'
-import AdminLoginPage from './pages/admin/AdminLoginPage'
-import AdminDashboardPage from './pages/dashboard/admin/AdminDashboardPage'
-import DoctorDashboardPage from './pages/dashboard/doctor/DoctorDashboardPage'
-import DoctorLoginPage from './pages/doctor/DoctorLoginPage'
-import AppointmentsPage from './pages/user/AppointmentsPage'
-import ForgotPasswordPage from './pages/user/ForgotPasswordPage'
-import LandingPage from './pages/user/LandingPage'
-import LoginPage from './pages/user/LoginPage'
-import OtpPage from './pages/user/OtpPage'
-import SignupPage from './pages/user/SignupPage'
-import type {
-  AppointmentUpdateDraft,
-  AuthSession,
-  LoginOtpChallenge,
-  Reservation,
-  ReservationCreateDraft,
-} from './types'
-import type { AppPage } from './types/navigation'
-import { getDefaultPageForRole } from './utils/roles'
+import AdminDashboard from './pages/AdminDashboard'
+import AdminLoginPage from './pages/AdminLoginPage'
+import AppointmentsPage from './pages/AppointmentsPage'
+import DoctorDashboardPage from './pages/DoctorDashboardPage'
+import DoctorLoginPage from './pages/DoctorLoginPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import LandingPage from './pages/LandingPage'
+import LoginPage from './pages/LoginPage'
+import OtpPage from './pages/OtpPage'
+import SignupPage from './pages/SignupPage'
+import ConfirmModal from './components/ui/ConfirmModal'
 
-const cloneReservations = (): Reservation[] => fallbackReservations.map((reservation) => ({ ...reservation }))
-
-const createDemoOtpChallenge = (username: string): LoginOtpChallenge => {
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
-  return {
-    challengeId: `demo-${Date.now()}`,
-    username,
-    expiresAt,
-    expiresInSeconds: 300,
-    otpPreview: '123456',
-  }
-}
+type ProtectedPage = 'appointments' | 'doctor_dashboard'
 
 function App() {
   const { currentPage, navigateToPage, navigateBack, isLanding, isAuthPage } = useAppRouting()
   const { theme, toggleTheme } = useAppTheme(isLanding || isAuthPage)
   const [dataMaskingEnabled, setDataMaskingEnabled] = useState(true)
-  const [reservations, setReservations] = useState<Reservation[]>(() => cloneReservations())
-  const [authUser, setAuthUser] = useState<AuthSession['user'] | null>(null)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [pendingOtpChallenge, setPendingOtpChallenge] = useState<LoginOtpChallenge | null>(() =>
-    createDemoOtpChallenge('demo.user@aihealthcare.com')
+
+  const {
+    authProvider,
+    auth0Enabled,
+    isBiometricReady,
+    sessionStatus,
+    authUser,
+    authError,
+    isAuthLoading,
+    isCheckingSession,
+    reservations,
+    latestReservation,
+    pendingOtpChallenge,
+    handleProviderLogin,
+    handleLogin,
+    handleVerifyOtp,
+    handleCancelOtp,
+    handleResendOtp,
+    handleSignupSuccess,
+    handleLogout,
+    idleWarningOpen,
+    idleRemainingSeconds,
+    acknowledgeIdle,
+  } = useAuthData({ currentPage, navigateToPage })
+
+  const isProtectedRoute =
+    currentPage === 'appointments' || currentPage === 'doctor_dashboard' || currentPage === 'admin'
+  const isReferenceDashboardPage =
+    currentPage === 'appointments' || currentPage === 'doctor_dashboard'
+  const showPublicHeader = !isLanding && !isAuthPage && !authUser && !isProtectedRoute
+  const showWorkspaceHeader =
+    Boolean(authUser) && !isAuthPage && currentPage !== 'landing' && !isReferenceDashboardPage
+  const showSupportAssistant = true
+
+  useEffect(() => {
+    if (!authUser) return
+    if (authUser.role !== 'user') return
+    if (currentPage === 'appointments') return
+    if (currentPage !== 'doctor_dashboard' && currentPage !== 'admin') return
+    navigateToPage('appointments', { replace: true })
+  }, [authUser, currentPage, navigateToPage])
+
+  useEffect(() => {
+    if (!authUser) return
+    if (authUser.role === 'user') return
+    if (currentPage !== 'appointments') return
+    navigateToPage('doctor_dashboard', { replace: true })
+  }, [authUser, currentPage, navigateToPage])
+
+  useScrollReveal(`${currentPage}-${isCheckingSession}-${authUser?.role ?? 'guest'}`)
+
+  const loginPage = (
+    <LoginPage
+      authUser={authUser}
+      authError={authError}
+      isAuthLoading={isAuthLoading}
+      onLogin={handleLogin}
+      onProviderLogin={auth0Enabled ? () => handleProviderLogin() : undefined}
+      authProvider={authProvider}
+      isBiometricReady={isBiometricReady}
+      onLogout={handleLogout}
+      onNavigate={navigateToPage}
+      onGoBack={() => navigateBack('landing')}
+    />
   )
 
-  const sessionStatus = authUser ? 'Demo session active' : 'Demo mode (no active session)'
-  const latestReservation = useMemo(() => reservations[0], [reservations])
+  const adminLoginPage = (
+    <AdminLoginPage
+      authUser={authUser}
+      authError={authError}
+      isAuthLoading={isAuthLoading}
+      onLogin={handleLogin}
+      onProviderLogin={auth0Enabled ? () => handleProviderLogin('doctor_dashboard') : undefined}
+      authProvider={authProvider}
+      isBiometricReady={isBiometricReady}
+      onLogout={handleLogout}
+      onNavigate={navigateToPage}
+      onGoBack={() => navigateBack('landing')}
+    />
+  )
 
-  useScrollReveal(`${currentPage}-${authUser?.role ?? 'guest'}`)
+  const otpPage = (
+    <OtpPage
+      challenge={pendingOtpChallenge}
+      authError={authError}
+      isAuthLoading={isAuthLoading}
+      onVerifyOtp={handleVerifyOtp}
+      onCancelOtp={handleCancelOtp}
+      onResendOtp={handleResendOtp}
+      onNavigate={navigateToPage}
+    />
+  )
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!isLegacyDashboardPath(window.location.pathname)) return
-
-    const role = authUser?.role
-    const redirectPage: AppPage =
-      role === 'admin' || role === 'system_admin'
-        ? 'admin'
-        : role === 'nurse'
-          ? 'doctor_dashboard'
-          : 'login'
-
-    navigateToPage(redirectPage, { replace: true, scroll: false })
-  }, [authUser?.role, navigateToPage])
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && isLegacyDashboardPath(window.location.pathname)) {
-      return
+  const renderProtectedPage = (
+    page: ProtectedPage,
+    options: {
+      loadingLabel: string
+      deniedTitle: string
+      deniedDetail: string
+      allowedContent: ReactNode
+    }
+  ) => {
+    if (isCheckingSession) {
+      return <AuthLoadingCard label={options.loadingLabel} />
     }
 
-    if (canAccessPage(currentPage, authUser?.role)) return
-
-    navigateToPage(getAuthRedirectPage(currentPage), { replace: true, scroll: false })
-  }, [authUser?.role, currentPage, navigateToPage])
-
-  const inferStaffRole = (username: string): AuthSession['user']['role'] => {
-    const normalized = username.toLowerCase()
-    if (normalized.includes('system') || normalized.includes('super')) return 'system_admin'
-    return 'admin'
-  }
-
-  const handleUpdateReservation = async (reservationId: string, updates: AppointmentUpdateDraft) => {
-    const existing = reservations.find((reservation) => reservation.id === reservationId)
-    if (!existing) {
-      throw new Error('Appointment not found')
+    if (!authUser) {
+      return page === 'doctor_dashboard' ? adminLoginPage : loginPage
     }
 
-    const nextReservation: Reservation = {
-      ...existing,
-      ...(updates.requestedTime ? { requestedTime: updates.requestedTime.trim() || existing.requestedTime } : {}),
-      ...(updates.department ? { department: updates.department.trim() || existing.department } : {}),
-      ...(updates.status ? { status: updates.status } : {}),
-      ...(updates.priority ? { priority: updates.priority } : {}),
-      ...(updates.summary ? { summary: updates.summary.trim() || existing.summary } : {}),
+    if (!canAccessPage(page, authUser.role)) {
+      return (
+        <AccessDeniedCard
+          title={options.deniedTitle}
+          detail={options.deniedDetail}
+          onSwitchAccount={() =>
+            navigateToPage(page === 'doctor_dashboard' ? 'admin_login' : 'login')
+          }
+          onBackToOverview={() => navigateToPage('landing')}
+        />
+      )
     }
 
-    setReservations((previous) =>
-      previous.map((reservation) => (reservation.id === reservationId ? nextReservation : reservation))
-    )
-
-    return nextReservation
-  }
-
-  const handleCreateReservation = async (draft: ReservationCreateDraft) => {
-    const patientName = draft.patientName.trim()
-    const symptoms = draft.symptoms.trim()
-    const requestedTime = draft.requestedTime.trim()
-    const major = draft.major.trim()
-    const doctorName = draft.doctorName.trim()
-
-    if (!patientName || !symptoms || !requestedTime || !major || !doctorName) {
-      throw new Error('Please complete all booking details.')
-    }
-
-    const nextSequence =
-      reservations.reduce((max, reservation) => {
-        const matches = reservation.id.match(/\d+/g)
-        if (!matches?.length) return max
-        const numeric = Number(matches[matches.length - 1])
-        if (!Number.isFinite(numeric)) return max
-        return Math.max(max, numeric)
-      }, 0) + 1
-
-    const id = `RES-${String(nextSequence).padStart(4, '0')}`
-    const normalizedSymptoms = symptoms.endsWith('.') ? symptoms.slice(0, -1) : symptoms
-
-    const nextReservation: Reservation = {
-      id,
-      patientName,
-      symptoms,
-      department: major,
-      doctorName,
-      nurseName: doctorNurseAssignments[doctorName] ?? undefined,
-      priority: 'Routine',
-      confidence: 0.75,
-      requestedTime,
-      createdAt: new Date().toISOString(),
-      status: 'Booked',
-      summary: `Decision Tree summary: ${normalizedSymptoms}. Recommend ${major}.`,
-    }
-
-    setReservations((previous) => [nextReservation, ...previous])
-
-    return nextReservation
-  }
-
-  const handleUserLogin = (username: string, password: string) => {
-    void password
-    const normalizedUsername = username.trim().toLowerCase() || 'demo.user@aihealthcare.com'
-    setAuthError(null)
-    setAuthUser({
-      username: normalizedUsername,
-      role: 'user',
-      authMethod: 'demo',
-      mfa: false,
-      sessionId: `demo-user-${Date.now()}`,
-    })
-    setPendingOtpChallenge(createDemoOtpChallenge(normalizedUsername))
-    navigateToPage('appointments')
-  }
-
-  const handleAdminLogin = (username: string, _password: string, targetPage?: AppPage) => {
-    const normalizedUsername = username.trim().toLowerCase() || 'demo.admin@aihealthcare.com'
-    const canUseAdminLogin =
-      normalizedUsername.includes('admin') ||
-      normalizedUsername.includes('system') ||
-      normalizedUsername.includes('super')
-
-    if (!canUseAdminLogin) {
-      setAuthError('Use an Admin or Super Admin account for Admin Log in.')
-      return
-    }
-
-    const role = inferStaffRole(normalizedUsername)
-    setAuthError(null)
-    setAuthUser({
-      username: normalizedUsername,
-      role,
-      authMethod: 'demo',
-      mfa: true,
-      sessionId: `demo-admin-${Date.now()}`,
-    })
-    navigateToPage(targetPage ?? getDefaultPageForRole(role))
-  }
-
-  const handleDoctorLogin = (username: string, password: string) => {
-    void password
-    const normalizedUsername = username.trim().toLowerCase() || 'demo.doctor@aihealthcare.com'
-    setAuthError(null)
-    setAuthUser({
-      username: normalizedUsername,
-      role: 'nurse',
-      authMethod: 'demo',
-      mfa: true,
-      sessionId: `demo-doctor-${Date.now()}`,
-    })
-    navigateToPage('doctor_dashboard')
-  }
-
-  const handleVerifyOtp = (code: string) => {
-    void code
-    setAuthError(null)
-    setAuthUser((previous) => ({
-      username: previous?.username ?? pendingOtpChallenge?.username ?? 'demo.user@aihealthcare.com',
-      role: 'user',
-      authMethod: 'demo-otp',
-      mfa: true,
-      sessionId: `demo-otp-${Date.now()}`,
-    }))
-    navigateToPage('appointments')
-  }
-
-  const handleCancelOtp = () => {
-    navigateToPage('login')
-  }
-
-  const handleSignupSuccess = (session: AuthSession) => {
-    setAuthError(null)
-    setAuthUser({
-      ...session.user,
-      authMethod: session.user.authMethod || 'demo-signup',
-    })
-    navigateToPage('login')
-  }
-
-  const handleLogout = () => {
-    setAuthError(null)
-    setAuthUser(null)
-    setPendingOtpChallenge(createDemoOtpChallenge('demo.user@aihealthcare.com'))
-    navigateToPage('landing')
+    return options.allowedContent
   }
 
   const withWorkspaceBoundary = (content: ReactNode, section: string) => (
@@ -253,116 +168,152 @@ function App() {
           onNavigate={navigateToPage}
           latestReservation={latestReservation}
           isAuthenticated={Boolean(authUser)}
+          onLogout={handleLogout}
         />
       )
       break
 
     case 'appointments':
-      pageContent = withWorkspaceBoundary(
-        <AppointmentsPage
-          reservations={reservations}
-          authUser={authUser}
-          onNavigate={navigateToPage}
-          onLogout={handleLogout}
-          onCreateReservation={handleCreateReservation}
-          sessionStatus={sessionStatus}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          dataMaskingEnabled={dataMaskingEnabled}
-          onToggleDataMasking={() => setDataMaskingEnabled((previous) => !previous)}
-        />,
-        'Appointments workspace'
-      )
+      if (authUser && authUser.role !== 'user') {
+        pageContent = <AuthLoadingCard label="Redirecting to doctor's dashboard..." />
+      } else {
+        pageContent = renderProtectedPage('appointments', {
+          loadingLabel: 'Checking appointment access...',
+          deniedTitle: 'Appointment access required',
+          deniedDetail:
+            'This page is the User appointment portal. Sign in with a User account to view personal appointments.',
+          allowedContent: (
+            withWorkspaceBoundary(
+              <AppointmentsPage
+                reservations={reservations}
+                authUser={authUser}
+                onNavigate={navigateToPage}
+                onLogout={handleLogout}
+                sessionStatus={sessionStatus}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                dataMaskingEnabled={dataMaskingEnabled}
+                onToggleDataMasking={() => setDataMaskingEnabled((prev) => !prev)}
+              />,
+              'Appointments workspace'
+            )
+          ),
+        })
+      }
       break
 
     case 'doctor_dashboard':
-      pageContent = withWorkspaceBoundary(
-        <DoctorDashboardPage
-          reservations={reservations}
-          authUser={authUser}
-          onNavigate={navigateToPage}
-          onLogout={handleLogout}
-          onUpdateReservation={handleUpdateReservation}
-          sessionStatus={sessionStatus}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          dataMaskingEnabled={dataMaskingEnabled}
-          onToggleDataMasking={() => setDataMaskingEnabled((previous) => !previous)}
-        />,
-        "Doctor's dashboard"
-      )
+      if (authUser?.role === 'user') {
+        pageContent = <AuthLoadingCard label="Redirecting to appointments..." />
+      } else {
+        pageContent = renderProtectedPage('doctor_dashboard', {
+          loadingLabel: "Checking doctor's dashboard access...",
+          deniedTitle: "Doctor's dashboard access required",
+          deniedDetail: 'This page is available for Nurse, Admin, and Super Admin roles.',
+          allowedContent: (
+            withWorkspaceBoundary(
+              <DoctorDashboardPage
+                authUser={authUser}
+                reservations={reservations}
+                onNavigate={navigateToPage}
+                onLogout={handleLogout}
+                sessionStatus={sessionStatus}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                dataMaskingEnabled={dataMaskingEnabled}
+                onToggleDataMasking={() => setDataMaskingEnabled((prev) => !prev)}
+              />,
+              "Doctor's dashboard"
+            )
+          ),
+        })
+      }
       break
 
     case 'admin':
-      pageContent = withWorkspaceBoundary(
-        <AdminDashboardPage
-          authUser={authUser}
-          reservations={reservations}
-          onNavigate={navigateToPage}
-          onLogout={handleLogout}
-          sessionStatus={sessionStatus}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          dataMaskingEnabled={dataMaskingEnabled}
-          onToggleDataMasking={() => setDataMaskingEnabled((previous) => !previous)}
-        />,
-        'Admin dashboard'
-      )
+      if (authUser?.role === 'user') {
+        pageContent = <AuthLoadingCard label="Redirecting to appointments..." />
+      } else if (isCheckingSession) {
+        pageContent = <AuthLoadingCard label="Checking admin access..." />
+      } else if (!authUser) {
+        pageContent = adminLoginPage
+      } else if (!canAccessPage('admin', authUser.role)) {
+        pageContent = (
+          <AccessDeniedCard
+            title="Admin access required"
+            detail="This section is limited to Nurse, Admin, and Super Admin roles. Sign in with the correct role or request elevated access."
+            onSwitchAccount={() => navigateToPage('admin_login')}
+            onBackToOverview={() => navigateToPage('landing')}
+          />
+        )
+      } else {
+        pageContent = withWorkspaceBoundary(
+          <AdminDashboard
+            authUser={authUser}
+            reservations={reservations}
+            onNavigate={navigateToPage}
+            onLogout={handleLogout}
+            sessionStatus={sessionStatus}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            dataMaskingEnabled={dataMaskingEnabled}
+            onToggleDataMasking={() => setDataMaskingEnabled((prev) => !prev)}
+          />,
+          'Admin dashboard'
+        )
+      }
       break
 
     case 'admin_login':
-      pageContent = (
-        <AdminLoginPage
-          authUser={authUser}
-          authError={authError}
-          isAuthLoading={false}
-          onLogin={handleAdminLogin}
-          onLogout={handleLogout}
-          onNavigate={navigateToPage}
-          onGoBack={() => navigateToPage('landing')}
-        />
-      )
+      if (authUser?.role === 'user') {
+        pageContent = (
+          <AccessDeniedCard
+            title="Staff login only"
+            detail="This login is for nurse, admin, and super admin accounts only. Switch account to continue."
+            onSwitchAccount={() => {
+              void handleLogout()
+            }}
+            onBackToOverview={() => navigateToPage('landing')}
+          />
+        )
+      } else {
+        pageContent = adminLoginPage
+      }
       break
 
     case 'doctor_login':
-      pageContent = (
-        <DoctorLoginPage
-          authUser={authUser}
-          authError={authError}
-          isAuthLoading={false}
-          onLogin={handleDoctorLogin}
-          onLogout={handleLogout}
-          onNavigate={navigateToPage}
-          onGoBack={() => navigateToPage('landing')}
-        />
-      )
+      if (authUser?.role === 'user') {
+        pageContent = (
+          <AccessDeniedCard
+            title="Doctor login only"
+            detail="This login is for doctor and admin accounts only. Switch account to continue."
+            onSwitchAccount={() => {
+              void handleLogout()
+            }}
+            onBackToOverview={() => navigateToPage('landing')}
+          />
+        )
+      } else {
+        pageContent = (
+          <DoctorLoginPage
+            authError={authError}
+            isAuthLoading={isAuthLoading}
+            onLogin={handleLogin}
+            onProviderLogin={auth0Enabled ? () => handleProviderLogin('doctor_dashboard') : undefined}
+            authProvider={authProvider}
+            isBiometricReady={isBiometricReady}
+            onNavigate={navigateToPage}
+          />
+        )
+      }
       break
 
     case 'login':
-      pageContent = (
-        <LoginPage
-          authUser={authUser}
-          authError={authError}
-          isAuthLoading={false}
-          onLogin={handleUserLogin}
-          onLogout={handleLogout}
-          onNavigate={navigateToPage}
-          onGoBack={() => navigateToPage('landing')}
-        />
-      )
+      pageContent = loginPage
       break
 
     case 'otp':
-      pageContent = (
-        <OtpPage
-          challenge={pendingOtpChallenge}
-          authError={authError}
-          isAuthLoading={false}
-          onVerifyOtp={handleVerifyOtp}
-          onCancelOtp={handleCancelOtp}
-          onNavigate={navigateToPage}
-        />
-      )
+      pageContent = otpPage
       break
 
     case 'signup':
@@ -397,12 +348,46 @@ function App() {
       )}
 
       <div className="relative z-10">
-        <main>{pageContent}</main>
-        <GlobalAssistantChat
-          key={`global-chat-${authUser?.username ?? 'guest'}-${authUser?.role ?? 'guest'}`}
-          isIdentified={Boolean(authUser)}
-          userRole={authUser?.role ?? null}
+        <ConfirmModal
+          open={Boolean(idleWarningOpen)}
+          title="Session timeout warning"
+          message={
+            idleRemainingSeconds > 0
+              ? `You've been idle. You will be logged out in ${Math.floor(
+                  idleRemainingSeconds / 60
+                )}:${String(idleRemainingSeconds % 60).padStart(2, '0')}.`
+              : "You've been idle. You will be logged out soon."
+          }
+          confirmLabel="Stay signed in"
+          cancelLabel="Logout now"
+          onConfirm={() => {
+            acknowledgeIdle()
+          }}
+          onCancel={() => {
+            void handleLogout()
+          }}
         />
+        {showPublicHeader && (
+          <AppHeader theme={theme} onToggleTheme={toggleTheme} onNavigate={navigateToPage} />
+        )}
+        {showWorkspaceHeader && authUser && (
+          <WorkspaceHeader
+            key={`workspace-header-${currentPage}-${authUser.username}-${authUser.role}`}
+            authUser={authUser}
+            currentPage={currentPage}
+            onNavigate={navigateToPage}
+            onLogout={handleLogout}
+          />
+        )}
+
+        <main>{pageContent}</main>
+        {showSupportAssistant && (
+          <GlobalAssistantChat
+            key={`global-chat-${authUser?.username ?? 'guest'}-${authUser?.role ?? 'guest'}`}
+            isIdentified={Boolean(authUser)}
+            userRole={authUser?.role ?? null}
+          />
+        )}
       </div>
     </div>
   )

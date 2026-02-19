@@ -5,7 +5,7 @@ const roleLabels: Record<UserRole, string> = {
   user: 'User',
   nurse: 'Nurse',
   admin: 'Admin',
-  system_admin: 'System Admin',
+  system_admin: 'Super Admin',
 }
 
 export const formatRoleLabel = (role?: string | null) => {
@@ -18,12 +18,12 @@ export const formatRoleLabel = (role?: string | null) => {
 export const getWorkspaceRoleLabel = (role?: UserRole | null) => {
   if (!role) return 'Unknown'
   if (role === 'user') return 'User'
-  if (role === 'nurse') return 'Doctor'
   return 'Admin'
 }
 
 export const getDefaultPageForRole = (role?: UserRole | null): AppPage => {
-  if (role === 'admin' || role === 'system_admin') return 'admin'
-  if (role === 'nurse') return 'doctor_dashboard'
+  if (role === 'doctor' || role === 'nurse' || role === 'admin' || role === 'system_admin') {
+    return 'doctor_dashboard'
+  }
   return 'appointments'
 }

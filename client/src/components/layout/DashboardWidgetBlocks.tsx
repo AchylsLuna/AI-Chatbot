@@ -33,7 +33,6 @@ type DashboardWidgetBlocksProps = {
   summaryValue: string
   summaryLabel: string
   secondaryLabel: string
-  showSummaryPanel?: boolean
   activityTitle: string
   activityItems: DashboardActivityItem[]
   chartTitle: string
@@ -66,7 +65,6 @@ const DashboardWidgetBlocks = ({
   summaryValue,
   summaryLabel,
   secondaryLabel,
-  showSummaryPanel = true,
   activityTitle,
   activityItems,
   chartTitle,
@@ -88,96 +86,89 @@ const DashboardWidgetBlocks = ({
     return highest
   }, [chartSeries])
 
-  const chartCard = (
-    <article className="reference-card reference-chart-card">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="reference-section-title">{chartTitle}</h3>
-        <div className="reference-legend-list">
-          {chartSeries.map((series) => (
-            <span key={series.key} className="reference-legend-item">
-              <span className="reference-legend-dot" style={{ backgroundColor: series.color }} />
-              {series.label}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="reference-chart-surface" role="img" aria-label={chartTitle}>
-        <svg viewBox="0 0 100 44" className="h-full w-full" preserveAspectRatio="none">
-          {Array.from({ length: 6 }).map((_, index) => {
-            const y = (index * 44) / 5
-            return (
-              <line
-                key={`grid-${index}`}
-                x1="0"
-                y1={y}
-                x2="100"
-                y2={y}
-                stroke="var(--reference-grid)"
-                strokeWidth="0.4"
-              />
-            )
-          })}
-
-          {chartSeries.map((series) => (
-            <polyline
-              key={series.key}
-              points={buildPolyline(series.values, maxSeriesValue)}
-              fill="none"
-              stroke={series.color}
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          ))}
-        </svg>
-      </div>
-    </article>
-  )
-
   return (
     <div className="space-y-4">
-      {showSummaryPanel ? (
-        <div className="reference-dashboard-grid">
-          <article className="reference-card reference-summary-card">
-            <div className="reference-progress-wrap">
-              <div
-                className="reference-progress-ring"
-                style={{
-                  background: `conic-gradient(var(--reference-blue-500) ${ringPercent}%, var(--reference-border) ${ringPercent}% 100%)`,
-                }}
-                aria-hidden="true"
-              >
-                <div className="reference-progress-inner">
-                  <span>{summaryValue}</span>
-                </div>
+      <div className="reference-dashboard-grid">
+        <article className="reference-card reference-summary-card">
+          <div className="reference-progress-wrap">
+            <div
+              className="reference-progress-ring"
+              style={{
+                background: `conic-gradient(var(--reference-blue-500) ${ringPercent}%, var(--reference-border) ${ringPercent}% 100%)`,
+              }}
+              aria-hidden="true"
+            >
+              <div className="reference-progress-inner">
+                <span>{summaryValue}</span>
               </div>
-              <p className="reference-widget-title">{summaryTitle}</p>
-              <p className="reference-widget-subtle">{summaryLabel}</p>
-              <p className="reference-widget-subtle">{secondaryLabel}</p>
             </div>
+            <p className="reference-widget-title">{summaryTitle}</p>
+            <p className="reference-widget-subtle">{summaryLabel}</p>
+            <p className="reference-widget-subtle">{secondaryLabel}</p>
+          </div>
 
-            <div className="reference-activity-block">
-              <h3 className="reference-section-title">{activityTitle}</h3>
-              <ul className="reference-activity-list">
-                {activityItems.map((item) => (
-                  <li key={item.id} className="reference-activity-item">
-                    <span className="reference-activity-icon" aria-hidden="true" />
-                    <span className="min-w-0">
-                      <span className="reference-activity-title">{item.title}</span>
-                      <span className="reference-activity-detail">{item.detail}</span>
-                      {item.meta ? <span className="reference-activity-meta">{item.meta}</span> : null}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+          <div className="reference-activity-block">
+            <h3 className="reference-section-title">{activityTitle}</h3>
+            <ul className="reference-activity-list">
+              {activityItems.map((item) => (
+                <li key={item.id} className="reference-activity-item">
+                  <span className="reference-activity-icon" aria-hidden="true" />
+                  <span className="min-w-0">
+                    <span className="reference-activity-title">{item.title}</span>
+                    <span className="reference-activity-detail">{item.detail}</span>
+                    {item.meta ? <span className="reference-activity-meta">{item.meta}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </article>
+
+        <article className="reference-card reference-chart-card">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="reference-section-title">{chartTitle}</h3>
+            <div className="reference-legend-list">
+              {chartSeries.map((series) => (
+                <span key={series.key} className="reference-legend-item">
+                  <span className="reference-legend-dot" style={{ backgroundColor: series.color }} />
+                  {series.label}
+                </span>
+              ))}
             </div>
-          </article>
-          {chartCard}
-        </div>
-      ) : (
-        chartCard
-      )}
+          </div>
+
+          <div className="reference-chart-surface" role="img" aria-label={chartTitle}>
+            <svg viewBox="0 0 100 44" className="h-full w-full" preserveAspectRatio="none">
+              {Array.from({ length: 6 }).map((_, index) => {
+                const y = (index * 44) / 5
+                return (
+                  <line
+                    key={`grid-${index}`}
+                    x1="0"
+                    y1={y}
+                    x2="100"
+                    y2={y}
+                    stroke="var(--reference-grid)"
+                    strokeWidth="0.4"
+                  />
+                )
+              })}
+
+              {chartSeries.map((series) => (
+                <polyline
+                  key={series.key}
+                  points={buildPolyline(series.values, maxSeriesValue)}
+                  fill="none"
+                  stroke={series.color}
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ))}
+            </svg>
+          </div>
+        </article>
+      </div>
 
       <article className="reference-card">
         <h3 className="reference-section-title">{recommendationTitle}</h3>

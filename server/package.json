@@ -1,0 +1,37 @@
+{
+  "name": "ai-chatbot-server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon server.js --watch . --ext js,json",
+    "start": "node server.js",
+    "create-admin": "node scripts/createAdmin.js",
+    "create-doctor": "node scripts/createDoctor.js"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "ethers": "^6.15.0",
+    "express": "^4.22.1",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^8.2.1",
+    "express-validator": "^7.3.1",
+    "helmet": "^8.1.0",
+    "json2csv": "^6.0.0-alpha.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^6.21.0",
+    "mongoose": "^9.2.1",
+    "multer": "^2.0.2",
+    "nodemailer": "^8.0.1",
+    "openai": "^6.21.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

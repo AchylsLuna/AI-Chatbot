@@ -7,22 +7,12 @@ export type Reservation = {
   patientName: string
   symptoms: string
   department: string
-  doctorName?: string
-  nurseName?: string
   priority: 'Low' | 'Routine' | 'High'
   confidence: number
   requestedTime: string
   createdAt: string
   status: ReservationStatus
   summary: string
-}
-
-export type ReservationCreateDraft = {
-  patientName: string
-  symptoms: string
-  requestedTime: string
-  major: string
-  doctorName: string
 }
 
 export type ReservationDraft = {

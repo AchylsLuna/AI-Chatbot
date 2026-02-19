@@ -9,7 +9,6 @@ export type {
 export type {
   AppointmentUpdateDraft,
   Reservation,
-  ReservationCreateDraft,
   ReservationDraft,
   ReservationStatus,
 } from './appointments'
