@@ -174,7 +174,7 @@ const dashboardSidebarItemClass =
   'w-full rounded-2xl border border-transparent px-3 py-2.5 text-left transition flex items-start gap-3'
 
 const sectionHeadingClass =
-  'text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]'
+  'dashboard-sidebar-heading text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]'
 
 const renderProfileInitials = (name: string, fallback = 'U') => {
   const tokens = name.trim().split(/\s+/).filter(Boolean)
@@ -264,18 +264,21 @@ const Sidebar = ({
     }
 
     if (mode === 'dashboard') {
+      const collapsedLabel = isCollapsed ? item.label : undefined
       return (
         <button
           key={item.key}
           type="button"
           onClick={onClick}
-          className={`${dashboardSidebarItemClass} ${
+          className={`dashboard-sidebar-item ${dashboardSidebarItemClass} ${
             isActive
               ? 'border-[color:var(--agent-accent)] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-ink)] shadow-[inset_3px_0_0_var(--agent-accent)]'
               : 'bg-transparent text-[color:var(--agent-muted)] hover:border-[color:var(--card-border)] hover:bg-[color:var(--agent-overlay)] hover:text-[color:var(--agent-ink)]'
           }`}
+          title={collapsedLabel}
+          aria-label={collapsedLabel}
         >
-          <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]">
+          <span className="dashboard-sidebar-icon mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]">
             <SidebarGlyph icon={item.icon} />
           </span>
           <span className="min-w-0">
@@ -427,22 +430,49 @@ const Sidebar = ({
   if (variant === 'dashboard') {
     return (
       <aside
-        className={`${className ?? ''} ${dashboardViewportClass} flex w-full flex-col rounded-3xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-4 shadow-[var(--card-shadow-soft)] lg:w-[282px]`}
+        className={`dashboard-sidebar ${isCollapsed ? 'is-collapsed' : ''} ${className ?? ''} ${dashboardViewportClass} flex w-full flex-col rounded-3xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-4 shadow-[var(--card-shadow-soft)]`}
       >
-        {showBrand ? (
-          <button
-            type="button"
-            onClick={onBrandClick}
-            className="w-full rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3.5 text-left"
-          >
-            <div className="flex items-center gap-3">
-              <AppLogoBadge className="h-10 w-10" />
-              <div>
-                <p className="text-base font-semibold text-[color:var(--agent-ink)]">{brandTitle}</p>
-                {brandSubtitle ? <p className="text-xs text-[color:var(--agent-muted)]">{brandSubtitle}</p> : null}
-              </div>
-            </div>
-          </button>
+        {showBrand || onToggleCollapse ? (
+          <div className="dashboard-sidebar-brand-row">
+            {showBrand ? (
+              <button
+                type="button"
+                onClick={onBrandClick}
+                className="dashboard-sidebar-brand w-full rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3.5 text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <AppLogoBadge className="h-10 w-10" />
+                  <div>
+                    <p className="text-base font-semibold text-[color:var(--agent-ink)]">{brandTitle}</p>
+                    {brandSubtitle ? (
+                      <p className="text-xs text-[color:var(--agent-muted)]">{brandSubtitle}</p>
+                    ) : null}
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <div />
+            )}
+            {onToggleCollapse ? (
+              <button
+                type="button"
+                className="dashboard-sidebar-collapse-toggle"
+                onClick={onToggleCollapse}
+                aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {isCollapsed ? (
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m8 5 5 5-5 5" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m12 5-5 5 5 5" />
+                  </svg>
+                )}
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         {mainItems.length > 0 ? (
@@ -484,9 +514,9 @@ const Sidebar = ({
         )}
 
         {(statusValue || profileValue || profileExtra) ? (
-          <div className="mt-auto border-t border-[color:var(--card-border)] pt-4">
+          <div className="dashboard-sidebar-footer mt-auto border-t border-[color:var(--card-border)] pt-4">
             {statusValue ? (
-              <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3.5">
+              <div className="dashboard-sidebar-status rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
                   {statusLabel ?? 'Status'}
                 </p>
@@ -495,7 +525,7 @@ const Sidebar = ({
             ) : null}
 
             {profileValue ? (
-              <div className="mt-3 rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3.5">
+              <div className="dashboard-sidebar-profile-card mt-3 rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
                   {profileLabel ?? 'Profile'}
                 </p>
@@ -506,7 +536,7 @@ const Sidebar = ({
               </div>
             ) : null}
 
-            {profileExtra ? <div className="mt-3">{profileExtra}</div> : null}
+            {profileExtra ? <div className="dashboard-sidebar-profile-extra mt-3">{profileExtra}</div> : null}
           </div>
         ) : null}
       </aside>

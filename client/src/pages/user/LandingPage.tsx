@@ -262,8 +262,8 @@ const LandingPage = ({
             </p>
             <h2 className="mt-2 text-2xl font-semibold">Need help or have feedback?</h2>
             <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-              Send us a message. This form is frontend-only demo mode and does not send data to a
-              backend service.
+              Send us a message. This form runs in frontend-only demo mode and stores entries in
+              local demo state only.
             </p>
 
             <form className="mt-5 space-y-4" onSubmit={handleContactSubmit} noValidate>

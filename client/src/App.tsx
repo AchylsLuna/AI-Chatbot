@@ -5,10 +5,10 @@ import { doctorNurseAssignments, fallbackReservations } from './config/fallbackD
 import useAppRouting from './hooks/useAppRouting'
 import useScrollReveal from './hooks/useScrollReveal'
 import useAppTheme from './hooks/useAppTheme'
-import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
+import AdminDashboardPage from './pages/dashboard/admin/AdminDashboardPage'
+import DoctorDashboardPage from './pages/dashboard/doctor/DoctorDashboardPage'
 import AppointmentsPage from './pages/user/AppointmentsPage'
-import DoctorDashboardPage from './pages/admin/DoctorDashboardPage'
 import ForgotPasswordPage from './pages/user/ForgotPasswordPage'
 import LandingPage from './pages/user/LandingPage'
 import LoginPage from './pages/user/LoginPage'
@@ -22,6 +22,7 @@ import type {
   ReservationCreateDraft,
 } from './types'
 import type { AppPage } from './types/navigation'
+import { getDefaultPageForRole } from './utils/roles'
 
 const cloneReservations = (): Reservation[] => fallbackReservations.map((reservation) => ({ ...reservation }))
 
@@ -51,6 +52,13 @@ function App() {
   const latestReservation = useMemo(() => reservations[0], [reservations])
 
   useScrollReveal(`${currentPage}-${authUser?.role ?? 'guest'}`)
+
+  const inferStaffRole = (username: string): AuthSession['user']['role'] => {
+    const normalized = username.toLowerCase()
+    if (normalized.includes('system') || normalized.includes('super')) return 'system_admin'
+    if (normalized.includes('nurse')) return 'nurse'
+    return 'admin'
+  }
 
   const handleUpdateReservation = async (reservationId: string, updates: AppointmentUpdateDraft) => {
     const existing = reservations.find((reservation) => reservation.id === reservationId)
@@ -134,15 +142,16 @@ function App() {
 
   const handleAdminLogin = (username: string, _password: string, targetPage?: AppPage) => {
     const normalizedUsername = username.trim().toLowerCase() || 'demo.admin@aihealthcare.com'
+    const role = inferStaffRole(normalizedUsername)
     setAuthError(null)
     setAuthUser({
       username: normalizedUsername,
-      role: 'admin',
+      role,
       authMethod: 'demo',
       mfa: true,
       sessionId: `demo-admin-${Date.now()}`,
     })
-    navigateToPage(targetPage ?? 'doctor_dashboard')
+    navigateToPage(targetPage ?? getDefaultPageForRole(role))
   }
 
   const handleVerifyOtp = (code: string) => {
@@ -203,6 +212,7 @@ function App() {
           reservations={reservations}
           authUser={authUser}
           onNavigate={navigateToPage}
+          onLogout={handleLogout}
           onCreateReservation={handleCreateReservation}
           sessionStatus={sessionStatus}
           theme={theme}
@@ -234,7 +244,7 @@ function App() {
 
     case 'admin':
       pageContent = withWorkspaceBoundary(
-        <AdminDashboard
+        <AdminDashboardPage
           authUser={authUser}
           reservations={reservations}
           onNavigate={navigateToPage}

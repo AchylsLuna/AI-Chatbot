@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import DashboardTopBar from '../../components/layout/DashboardTopBar'
 import DashboardWidgetBlocks from '../../components/layout/DashboardWidgetBlocks'
 import PaginationControls from '../../components/layout/PaginationControls'
+import ProfileAvatarSettingsCard from '../../components/profile/ProfileAvatarSettingsCard'
 import WorkspaceCanvas from '../../components/layout/WorkspaceCanvas'
 import Sidebar, { type SidebarItem } from '../../components/layout/Sidebar'
 import {
@@ -18,6 +19,7 @@ type AppointmentsPageProps = {
   reservations: Reservation[]
   authUser: AuthSession['user'] | null
   onNavigate?: (page: AppPage) => void
+  onLogout: () => void
   onCreateReservation: (draft: ReservationCreateDraft) => Promise<Reservation>
   sessionStatus: string
   theme: 'light' | 'dark'
@@ -138,6 +140,7 @@ const isUserSidebarSection = (key: string): key is UserSidebarSection =>
 const AppointmentsPage = ({
   reservations,
   authUser,
+  onLogout,
   onCreateReservation,
   sessionStatus,
   theme,
@@ -393,10 +396,17 @@ const AppointmentsPage = ({
 
   const renderBookingForm = () => (
     <form className="reference-card p-5" onSubmit={handleCreateBooking}>
-      <h2 className="reference-section-title">Create booking</h2>
-      <p className="reference-widget-subtle mt-2">
-        Select a major and doctor, then submit full booking details.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="reference-section-title">Create appointment</h2>
+          <p className="reference-widget-subtle mt-2">
+            Enter patient details, choose specialty and doctor, then submit booking.
+          </p>
+        </div>
+        <span className="rounded-full border border-[color:var(--reference-border)] bg-[color:var(--reference-surface-soft)] px-3 py-1 text-xs font-semibold text-[color:var(--reference-muted)]">
+          Step 1 of 1
+        </span>
+      </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <input
@@ -456,19 +466,21 @@ const AppointmentsPage = ({
           resetBookingFeedback()
           setBookingSymptoms(event.target.value)
         }}
-        placeholder="Symptoms"
+        placeholder="Symptoms and clinical context"
         className={`${workspaceFieldClass} mt-3 min-h-[104px]`}
       />
 
       {bookingFormError ? <p className="mt-3 text-xs font-semibold text-rose-500">{bookingFormError}</p> : null}
-      {bookingFormSuccess ? <p className="mt-3 text-xs font-semibold text-emerald-600">{bookingFormSuccess}</p> : null}
+      {bookingFormSuccess ? (
+        <p className="mt-3 text-xs font-semibold text-emerald-600">{bookingFormSuccess}</p>
+      ) : null}
 
       <button
         type="submit"
         disabled={isCreatingBooking}
         className={`${workspacePrimaryButtonClass} mt-4 disabled:cursor-not-allowed disabled:opacity-70`}
       >
-        {isCreatingBooking ? 'Creating...' : 'Create booking'}
+        {isCreatingBooking ? 'Creating...' : 'Create appointment'}
       </button>
     </form>
   )
@@ -479,6 +491,30 @@ const AppointmentsPage = ({
     return (
       <section className="space-y-3">
         {renderBookingForm()}
+
+        <article className="reference-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="reference-section-title">Appointment tracking</h2>
+            <p className="text-xs font-semibold text-[color:var(--agent-muted-soft)]">
+              Showing {visibleReservations.length} appointment(s)
+            </p>
+          </div>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <div className="reference-card-soft p-3">
+              <p className="text-xs uppercase tracking-[0.13em] text-[color:var(--agent-muted-soft)]">Booked</p>
+              <p className="mt-1 text-xl font-semibold text-sky-600">{metrics.booked}</p>
+            </div>
+            <div className="reference-card-soft p-3">
+              <p className="text-xs uppercase tracking-[0.13em] text-[color:var(--agent-muted-soft)]">Recorded</p>
+              <p className="mt-1 text-xl font-semibold text-emerald-600">{metrics.recorded}</p>
+            </div>
+            <div className="reference-card-soft p-3">
+              <p className="text-xs uppercase tracking-[0.13em] text-[color:var(--agent-muted-soft)]">Failed</p>
+              <p className="mt-1 text-xl font-semibold text-rose-600">{metrics.failed}</p>
+            </div>
+          </div>
+        </article>
 
         {visibleReservations.length === 0 ? (
           <article className="reference-card p-5">
@@ -526,7 +562,13 @@ const AppointmentsPage = ({
                   {item.status}
                 </span>
               </div>
-              <p className="mt-3 text-sm text-[color:var(--agent-muted)]">{item.summary}</p>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <p className="text-sm text-[color:var(--agent-muted)]">{item.summary}</p>
+                <div className="space-y-1 text-xs text-[color:var(--agent-muted-soft)] md:text-right">
+                  <p>Doctor: {item.doctorName ?? 'Unassigned'}</p>
+                  <p>Logged {new Date(item.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
             </article>
           ))
         )}
@@ -571,6 +613,14 @@ const AppointmentsPage = ({
             </button>
           </div>
         </div>
+
+        <ProfileAvatarSettingsCard
+          username={authUser?.username ?? 'Unknown'}
+          role={authUser?.role ?? null}
+          className="xl:col-span-2"
+          title="Profile photo"
+          description="Upload a profile photo for your appointment workspace account card."
+        />
 
         <div className="reference-card-soft p-4 xl:col-span-2">
           <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">Notifications</p>
@@ -659,6 +709,16 @@ const AppointmentsPage = ({
             Update password
           </button>
         </form>
+
+        <div className="reference-card-soft p-4 xl:col-span-2">
+          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">Session</p>
+          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+            Log out from the current account and return to the landing page.
+          </p>
+          <button type="button" className={`${workspaceGhostButtonClass} mt-3`} onClick={onLogout}>
+            Log out
+          </button>
+        </div>
       </div>
     </section>
   )
@@ -805,8 +865,13 @@ const AppointmentsPage = ({
             onSelectAuxiliary={(key) => {
               if (isUserSidebarSection(key)) {
                 setSection(key)
+                return
+              }
+              if (key === 'logout') {
+                onLogout()
               }
             }}
+            supportItem={{ key: 'logout', label: 'Log out', icon: 'shield' }}
             footerProfile={{
               name: profileName,
               subtitle: 'Welcome back',

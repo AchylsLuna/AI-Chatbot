@@ -359,6 +359,18 @@
     transition: grid-template-columns 180ms ease;
   }
 
+  .dashboard-shell {
+    display: grid;
+    grid-template-columns: 17.75rem minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+    transition: grid-template-columns 180ms ease;
+  }
+
+  .dashboard-shell--sidebar-collapsed {
+    grid-template-columns: 5.2rem minmax(0, 1fr);
+  }
+
   .reference-shell--sidebar-collapsed {
     grid-template-columns: 5.15rem minmax(0, 1fr);
   }
@@ -414,6 +426,36 @@
     display: flex;
     align-items: flex-start;
     gap: 0.45rem;
+  }
+
+  .dashboard-sidebar {
+    min-width: 0;
+    transition: padding 180ms ease;
+  }
+
+  .dashboard-sidebar-brand-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+  }
+
+  .dashboard-sidebar-collapse-toggle {
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--card-border);
+    border-radius: 9999px;
+    background: var(--agent-surface-strong);
+    color: var(--agent-muted);
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+  }
+
+  .dashboard-sidebar-collapse-toggle:hover {
+    border-color: var(--agent-line);
+    background: var(--agent-surface);
+    color: var(--agent-ink);
   }
 
   .reference-sidebar-collapse-toggle {
@@ -657,6 +699,36 @@
   .reference-sidebar.is-collapsed .reference-sidebar-divider {
     margin-top: 0.65rem;
     padding-top: 0.65rem;
+  }
+
+  .dashboard-sidebar.is-collapsed {
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+  }
+
+  .dashboard-sidebar.is-collapsed .dashboard-sidebar-brand {
+    padding: 0.6rem;
+    justify-content: center;
+  }
+
+  .dashboard-sidebar.is-collapsed .dashboard-sidebar-brand > div,
+  .dashboard-sidebar.is-collapsed .dashboard-sidebar-heading,
+  .dashboard-sidebar.is-collapsed .dashboard-sidebar-item .min-w-0 {
+    display: none;
+  }
+
+  .dashboard-sidebar.is-collapsed .dashboard-sidebar-item {
+    justify-content: center;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+  }
+
+  .dashboard-sidebar.is-collapsed .dashboard-sidebar-icon {
+    margin-top: 0;
+  }
+
+  .dashboard-sidebar.is-collapsed .dashboard-sidebar-footer {
+    display: none;
   }
 
   .reference-pagination {
@@ -1184,6 +1256,13 @@
 
   .reference-dashboard-grid {
     grid-template-columns: 290px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1279px) {
+  .dashboard-shell,
+  .dashboard-shell--sidebar-collapsed {
+    grid-template-columns: 1fr;
   }
 }
 

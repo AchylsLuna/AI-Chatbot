@@ -79,15 +79,15 @@ const AdminLoginPage = ({
             {hasAdminLoginAccess ? (
               <div className="space-y-3">
                 <p className="text-sm text-emerald-300">
-                  Access verified. Continue to the Doctor Dashboard.
+                  Access verified. Continue to the Admin dashboard.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button w-full">
-                    Open Doctor Dashboard
+                  <button onClick={() => onNavigate?.('admin')} className="agent-button w-full">
+                    Open Admin Dashboard
                   </button>
                   {hasAdminWorkspaceAccess && (
-                    <button onClick={() => onNavigate?.('admin')} className="agent-button-ghost w-full">
-                      Open Admin Workspace
+                    <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button-ghost w-full">
+                      Open Doctor Dashboard
                     </button>
                   )}
                   <button
@@ -125,7 +125,7 @@ const AdminLoginPage = ({
                 setFormError('Use a valid .com email address before signing in.')
                 return
               }
-              onLogin(email, password, 'doctor_dashboard')
+              onLogin(email, password, 'admin')
             }}
           >
             <div className="space-y-2">
