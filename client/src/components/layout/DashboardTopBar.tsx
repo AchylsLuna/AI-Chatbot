@@ -1,8 +1,9 @@
 type DashboardTopBarProps = {
-  title: string
+  title?: string
   searchValue: string
   onSearchChange: (value: string) => void
   searchPlaceholder?: string
+  searchLabel?: string
 }
 
 const SearchIcon = () => (
@@ -17,23 +18,29 @@ const DashboardTopBar = ({
   searchValue,
   onSearchChange,
   searchPlaceholder = 'Search records',
+  searchLabel = 'Search',
 }: DashboardTopBarProps) => {
-  return (
-    <section className="reference-topbar">
-      <h1 className="reference-page-title">{title}</h1>
+  const hasTitle = Boolean(title?.trim())
 
-      <label className="reference-search" htmlFor="reference-dashboard-search">
-        <span className="text-[color:var(--agent-muted-soft)]" aria-hidden="true">
-          <SearchIcon />
-        </span>
-        <input
-          id="reference-dashboard-search"
-          value={searchValue}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder={searchPlaceholder}
-          className="reference-search-input"
-        />
-      </label>
+  return (
+    <section className={`reference-topbar ${hasTitle ? '' : 'reference-topbar--search-only'}`}>
+      {hasTitle ? <h1 className="reference-page-title">{title}</h1> : null}
+
+      <div className="reference-search-stack">
+        <p className="reference-search-label">{searchLabel}</p>
+        <label className="reference-search" htmlFor="reference-dashboard-search">
+          <span className="text-[color:var(--agent-muted-soft)]" aria-hidden="true">
+            <SearchIcon />
+          </span>
+          <input
+            id="reference-dashboard-search"
+            value={searchValue}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder={searchPlaceholder}
+            className="reference-search-input"
+          />
+        </label>
+      </div>
     </section>
   )
 }

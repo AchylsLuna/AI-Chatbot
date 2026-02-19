@@ -802,11 +802,29 @@
     gap: 0.7rem;
   }
 
+  .reference-topbar--search-only {
+    grid-template-columns: 1fr;
+  }
+
   .reference-page-title {
     font-size: 1.55rem;
     font-weight: 700;
     color: var(--reference-ink);
     line-height: 1.1;
+  }
+
+  .reference-search-stack {
+    min-width: 0;
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .reference-search-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--reference-muted-soft);
   }
 
   .reference-search {
@@ -1248,7 +1266,7 @@
     scrollbar-gutter: stable;
   }
 
-  .reference-topbar {
+  .reference-topbar:not(.reference-topbar--search-only) {
     grid-template-columns: 220px minmax(0, 1fr);
     align-items: center;
     gap: 0.85rem;

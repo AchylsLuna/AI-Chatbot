@@ -5,12 +5,9 @@ import WorkspaceCanvas from '../../../components/layout/WorkspaceCanvas'
 import type { AuthSession, Reservation } from '../../../types'
 import type { AppPage } from '../../../types/navigation'
 import { maskIdentifier, maskPersonName } from '../../../utils/privacy'
-import { buildDashboardLogItems, buildDashboardNotificationItems } from '../shared/dashboardEvents'
-import type { DashboardNotificationItem } from '../shared/types'
+import { buildDashboardLogItems } from '../shared/dashboardEvents'
 import AdminAppointmentsSection from './sections/AdminAppointmentsSection'
 import AdminDashboardOverviewSection from './sections/AdminDashboardOverviewSection'
-import AdminNotificationsSection from './sections/AdminNotificationsSection'
-import AdminProfileSettingsSection from './sections/AdminProfileSettingsSection'
 import AdminReportsLogSection from './sections/AdminReportsLogSection'
 import AdminSettingsSection from './sections/AdminSettingsSection'
 import AdminUserManagementSection, {
@@ -36,9 +33,7 @@ type AdminSidebarSection =
   | 'appointments'
   | 'reports_log'
   | 'user_management'
-  | 'notifications'
   | 'settings'
-  | 'profile_settings'
 
 type ReservationFilterStatus = 'all' | Reservation['status']
 
@@ -64,9 +59,7 @@ const sidebarItems: SidebarItem[] = [
 ]
 
 const utilityItems: SidebarItem[] = [
-  { key: 'notifications', label: 'Notifications', icon: 'alert' },
   { key: 'settings', label: 'Settings', icon: 'settings' },
-  { key: 'profile_settings', label: 'Profile Settings', icon: 'hospital' },
 ]
 
 const sidebarCollapsedKey = 'pulse-ledger-admin-sidebar-collapsed'
@@ -151,9 +144,7 @@ const isAdminSidebarSection = (value: string): value is AdminSidebarSection => {
     value === 'appointments' ||
     value === 'reports_log' ||
     value === 'user_management' ||
-    value === 'notifications' ||
-    value === 'settings' ||
-    value === 'profile_settings'
+    value === 'settings'
   )
 }
 
@@ -413,9 +404,6 @@ const AdminDashboardPage = ({
   const [doctorManagementMeta, setDoctorManagementMeta] = useState<Record<string, ManagementMeta>>(() =>
     loadManagementMeta(doctorMetaKey)
   )
-  const [nurseManagementMeta, setNurseManagementMeta] = useState<Record<string, ManagementMeta>>(() =>
-    loadManagementMeta(nurseMetaKey)
-  )
 
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [draftName, setDraftName] = useState('')
@@ -449,11 +437,6 @@ const AdminDashboardPage = ({
     if (typeof window === 'undefined') return
     window.localStorage.setItem(doctorMetaKey, JSON.stringify(doctorManagementMeta))
   }, [doctorManagementMeta])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(nurseMetaKey, JSON.stringify(nurseManagementMeta))
-  }, [nurseManagementMeta])
 
   const setSection = (next: AdminSidebarSection) => {
     if (next !== 'dashboard') {
@@ -586,24 +569,12 @@ const AdminDashboardPage = ({
     })
   }, [reportLogs, searchQuery])
 
-  const notifications = useMemo(() => buildDashboardNotificationItems(reservations), [reservations])
-
-  const filteredNotifications = useMemo<DashboardNotificationItem[]>(() => {
-    const query = searchQuery.trim().toLowerCase()
-    if (!query) return notifications
-
-    return notifications.filter((item) => {
-      return item.title.toLowerCase().includes(query) || item.detail.toLowerCase().includes(query)
-    })
-  }, [notifications, searchQuery])
-
   const itemsByTab = useMemo<Record<AdminUserManagementTab, AdminUserManagementItem[]>>(
     () => ({
       users: buildUserItems(reservations, userManagementMeta),
       doctors: buildStaffItems(reservations, doctorManagementMeta, 'doctor'),
-      nurses: buildStaffItems(reservations, nurseManagementMeta, 'nurse'),
     }),
-    [reservations, userManagementMeta, doctorManagementMeta, nurseManagementMeta]
+    [reservations, userManagementMeta, doctorManagementMeta]
   )
 
   const filteredManagementItems = useMemo(() => {
@@ -644,11 +615,7 @@ const AdminDashboardPage = ({
       setUserManagementMeta(updater)
       return
     }
-    if (tab === 'doctors') {
-      setDoctorManagementMeta(updater)
-      return
-    }
-    setNurseManagementMeta(updater)
+    setDoctorManagementMeta(updater)
   }
 
   const getIdentityFromKey = (key: string) => {
@@ -718,10 +685,16 @@ const AdminDashboardPage = ({
     dashboard: 'Search by patient, id, department, or summary',
     appointments: 'Search appointments',
     reports_log: "Search report's log",
-    user_management: 'Search users, doctors, nurses, or notes',
-    notifications: 'Search notification feed',
+    user_management: 'Search users, doctors, or notes',
     settings: 'Search settings',
-    profile_settings: 'Search profile settings',
+  }
+
+  const searchLabelMap: Record<AdminSidebarSection, string> = {
+    dashboard: 'Search dashboard',
+    appointments: 'Search appointments',
+    reports_log: "Search report's log",
+    user_management: 'Search user management',
+    settings: 'Search settings',
   }
 
   const sectionTitleMap: Record<AdminSidebarSection, string> = {
@@ -729,9 +702,7 @@ const AdminDashboardPage = ({
     appointments: 'Appointment',
     reports_log: "Report's Log",
     user_management: 'User Management',
-    notifications: 'Notifications',
     settings: 'Settings',
-    profile_settings: 'Profile Settings',
   }
 
   return (
@@ -774,7 +745,7 @@ const AdminDashboardPage = ({
             footerProfile={{
               name: authUser?.username ?? 'Admin',
               subtitle: 'Admin workspace',
-              onClick: () => setSection('profile_settings'),
+              onClick: () => setSection('settings'),
             }}
           />
 
@@ -784,15 +755,17 @@ const AdminDashboardPage = ({
                 title={sectionTitleMap[activeSection]}
                 searchValue={searchQuery}
                 searchPlaceholder={searchPlaceholderMap[activeSection]}
+                searchLabel={searchLabelMap[activeSection]}
                 onSearchChange={setSearchQuery}
               />
-            ) : activeSection !== 'settings' && activeSection !== 'profile_settings' ? (
+            ) : activeSection !== 'settings' ? (
               <>
                 <h1 className="reference-page-title">{sectionTitleMap[activeSection]}</h1>
                 <DashboardTopBar
-                  title=""
+                  title={undefined}
                   searchValue={searchQuery}
                   searchPlaceholder={searchPlaceholderMap[activeSection]}
+                  searchLabel={searchLabelMap[activeSection]}
                   onSearchChange={setSearchQuery}
                 />
               </>
@@ -874,10 +847,6 @@ const AdminDashboardPage = ({
               />
             ) : null}
 
-            {activeSection === 'notifications' ? (
-              <AdminNotificationsSection items={filteredNotifications} dataMaskingEnabled={dataMaskingEnabled} />
-            ) : null}
-
             {activeSection === 'settings' ? (
               <AdminSettingsSection
                 authUser={authUser}
@@ -924,10 +893,6 @@ const AdminDashboardPage = ({
                 passwordError={passwordError}
                 passwordMessage={passwordMessage}
               />
-            ) : null}
-
-            {activeSection === 'profile_settings' ? (
-              <AdminProfileSettingsSection authUser={authUser} sessionStatus={sessionStatus} />
             ) : null}
           </section>
         </div>

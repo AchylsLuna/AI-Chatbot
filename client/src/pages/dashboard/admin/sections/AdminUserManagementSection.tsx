@@ -8,7 +8,7 @@ import {
 import type { Reservation } from '../../../../types'
 import { maskIdentifier, maskPersonName } from '../../../../utils/privacy'
 
-export type AdminUserManagementTab = 'users' | 'doctors' | 'nurses'
+export type AdminUserManagementTab = 'users' | 'doctors'
 
 export type AdminUserManagementItem = {
   key: string
@@ -47,24 +47,6 @@ type AdminUserManagementSectionProps = {
   actionError: string | null
 }
 
-const parseDate = (value: string) => {
-  const timestamp = new Date(value).getTime()
-  return Number.isNaN(timestamp) ? 0 : timestamp
-}
-
-const formatDateTime = (value: string) => {
-  const timestamp = parseDate(value)
-  if (!timestamp) return 'Unknown'
-  return new Date(timestamp).toLocaleString()
-}
-
-const statusBadgeClass = (status: AdminUserManagementItem['latestStatus']) => {
-  if (status === 'Recorded') return 'border-emerald-300/70 bg-emerald-100 text-emerald-700'
-  if (status === 'Failed') return 'border-rose-300/70 bg-rose-100 text-rose-700'
-  if (status === 'Booked') return 'border-sky-300/70 bg-sky-100 text-sky-700'
-  return 'border-slate-300/70 bg-slate-100 text-slate-700'
-}
-
 const accountStatusBadgeClass = (status: AdminUserManagementItem['accountStatus']) => {
   if (status === 'Disabled') return 'border-rose-300/70 bg-rose-100 text-rose-700'
   return 'border-emerald-300/70 bg-emerald-100 text-emerald-700'
@@ -97,13 +79,11 @@ const AdminUserManagementSection = ({
   const tabLabelMap: Record<AdminUserManagementTab, string> = {
     users: 'Users',
     doctors: 'Doctors',
-    nurses: 'Nurses',
   }
 
   const tabDescriptionMap: Record<AdminUserManagementTab, string> = {
     users: 'Patient account profiles derived from reservation activity.',
     doctors: 'Doctor roster derived from appointment assignments.',
-    nurses: 'Nurse roster derived from appointment assignments.',
   }
 
   const activeItems = itemsByTab[activeTab]
@@ -122,7 +102,7 @@ const AdminUserManagementSection = ({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          {(['users', 'doctors', 'nurses'] as const).map((tab) => {
+          {(['users', 'doctors'] as const).map((tab) => {
             const isActive = tab === activeTab
             return (
               <button
@@ -175,12 +155,6 @@ const AdminUserManagementSection = ({
                     Bookings
                   </th>
                   <th className="px-3 py-2 text-left text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-                    Latest activity
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-                    Latest status
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
                     Account
                   </th>
                   <th className="px-3 py-2 text-left text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
@@ -206,12 +180,6 @@ const AdminUserManagementSection = ({
                           {item.contactEmail || 'No contact email'}
                         </td>
                         <td className="px-3 py-3 font-semibold text-[color:var(--agent-ink)]">{item.bookingCount}</td>
-                        <td className="px-3 py-3 text-[color:var(--agent-muted)]">{formatDateTime(item.latestActivity)}</td>
-                        <td className="px-3 py-3">
-                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusBadgeClass(item.latestStatus)}`}>
-                            {item.latestStatus}
-                          </span>
-                        </td>
                         <td className="px-3 py-3">
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${accountStatusBadgeClass(item.accountStatus)}`}>
                             {item.accountStatus}
@@ -244,7 +212,7 @@ const AdminUserManagementSection = ({
 
                       {isEditing ? (
                         <tr>
-                          <td colSpan={7} className="px-3 pb-3">
+                          <td colSpan={5} className="px-3 pb-3">
                             <div className="reference-card-soft p-3">
                               <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">Edit record</p>
                               <div className="mt-3 grid gap-3 md:grid-cols-3">

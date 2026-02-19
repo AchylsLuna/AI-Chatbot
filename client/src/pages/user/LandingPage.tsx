@@ -175,7 +175,14 @@ const LandingPage = ({
               onClick={() => onNavigate?.('login')}
               className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
             >
-              Login
+              User Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate?.('admin_login')}
+              className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
+            >
+              Doctor Sign in
             </button>
             <button
               type="button"
@@ -202,20 +209,39 @@ const LandingPage = ({
               streamlined for speed, clarity, and daily use.
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onNavigate?.(isAuthenticated ? 'appointments' : 'login')}
-                className="rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
-              >
-                Open appointments
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate?.(isAuthenticated ? 'appointments' : 'login')}
-                className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
-              >
-                Open appointments
-              </button>
+              {isAuthenticated ? (
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('appointments')}
+                  className="rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
+                >
+                  Open appointments
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate?.('login')}
+                    className="rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
+                  >
+                    User Sign in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate?.('admin_login')}
+                    className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
+                  >
+                    Doctor Sign in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate?.('signup')}
+                    className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
+                  >
+                    Sign up
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </section>

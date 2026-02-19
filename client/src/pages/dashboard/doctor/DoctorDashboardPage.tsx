@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import DashboardTopBar from '../../../components/layout/DashboardTopBar'
-import { buildDashboardLogItems, buildDashboardNotificationItems } from '../shared/dashboardEvents'
-import type { DashboardNotificationItem } from '../shared/types'
+import { buildDashboardLogItems } from '../shared/dashboardEvents'
 import DoctorAppointmentSection from './sections/DoctorAppointmentSection'
 import DoctorDashboardOverviewSection from './sections/DoctorDashboardOverviewSection'
-import DoctorNotificationsSection from './sections/DoctorNotificationsSection'
-import DoctorProfileSettingsSection from './sections/DoctorProfileSettingsSection'
 import DoctorReportsLogSection from './sections/DoctorReportsLogSection'
 import DoctorSettingsSection from './sections/DoctorSettingsSection'
 import WorkspaceCanvas from '../../../components/layout/WorkspaceCanvas'
@@ -38,9 +35,7 @@ type DoctorSidebarSection =
   | 'dashboard'
   | 'appointments'
   | 'reports_log'
-  | 'notifications'
   | 'settings'
-  | 'profile_settings'
 
 type ReservationFilterStatus = 'all' | Reservation['status']
 
@@ -58,9 +53,7 @@ const sidebarItems: SidebarItem[] = [
 ]
 
 const utilityItems: SidebarItem[] = [
-  { key: 'notifications', label: 'Notifications', icon: 'alert' },
   { key: 'settings', label: 'Settings', icon: 'settings' },
-  { key: 'profile_settings', label: 'Profile Settings', icon: 'user' },
 ]
 
 const sidebarCollapsedKey = 'pulse-ledger-doctor-sidebar-collapsed'
@@ -128,9 +121,7 @@ const isDoctorSidebarSection = (value: string): value is DoctorSidebarSection =>
     value === 'dashboard' ||
     value === 'appointments' ||
     value === 'reports_log' ||
-    value === 'notifications' ||
-    value === 'settings' ||
-    value === 'profile_settings'
+    value === 'settings'
   )
 }
 
@@ -324,17 +315,6 @@ const DoctorDashboardPage = ({
     })
   }, [reportLogs, searchQuery])
 
-  const notifications = useMemo(() => buildDashboardNotificationItems(reservations), [reservations])
-
-  const filteredNotifications = useMemo<DashboardNotificationItem[]>(() => {
-    const query = searchQuery.trim().toLowerCase()
-    if (!query) return notifications
-
-    return notifications.filter((item) => {
-      return item.title.toLowerCase().includes(query) || item.detail.toLowerCase().includes(query)
-    })
-  }, [notifications, searchQuery])
-
   const beginEdit = (reservation: Reservation) => {
     setEditingId(reservation.id)
     setDraftStatus(reservation.status)
@@ -376,18 +356,21 @@ const DoctorDashboardPage = ({
     dashboard: 'Search by patient, id, department, or summary',
     appointments: 'Search appointments',
     reports_log: 'Search report logs',
-    notifications: 'Search notification feed',
     settings: 'Search settings',
-    profile_settings: 'Search profile settings',
+  }
+
+  const searchLabelMap: Record<DoctorSidebarSection, string> = {
+    dashboard: 'Search dashboard',
+    appointments: 'Search appointments',
+    reports_log: "Search report's log",
+    settings: 'Search settings',
   }
 
   const sectionTitleMap: Record<DoctorSidebarSection, string> = {
     dashboard: 'Dashboard',
     appointments: 'Appointment',
     reports_log: "Report's Log",
-    notifications: 'Notifications',
     settings: 'Settings',
-    profile_settings: 'Profile Settings',
   }
 
   return (
@@ -430,7 +413,7 @@ const DoctorDashboardPage = ({
             footerProfile={{
               name: authUser?.username ?? 'Staff',
               subtitle: 'Doctor workspace',
-              onClick: () => setSection('profile_settings'),
+              onClick: () => setSection('settings'),
             }}
           />
 
@@ -440,15 +423,17 @@ const DoctorDashboardPage = ({
                 title={sectionTitleMap[activeSection]}
                 searchValue={searchQuery}
                 searchPlaceholder={searchPlaceholderMap[activeSection]}
+                searchLabel={searchLabelMap[activeSection]}
                 onSearchChange={setSearchQuery}
               />
-            ) : activeSection !== 'settings' && activeSection !== 'profile_settings' ? (
+            ) : activeSection !== 'settings' ? (
               <>
                 <h1 className="reference-page-title">{sectionTitleMap[activeSection]}</h1>
                 <DashboardTopBar
-                  title=""
+                  title={undefined}
                   searchValue={searchQuery}
                   searchPlaceholder={searchPlaceholderMap[activeSection]}
+                  searchLabel={searchLabelMap[activeSection]}
                   onSearchChange={setSearchQuery}
                 />
               </>
@@ -504,13 +489,6 @@ const DoctorDashboardPage = ({
               <DoctorReportsLogSection items={filteredReportLogs} dataMaskingEnabled={dataMaskingEnabled} />
             ) : null}
 
-            {activeSection === 'notifications' ? (
-              <DoctorNotificationsSection
-                items={filteredNotifications}
-                dataMaskingEnabled={dataMaskingEnabled}
-              />
-            ) : null}
-
             {activeSection === 'settings' ? (
               <DoctorSettingsSection
                 authUser={authUser}
@@ -557,10 +535,6 @@ const DoctorDashboardPage = ({
                 passwordError={passwordError}
                 passwordMessage={passwordMessage}
               />
-            ) : null}
-
-            {activeSection === 'profile_settings' ? (
-              <DoctorProfileSettingsSection authUser={authUser} sessionStatus={sessionStatus} />
             ) : null}
           </section>
         </div>

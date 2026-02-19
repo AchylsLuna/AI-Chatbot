@@ -31,8 +31,6 @@ type AppointmentsPageProps = {
 const USER_SIDEBAR_SECTIONS = [
   'dashboard',
   'appointments',
-  'notifications',
-  'alerts',
   'settings',
 ] as const
 
@@ -53,11 +51,9 @@ type DoctorMajorOption = {
 const sidebarItems: SidebarItem[] = [
   { key: 'dashboard', label: 'Overview', icon: 'home' },
   { key: 'appointments', label: 'Booking Appointment', icon: 'calendar' },
-  { key: 'notifications', label: 'History', icon: 'report' },
 ]
 
 const utilityItems: SidebarItem[] = [
-  { key: 'alerts', label: 'Notifications', icon: 'alert' },
   { key: 'settings', label: 'Settings', icon: 'settings' },
 ]
 
@@ -151,8 +147,6 @@ const AppointmentsPage = ({
   const [activeSection, setActiveSection] = useState<UserSidebarSection>('dashboard')
   const [searchQuery, setSearchQuery] = useState('')
   const [appointmentsPage, setAppointmentsPage] = useState(1)
-  const [historyPage, setHistoryPage] = useState(1)
-  const [alertsPage, setAlertsPage] = useState(1)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem(sidebarCollapsedKey) === 'true'
@@ -218,12 +212,6 @@ const AppointmentsPage = ({
     if (next === 'appointments') {
       setAppointmentsPage(1)
     }
-    if (next === 'notifications') {
-      setHistoryPage(1)
-    }
-    if (next === 'alerts') {
-      setAlertsPage(1)
-    }
     setActiveSection(next)
   }
 
@@ -254,26 +242,10 @@ const AppointmentsPage = ({
     () => Math.max(1, Math.ceil(visibleReservations.length / PAGINATION_PAGE_SIZE)),
     [visibleReservations.length]
   )
-  const historyTotalPages = useMemo(
-    () => Math.max(1, Math.ceil(sortedReservations.length / PAGINATION_PAGE_SIZE)),
-    [sortedReservations.length]
-  )
-  const alertsTotalPages = useMemo(
-    () => Math.max(1, Math.ceil(sortedReservations.length / PAGINATION_PAGE_SIZE)),
-    [sortedReservations.length]
-  )
 
   useEffect(() => {
     setAppointmentsPage((previous) => Math.min(previous, appointmentsTotalPages))
   }, [appointmentsTotalPages])
-
-  useEffect(() => {
-    setHistoryPage((previous) => Math.min(previous, historyTotalPages))
-  }, [historyTotalPages])
-
-  useEffect(() => {
-    setAlertsPage((previous) => Math.min(previous, alertsTotalPages))
-  }, [alertsTotalPages])
 
   const metrics = useMemo(() => {
     const booked = visibleReservations.filter((item) => item.status === 'Booked').length
@@ -723,118 +695,21 @@ const AppointmentsPage = ({
     </section>
   )
 
-  const renderHistoryTimeline = () => {
-    const pagedHistory = getPageSlice(sortedReservations, historyPage)
-
-    return (
-      <section className="space-y-3">
-        {sortedReservations.length === 0 ? (
-          <article className="reference-card p-5">
-            <h2 className="reference-section-title">No history yet</h2>
-            <p className="reference-widget-subtle mt-2">
-              Your booking timeline will appear here after your first appointment is created.
-            </p>
-          </article>
-        ) : (
-          pagedHistory.map((item) => (
-            <article key={item.id} className="reference-card p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.13em] text-[color:var(--agent-muted-soft)]">
-                    {dataMaskingEnabled ? maskIdentifier(item.id) : item.id}
-                  </p>
-                  <h2 className="mt-1 text-lg font-semibold text-[color:var(--agent-ink)]">
-                    {dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName}
-                  </h2>
-                  <p className="mt-1 text-sm text-[color:var(--agent-muted)]">
-                    {item.department} · {item.requestedTime}
-                  </p>
-                  <p className="mt-1 text-xs text-[color:var(--agent-muted-soft)]">
-                    Doctor: {item.doctorName ?? 'Unassigned'} · Major: {item.department}
-                  </p>
-                </div>
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(item.status)}`}>
-                  {item.status}
-                </span>
-              </div>
-              <p className="mt-3 text-sm text-[color:var(--agent-muted)]">{item.summary}</p>
-              <p className="mt-2 text-xs text-[color:var(--agent-muted-soft)]">
-                Logged {new Date(item.createdAt).toLocaleString()}
-              </p>
-            </article>
-          ))
-        )}
-
-        <PaginationControls
-          currentPage={historyPage}
-          totalItems={sortedReservations.length}
-          pageSize={PAGINATION_PAGE_SIZE}
-          maxPageButtons={MAX_PAGE_BUTTONS}
-          onPageChange={setHistoryPage}
-        />
-      </section>
-    )
-  }
-
-  const renderNotificationsPanel = () => {
-    const pagedAlerts = getPageSlice(sortedReservations, alertsPage)
-
-    return (
-      <section className="space-y-3">
-        <article className="reference-card p-5">
-          <h2 className="reference-section-title">Recent alerts</h2>
-          <p className="reference-widget-subtle mt-2">
-            Notification channels are managed in Account settings.
-          </p>
-          {sortedReservations.length === 0 ? (
-            <p className="reference-widget-subtle mt-3">No alerts yet. New booking updates will appear here.</p>
-          ) : (
-            <div className="mt-3 space-y-3">
-              {pagedAlerts.map((item) => (
-                <div key={`alert-${item.id}`} className="reference-card-soft p-3">
-                  <p className="text-xs uppercase tracking-[0.13em] text-[color:var(--agent-muted-soft)]">
-                    {dataMaskingEnabled ? maskIdentifier(item.id) : item.id}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-[color:var(--agent-ink)]">
-                    {dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName} is now {item.status}.
-                  </p>
-                  <p className="mt-1 text-xs text-[color:var(--agent-muted)]">
-                    {item.department} · {item.requestedTime}
-                  </p>
-                  <p className="mt-1 text-xs text-[color:var(--agent-muted-soft)]">
-                    Logged {new Date(item.createdAt).toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <PaginationControls
-          currentPage={alertsPage}
-          totalItems={sortedReservations.length}
-          pageSize={PAGINATION_PAGE_SIZE}
-          maxPageButtons={MAX_PAGE_BUTTONS}
-          onPageChange={setAlertsPage}
-        />
-      </section>
-    )
-  }
-
   const profileName = authUser?.username ?? 'User'
   const sectionTitleMap: Record<UserSidebarSection, string> = {
     dashboard: 'Overview',
     appointments: 'Booking Appointment',
-    alerts: 'Notifications',
     settings: 'Account settings',
-    notifications: 'History',
   }
   const sectionSearchPlaceholderMap: Record<UserSidebarSection, string> = {
     dashboard: 'Search by appointment id, patient, or department',
     appointments: 'Search appointments',
-    alerts: 'Search notifications',
     settings: 'Search settings',
-    notifications: 'Search notifications',
+  }
+  const sectionSearchLabelMap: Record<UserSidebarSection, string> = {
+    dashboard: 'Search overview',
+    appointments: 'Search appointments',
+    settings: 'Search settings',
   }
 
   return (
@@ -885,6 +760,7 @@ const AppointmentsPage = ({
                 title={sectionTitleMap[activeSection]}
                 searchValue={searchQuery}
                 searchPlaceholder={sectionSearchPlaceholderMap[activeSection]}
+                searchLabel={sectionSearchLabelMap[activeSection]}
                 onSearchChange={setSearchQuery}
               />
             ) : activeSection !== 'settings' ? (
@@ -900,8 +776,8 @@ const AppointmentsPage = ({
                   </p>
                   <ul className="mt-3 space-y-1 text-sm text-[color:var(--agent-muted)]">
                     <li>Guided booking with patient details, major selection, and doctor assignment.</li>
-                    <li>History timeline tracking of booking outcomes and care status updates.</li>
-                    <li>Notification channels and recent alert feed for booking events.</li>
+                    <li>Booking outcome tracking across booked, recorded, and failed statuses.</li>
+                    <li>Notification channels configurable in account settings.</li>
                   </ul>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -954,8 +830,6 @@ const AppointmentsPage = ({
 
             {activeSection === 'appointments' ? renderAppointmentsList() : null}
             {activeSection === 'settings' ? renderSettings() : null}
-            {activeSection === 'alerts' ? renderNotificationsPanel() : null}
-            {activeSection === 'notifications' ? renderHistoryTimeline() : null}
           </section>
         </div>
       </div>
