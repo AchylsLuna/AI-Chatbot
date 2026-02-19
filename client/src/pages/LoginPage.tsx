@@ -201,6 +201,20 @@ const LoginPage = ({
             {isAuthLoading ? 'Signing in...' : 'Sign in'}
           </button>
 
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                const apiBase = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api').replace(/\/$/, '')
+                window.location.href = `${apiBase}/auth/google`
+              }}
+              disabled={isAuthLoading}
+              className="agent-button-ghost w-full disabled:cursor-not-allowed"
+            >
+              Continue with Google
+            </button>
+          </div>
+
           {onProviderLogin ? (
             <button
               type="button"

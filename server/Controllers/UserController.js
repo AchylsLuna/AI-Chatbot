@@ -117,7 +117,7 @@ export async function logout(req, res) {
                 await AuditLog.create({
                     userId: req.user.id,
                     action: 'LOGOUT',
-                    details: `User logged out`,
+                    details: `User ${req.user.email} logged out`,
                     ipAddress: req.ip,
                     userAgent: req.headers['user-agent']
                 });
@@ -297,21 +297,23 @@ export async function googleCallback(req, res) {
             action: "LOGIN_GOOGLE",
             details: `User ${user.email} logged in via Google OAuth.`,
             ipAddress: req.ip,
-            userAgent: req.headers['user-agent']
+            userAgent: req.headers['user-agent'],
+            
         });
 
         // 4. Set Cookie
-        res.cookie("token", token, {
+        // For cross-site OAuth flows the cookie must be SameSite=None and Secure in production
+        const isProd = process.env.NODE_ENV === 'production'
+        res.cookie('token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
+            secure: isProd,
+            sameSite: isProd ? 'none' : 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
         // 5. Redirect to Frontend
-        // Use an env var for the frontend URL so it works in production too
-        const clientUrl = process.env.CLIENT_ORIGIN || "http://localhost:5173";
-        return res.redirect(`${clientUrl}/appointments`);
+        const frontendUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
+        return res.redirect(`${frontendUrl.replace(/\/$/, '')}/appointments`);
 
     } catch (error) {
         console.error("Google Auth Error:", error);

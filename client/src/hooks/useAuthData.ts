@@ -258,6 +258,38 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     if (authUser) return
     if (authToken) return
     if (auth0Enabled && isAuthLoading) return
+
+    // If using local auth and we don't have a client-side token, attempt a one-time
+    // session introspection via cookie (useful after OAuth redirects which set a cookie).
+    if (authProvider === 'local') {
+      let isMounted = true
+      ;(async () => {
+        try {
+          setIsAuthLoading(true)
+          const user = await api.getSession()
+          if (!isMounted) return
+          if (user) {
+            setAuthUser(user)
+            setApiReady(true)
+            return
+          }
+        } catch (err) {
+          // ignore - will redirect to login below
+        } finally {
+          if (isMounted) setIsAuthLoading(false)
+        }
+        if (!isMounted) return
+        if (currentPage !== 'login' && currentPage !== 'admin_login' && currentPage !== 'otp') {
+          setPostLoginPage(currentPage)
+          const needsAdminLogin = currentPage === 'admin' || currentPage === 'doctor_dashboard'
+          navigateToPage(needsAdminLogin ? 'admin_login' : 'login', { replace: true })
+        }
+      })()
+      return () => {
+        isMounted = false
+      }
+    }
+
     if (currentPage !== 'login' && currentPage !== 'admin_login' && currentPage !== 'otp') {
       setPostLoginPage(currentPage)
       const needsAdminLogin = currentPage === 'admin' || currentPage === 'doctor_dashboard'

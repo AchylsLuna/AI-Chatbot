@@ -62,12 +62,14 @@ const withAuth = (init?: RequestInit): RequestInit => {
   if (authToken) {
     headers.set('Authorization', `Bearer ${authToken}`)
   }
-  return { ...init, headers }
+  return { ...init, headers, credentials: 'include' as RequestCredentials }
 }
 
 const request = async (url: string, init?: RequestInit) => {
   try {
-    return await fetch(url, init)
+    // Ensure cross-origin cookies are included when the API sets auth cookies
+    const options: RequestInit = { credentials: 'include' as RequestCredentials, ...init }
+    return await fetch(url, options)
   } catch {
     throw new Error(NETWORK_ERROR_MESSAGE)
   }

@@ -105,12 +105,17 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             onSubmit={async (event) => {
               event.preventDefault()
               const cleanedFullName = fullName.trim()
-              const cleanedEmail = email.trim()
+              const cleanedEmail = email.trim().toLowerCase()
+              const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
               const cleanedPassword = password.trim()
               const cleanedConfirmPassword = confirmPassword.trim()
 
               if (!cleanedFullName || !cleanedEmail || !cleanedPassword || !cleanedConfirmPassword) {
                 setSubmitError('Please complete all required fields.')
+                return
+              }
+              if (!EMAIL_PATTERN.test(cleanedEmail)) {
+                setSubmitError('Please use a valid email address.')
                 return
               }
               if (!meetsPasswordPolicy(cleanedPassword)) {
