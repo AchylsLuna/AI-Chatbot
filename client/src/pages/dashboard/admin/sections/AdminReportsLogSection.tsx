@@ -1,4 +1,5 @@
 import {
+  workspaceFieldClass,
   workspaceGhostButtonClass,
   workspaceMutedTextClass,
   workspacePanelClass,
@@ -6,12 +7,25 @@ import {
 } from '../../../../styles/workspaceUi'
 import { maskIdentifier, maskPersonName } from '../../../../utils/privacy'
 import { formatDashboardDateTime } from '../../shared/dashboardEvents'
+import {
+  type ReportLogActionFilter,
+  type ReportLogSeverityFilter,
+  type ReportLogSourceFilter,
+} from '../../shared/reportLogFilters'
 import { resolveReportLogMetadata } from '../../shared/reportLogMetadata'
 import type { DashboardLogItem } from '../../shared/types'
 
 type AdminReportsLogSectionProps = {
   items: DashboardLogItem[]
   dataMaskingEnabled: boolean
+  sourceFilter: ReportLogSourceFilter
+  severityFilter: ReportLogSeverityFilter
+  actionFilter: ReportLogActionFilter
+  actionOptions: string[]
+  onSourceFilterChange: (value: ReportLogSourceFilter) => void
+  onSeverityFilterChange: (value: ReportLogSeverityFilter) => void
+  onActionFilterChange: (value: ReportLogActionFilter) => void
+  onResetFilters: () => void
 }
 
 const severityClass = (severity: DashboardLogItem['severity']) => {
@@ -33,7 +47,21 @@ const downloadTextFile = (filename: string, content: string, mimeType: string) =
   window.URL.revokeObjectURL(objectUrl)
 }
 
-const AdminReportsLogSection = ({ items, dataMaskingEnabled }: AdminReportsLogSectionProps) => {
+const sourceOptions: DashboardLogItem['source'][] = ['Auth', 'Reservation', 'System']
+const severityOptions: DashboardLogItem['severity'][] = ['Info', 'Warning', 'Critical']
+
+const AdminReportsLogSection = ({
+  items,
+  dataMaskingEnabled,
+  sourceFilter,
+  severityFilter,
+  actionFilter,
+  actionOptions,
+  onSourceFilterChange,
+  onSeverityFilterChange,
+  onActionFilterChange,
+  onResetFilters,
+}: AdminReportsLogSectionProps) => {
   const exportRows = items.map((item) => {
     const metadata = resolveReportLogMetadata(item, dataMaskingEnabled)
 
@@ -45,6 +73,7 @@ const AdminReportsLogSection = ({ items, dataMaskingEnabled }: AdminReportsLogSe
       detail: dataMaskingEnabled ? maskIdentifier(item.detail) : item.detail,
       severity: item.severity,
       createdAt: formatDashboardDateTime(item.createdAt),
+      userId: metadata.userId,
       action: metadata.action,
       details: metadata.details,
       ipAddress: metadata.ipAddress,
@@ -79,6 +108,54 @@ const AdminReportsLogSection = ({ items, dataMaskingEnabled }: AdminReportsLogSe
               Download Backup
             </button>
           </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center">
+          <select
+            value={sourceFilter}
+            onChange={(event) => onSourceFilterChange(event.target.value as ReportLogSourceFilter)}
+            className={workspaceFieldClass}
+            aria-label="Filter report logs by source"
+          >
+            <option value="all">All sources</option>
+            {sourceOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={severityFilter}
+            onChange={(event) => onSeverityFilterChange(event.target.value as ReportLogSeverityFilter)}
+            className={workspaceFieldClass}
+            aria-label="Filter report logs by severity"
+          >
+            <option value="all">All severities</option>
+            {severityOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={actionFilter}
+            onChange={(event) => onActionFilterChange(event.target.value as ReportLogActionFilter)}
+            className={workspaceFieldClass}
+            aria-label="Filter report logs by action"
+          >
+            <option value="all">All actions</option>
+            {actionOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+
+          <button type="button" className={workspaceGhostButtonClass} onClick={onResetFilters}>
+            Reset filters
+          </button>
         </div>
       </article>
 

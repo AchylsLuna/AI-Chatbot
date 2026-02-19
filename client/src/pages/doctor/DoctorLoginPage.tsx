@@ -2,11 +2,10 @@ import { useState } from 'react'
 import AuthSplitLayout from '../../components/auth/AuthSplitLayout'
 import type { AppPage } from '../../types/navigation'
 import type { AuthProvider, AuthSession } from '../../types'
-import { getDefaultPageForRole } from '../../utils/roles'
 
 const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
 
-type LoginPageProps = {
+type DoctorLoginPageProps = {
   authUser: AuthSession['user'] | null
   authError: string | null
   isAuthLoading: boolean
@@ -19,7 +18,7 @@ type LoginPageProps = {
   onGoBack?: () => void
 }
 
-const LoginPage = ({
+const DoctorLoginPage = ({
   authUser,
   authError,
   isAuthLoading,
@@ -30,18 +29,11 @@ const LoginPage = ({
   onLogout,
   onNavigate,
   onGoBack,
-}: LoginPageProps) => {
+}: DoctorLoginPageProps) => {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const homePage: AppPage = getDefaultPageForRole(authUser?.role)
-  const homeLabel =
-    homePage === 'appointments'
-      ? 'Go to appointments'
-      : homePage === 'doctor_dashboard'
-        ? "Go to doctor's dashboard"
-        : 'Go to dashboard'
 
   return (
     <AuthSplitLayout>
@@ -66,7 +58,7 @@ const LoginPage = ({
         </button>
 
         <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Welcome back</h2>
-        <p className="mt-2 text-sm text-[color:var(--agent-muted)]">Sign in to continue.</p>
+        <p className="mt-2 text-sm text-[color:var(--agent-muted)]">Doctor sign in.</p>
       </div>
 
       {authUser ? (
@@ -78,8 +70,8 @@ const LoginPage = ({
             <button onClick={onLogout} className="agent-button-ghost">
               Sign out
             </button>
-            <button onClick={() => onNavigate?.(homePage)} className="agent-button">
-              {homeLabel}
+            <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button">
+              Open Doctor Dashboard
             </button>
           </div>
         </div>
@@ -100,14 +92,14 @@ const LoginPage = ({
             <div className="grid grid-cols-2 gap-1">
               <button
                 type="button"
-                className="rounded-xl bg-[color:var(--agent-accent)] px-3 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)]"
+                onClick={() => onNavigate?.('login')}
+                className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
               >
                 User Sign in
               </button>
               <button
                 type="button"
-                onClick={() => onNavigate?.('doctor_login')}
-                className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
+                className="rounded-xl bg-[color:var(--agent-accent)] px-3 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)]"
               >
                 Doctor Sign in
               </button>
@@ -169,7 +161,7 @@ const LoginPage = ({
             />
             <button
               type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
+              onClick={() => setShowPassword((previous) => !previous)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--agent-muted-soft)] transition hover:text-[color:var(--agent-ink)]"
             >
@@ -205,16 +197,6 @@ const LoginPage = ({
             </button>
           </div>
 
-          <div className="flex items-center justify-end">
-            <button
-              type="button"
-              onClick={() => onNavigate?.('forgot_password')}
-              className="text-xs font-semibold text-[color:var(--agent-accent)] transition hover:text-[color:var(--agent-accent-strong)]"
-            >
-              Forgot password?
-            </button>
-          </div>
-
           <button type="submit" disabled={isAuthLoading} className="agent-button w-full disabled:cursor-not-allowed">
             {isAuthLoading ? 'Signing in...' : 'Sign in'}
           </button>
@@ -239,21 +221,10 @@ const LoginPage = ({
           {(formError || authError) && (
             <p className="text-xs font-semibold text-rose-300">{formError ?? authError}</p>
           )}
-
-          <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-[color:var(--agent-muted)]">
-            <span>Don't have an account?</span>
-            <button
-              type="button"
-              onClick={() => onNavigate?.('signup')}
-              className="font-semibold text-[color:var(--agent-accent)] transition hover:text-[color:var(--agent-accent-strong)]"
-            >
-              Create one
-            </button>
-          </div>
         </form>
       )}
     </AuthSplitLayout>
   )
 }
 
-export default LoginPage
+export default DoctorLoginPage

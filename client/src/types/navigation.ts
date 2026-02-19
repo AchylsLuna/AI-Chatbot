@@ -4,6 +4,7 @@ export type AppPage =
   | 'doctor_dashboard'
   | 'admin'
   | 'admin_login'
+  | 'doctor_login'
   | 'login'
   | 'otp'
   | 'forgot_password'

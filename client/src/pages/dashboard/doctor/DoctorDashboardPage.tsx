@@ -17,6 +17,13 @@ import {
   maskIdentifier,
   maskPersonName,
 } from '../../../utils/privacy'
+import {
+  filterReportLogItems,
+  getReportLogActionOptions,
+  type ReportLogActionFilter,
+  type ReportLogSeverityFilter,
+  type ReportLogSourceFilter,
+} from '../shared/reportLogFilters'
 
 type DoctorDashboardPageProps = {
   reservations: Reservation[]
@@ -109,6 +116,7 @@ const buildWeeklySeries = (items: Reservation[]) => {
 
 const PAGINATION_PAGE_SIZE = 10
 const MAX_PAGE_BUTTONS = 10
+const SIDEBAR_COLLAPSE_BREAKPOINT = 1200
 
 const getPageSlice = <T,>(items: T[], currentPage: number, pageSize = PAGINATION_PAGE_SIZE) => {
   const safePage = Math.max(1, Math.floor(currentPage) || 1)
@@ -140,9 +148,16 @@ const DoctorDashboardPage = ({
   const [searchQuery, setSearchQuery] = useState('')
   const [appointmentsPage, setAppointmentsPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<ReservationFilterStatus>('all')
+  const [reportSourceFilter, setReportSourceFilter] = useState<ReportLogSourceFilter>('all')
+  const [reportSeverityFilter, setReportSeverityFilter] = useState<ReportLogSeverityFilter>('all')
+  const [reportActionFilter, setReportActionFilter] = useState<ReportLogActionFilter>('all')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem(sidebarCollapsedKey) === 'true'
+  })
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.innerWidth < SIDEBAR_COLLAPSE_BREAKPOINT
   })
 
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => {
@@ -172,8 +187,23 @@ const DoctorDashboardPage = ({
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+
+    const handleResize = () => {
+      setIsNarrowViewport(window.innerWidth < SIDEBAR_COLLAPSE_BREAKPOINT)
+    }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isNarrowViewport) return
     window.localStorage.setItem(sidebarCollapsedKey, isSidebarCollapsed ? 'true' : 'false')
-  }, [isSidebarCollapsed])
+  }, [isNarrowViewport, isSidebarCollapsed])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -181,9 +211,7 @@ const DoctorDashboardPage = ({
   }, [notificationPrefs])
 
   const setSection = (next: DoctorSidebarSection) => {
-    if (next !== 'dashboard') {
-      setSearchQuery('')
-    }
+    setSearchQuery('')
     if (next === 'appointments') {
       setAppointmentsPage(1)
     }
@@ -301,19 +329,27 @@ const DoctorDashboardPage = ({
     [authUser, reservations, sessionStatus]
   )
 
-  const filteredReportLogs = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
-    if (!query) return reportLogs
+  const reportActionOptions = useMemo(() => getReportLogActionOptions(reportLogs), [reportLogs])
+  const effectiveReportActionFilter: ReportLogActionFilter =
+    reportActionFilter === 'all' || reportActionOptions.includes(reportActionFilter)
+      ? reportActionFilter
+      : 'all'
 
-    return reportLogs.filter((item) => {
-      return (
-        item.actor.toLowerCase().includes(query) ||
-        item.source.toLowerCase().includes(query) ||
-        item.title.toLowerCase().includes(query) ||
-        item.detail.toLowerCase().includes(query)
-      )
+  const filteredReportLogs = useMemo(() => {
+    return filterReportLogItems({
+      items: reportLogs,
+      searchQuery,
+      sourceFilter: reportSourceFilter,
+      severityFilter: reportSeverityFilter,
+      actionFilter: effectiveReportActionFilter,
     })
-  }, [reportLogs, searchQuery])
+  }, [effectiveReportActionFilter, reportLogs, reportSeverityFilter, reportSourceFilter, searchQuery])
+
+  const resetReportFilters = () => {
+    setReportSourceFilter('all')
+    setReportSeverityFilter('all')
+    setReportActionFilter('all')
+  }
 
   const beginEdit = (reservation: Reservation) => {
     setEditingId(reservation.id)
@@ -372,13 +408,14 @@ const DoctorDashboardPage = ({
     reports_log: "Report's Log",
     settings: 'Settings',
   }
+  const effectiveSidebarCollapsed = isNarrowViewport ? true : isSidebarCollapsed
 
   return (
     <WorkspaceCanvas>
       <div className="w-full overflow-x-auto">
         <div
           className={`reference-shell h-screen min-w-[1080px] ${
-            isSidebarCollapsed ? 'reference-shell--sidebar-collapsed' : ''
+            effectiveSidebarCollapsed ? 'reference-shell--sidebar-collapsed' : ''
           }`}
         >
           <Sidebar
@@ -386,8 +423,10 @@ const DoctorDashboardPage = ({
             className="self-start"
             heightMode="viewport"
             stickyOffset="compact"
-            isCollapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed((previous) => !previous)}
+            isCollapsed={effectiveSidebarCollapsed}
+            onToggleCollapse={
+              isNarrowViewport ? undefined : () => setIsSidebarCollapsed((previous) => !previous)
+            }
             brandTitle="AI Health Care"
             brandSubtitle="Doctor workspace"
             sectionLabel="Main"
@@ -419,13 +458,7 @@ const DoctorDashboardPage = ({
 
           <section className="reference-main h-screen overflow-y-auto px-4 pb-10 pt-5 sm:px-6 lg:px-8">
             {activeSection === 'dashboard' ? (
-              <DashboardTopBar
-                title={sectionTitleMap[activeSection]}
-                searchValue={searchQuery}
-                searchPlaceholder={searchPlaceholderMap[activeSection]}
-                searchLabel={searchLabelMap[activeSection]}
-                onSearchChange={setSearchQuery}
-              />
+              <h1 className="reference-page-title">{sectionTitleMap[activeSection]}</h1>
             ) : activeSection !== 'settings' ? (
               <>
                 <h1 className="reference-page-title">{sectionTitleMap[activeSection]}</h1>
@@ -486,7 +519,18 @@ const DoctorDashboardPage = ({
             ) : null}
 
             {activeSection === 'reports_log' ? (
-              <DoctorReportsLogSection items={filteredReportLogs} dataMaskingEnabled={dataMaskingEnabled} />
+              <DoctorReportsLogSection
+                items={filteredReportLogs}
+                dataMaskingEnabled={dataMaskingEnabled}
+                sourceFilter={reportSourceFilter}
+                severityFilter={reportSeverityFilter}
+                actionFilter={effectiveReportActionFilter}
+                actionOptions={reportActionOptions}
+                onSourceFilterChange={setReportSourceFilter}
+                onSeverityFilterChange={setReportSeverityFilter}
+                onActionFilterChange={setReportActionFilter}
+                onResetFilters={resetReportFilters}
+              />
             ) : null}
 
             {activeSection === 'settings' ? (

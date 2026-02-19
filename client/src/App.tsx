@@ -1,13 +1,16 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import GlobalAssistantChat from './components/chat/GlobalAssistantChat'
 import AppErrorBoundary from './components/states/AppErrorBoundary'
+import { canAccessPage, getAuthRedirectPage } from './config/accessControl'
 import { doctorNurseAssignments, fallbackReservations } from './config/fallbackData'
+import { isLegacyDashboardPath } from './config/routing'
 import useAppRouting from './hooks/useAppRouting'
 import useScrollReveal from './hooks/useScrollReveal'
 import useAppTheme from './hooks/useAppTheme'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/dashboard/admin/AdminDashboardPage'
 import DoctorDashboardPage from './pages/dashboard/doctor/DoctorDashboardPage'
+import DoctorLoginPage from './pages/doctor/DoctorLoginPage'
 import AppointmentsPage from './pages/user/AppointmentsPage'
 import ForgotPasswordPage from './pages/user/ForgotPasswordPage'
 import LandingPage from './pages/user/LandingPage'
@@ -53,10 +56,34 @@ function App() {
 
   useScrollReveal(`${currentPage}-${authUser?.role ?? 'guest'}`)
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isLegacyDashboardPath(window.location.pathname)) return
+
+    const role = authUser?.role
+    const redirectPage: AppPage =
+      role === 'admin' || role === 'system_admin'
+        ? 'admin'
+        : role === 'nurse'
+          ? 'doctor_dashboard'
+          : 'login'
+
+    navigateToPage(redirectPage, { replace: true, scroll: false })
+  }, [authUser?.role, navigateToPage])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && isLegacyDashboardPath(window.location.pathname)) {
+      return
+    }
+
+    if (canAccessPage(currentPage, authUser?.role)) return
+
+    navigateToPage(getAuthRedirectPage(currentPage), { replace: true, scroll: false })
+  }, [authUser?.role, currentPage, navigateToPage])
+
   const inferStaffRole = (username: string): AuthSession['user']['role'] => {
     const normalized = username.toLowerCase()
     if (normalized.includes('system') || normalized.includes('super')) return 'system_admin'
-    if (normalized.includes('nurse')) return 'nurse'
     return 'admin'
   }
 
@@ -142,6 +169,16 @@ function App() {
 
   const handleAdminLogin = (username: string, _password: string, targetPage?: AppPage) => {
     const normalizedUsername = username.trim().toLowerCase() || 'demo.admin@aihealthcare.com'
+    const canUseAdminLogin =
+      normalizedUsername.includes('admin') ||
+      normalizedUsername.includes('system') ||
+      normalizedUsername.includes('super')
+
+    if (!canUseAdminLogin) {
+      setAuthError('Use an Admin or Super Admin account for Admin Log in.')
+      return
+    }
+
     const role = inferStaffRole(normalizedUsername)
     setAuthError(null)
     setAuthUser({
@@ -152,6 +189,20 @@ function App() {
       sessionId: `demo-admin-${Date.now()}`,
     })
     navigateToPage(targetPage ?? getDefaultPageForRole(role))
+  }
+
+  const handleDoctorLogin = (username: string, password: string) => {
+    void password
+    const normalizedUsername = username.trim().toLowerCase() || 'demo.doctor@aihealthcare.com'
+    setAuthError(null)
+    setAuthUser({
+      username: normalizedUsername,
+      role: 'nurse',
+      authMethod: 'demo',
+      mfa: true,
+      sessionId: `demo-doctor-${Date.now()}`,
+    })
+    navigateToPage('doctor_dashboard')
   }
 
   const handleVerifyOtp = (code: string) => {
@@ -268,7 +319,21 @@ function App() {
           onLogin={handleAdminLogin}
           onLogout={handleLogout}
           onNavigate={navigateToPage}
-          onGoBack={() => navigateBack('landing')}
+          onGoBack={() => navigateToPage('landing')}
+        />
+      )
+      break
+
+    case 'doctor_login':
+      pageContent = (
+        <DoctorLoginPage
+          authUser={authUser}
+          authError={authError}
+          isAuthLoading={false}
+          onLogin={handleDoctorLogin}
+          onLogout={handleLogout}
+          onNavigate={navigateToPage}
+          onGoBack={() => navigateToPage('landing')}
         />
       )
       break
@@ -282,7 +347,7 @@ function App() {
           onLogin={handleUserLogin}
           onLogout={handleLogout}
           onNavigate={navigateToPage}
-          onGoBack={() => navigateBack('landing')}
+          onGoBack={() => navigateToPage('landing')}
         />
       )
       break

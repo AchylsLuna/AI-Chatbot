@@ -6,6 +6,13 @@ import type { AuthSession, Reservation } from '../../../types'
 import type { AppPage } from '../../../types/navigation'
 import { maskIdentifier, maskPersonName } from '../../../utils/privacy'
 import { buildDashboardLogItems } from '../shared/dashboardEvents'
+import {
+  filterReportLogItems,
+  getReportLogActionOptions,
+  type ReportLogActionFilter,
+  type ReportLogSeverityFilter,
+  type ReportLogSourceFilter,
+} from '../shared/reportLogFilters'
 import AdminAppointmentsSection from './sections/AdminAppointmentsSection'
 import AdminDashboardOverviewSection from './sections/AdminDashboardOverviewSection'
 import AdminReportsLogSection from './sections/AdminReportsLogSection'
@@ -80,6 +87,7 @@ const defaultNotificationPrefs: NotificationPreferences = {
 
 const PAGINATION_PAGE_SIZE = 10
 const MAX_PAGE_BUTTONS = 10
+const SIDEBAR_COLLAPSE_BREAKPOINT = 1200
 
 const parseDate = (value: string) => {
   const timestamp = new Date(value).getTime()
@@ -381,10 +389,17 @@ const AdminDashboardPage = ({
   const [appointmentsPage, setAppointmentsPage] = useState(1)
   const [managementPage, setManagementPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<ReservationFilterStatus>('all')
+  const [reportSourceFilter, setReportSourceFilter] = useState<ReportLogSourceFilter>('all')
+  const [reportSeverityFilter, setReportSeverityFilter] = useState<ReportLogSeverityFilter>('all')
+  const [reportActionFilter, setReportActionFilter] = useState<ReportLogActionFilter>('all')
   const [managementTab, setManagementTab] = useState<AdminUserManagementTab>('users')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem(sidebarCollapsedKey) === 'true'
+  })
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.innerWidth < SIDEBAR_COLLAPSE_BREAKPOINT
   })
 
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => {
@@ -420,8 +435,23 @@ const AdminDashboardPage = ({
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+
+    const handleResize = () => {
+      setIsNarrowViewport(window.innerWidth < SIDEBAR_COLLAPSE_BREAKPOINT)
+    }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isNarrowViewport) return
     window.localStorage.setItem(sidebarCollapsedKey, isSidebarCollapsed ? 'true' : 'false')
-  }, [isSidebarCollapsed])
+  }, [isNarrowViewport, isSidebarCollapsed])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -439,9 +469,7 @@ const AdminDashboardPage = ({
   }, [doctorManagementMeta])
 
   const setSection = (next: AdminSidebarSection) => {
-    if (next !== 'dashboard') {
-      setSearchQuery('')
-    }
+    setSearchQuery('')
     if (next === 'appointments') {
       setAppointmentsPage(1)
     }
@@ -555,19 +583,27 @@ const AdminDashboardPage = ({
     [authUser, reservations, sessionStatus]
   )
 
-  const filteredReportLogs = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
-    if (!query) return reportLogs
+  const reportActionOptions = useMemo(() => getReportLogActionOptions(reportLogs), [reportLogs])
+  const effectiveReportActionFilter: ReportLogActionFilter =
+    reportActionFilter === 'all' || reportActionOptions.includes(reportActionFilter)
+      ? reportActionFilter
+      : 'all'
 
-    return reportLogs.filter((item) => {
-      return (
-        item.actor.toLowerCase().includes(query) ||
-        item.source.toLowerCase().includes(query) ||
-        item.title.toLowerCase().includes(query) ||
-        item.detail.toLowerCase().includes(query)
-      )
+  const filteredReportLogs = useMemo(() => {
+    return filterReportLogItems({
+      items: reportLogs,
+      searchQuery,
+      sourceFilter: reportSourceFilter,
+      severityFilter: reportSeverityFilter,
+      actionFilter: effectiveReportActionFilter,
     })
-  }, [reportLogs, searchQuery])
+  }, [effectiveReportActionFilter, reportLogs, reportSeverityFilter, reportSourceFilter, searchQuery])
+
+  const resetReportFilters = () => {
+    setReportSourceFilter('all')
+    setReportSeverityFilter('all')
+    setReportActionFilter('all')
+  }
 
   const itemsByTab = useMemo<Record<AdminUserManagementTab, AdminUserManagementItem[]>>(
     () => ({
@@ -704,13 +740,14 @@ const AdminDashboardPage = ({
     user_management: 'User Management',
     settings: 'Settings',
   }
+  const effectiveSidebarCollapsed = isNarrowViewport ? true : isSidebarCollapsed
 
   return (
     <WorkspaceCanvas>
       <div className="w-full overflow-x-auto">
         <div
           className={`reference-shell h-screen min-w-[1080px] ${
-            isSidebarCollapsed ? 'reference-shell--sidebar-collapsed' : ''
+            effectiveSidebarCollapsed ? 'reference-shell--sidebar-collapsed' : ''
           }`}
         >
           <Sidebar
@@ -718,8 +755,10 @@ const AdminDashboardPage = ({
             className="self-start"
             heightMode="viewport"
             stickyOffset="compact"
-            isCollapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed((previous) => !previous)}
+            isCollapsed={effectiveSidebarCollapsed}
+            onToggleCollapse={
+              isNarrowViewport ? undefined : () => setIsSidebarCollapsed((previous) => !previous)
+            }
             brandTitle="AI Health Care"
             brandSubtitle="Admin workspace"
             sectionLabel="Main"
@@ -751,13 +790,7 @@ const AdminDashboardPage = ({
 
           <section className="reference-main h-screen overflow-y-auto px-4 pb-10 pt-5 sm:px-6 lg:px-8">
             {activeSection === 'dashboard' ? (
-              <DashboardTopBar
-                title={sectionTitleMap[activeSection]}
-                searchValue={searchQuery}
-                searchPlaceholder={searchPlaceholderMap[activeSection]}
-                searchLabel={searchLabelMap[activeSection]}
-                onSearchChange={setSearchQuery}
-              />
+              <h1 className="reference-page-title">{sectionTitleMap[activeSection]}</h1>
             ) : activeSection !== 'settings' ? (
               <>
                 <h1 className="reference-page-title">{sectionTitleMap[activeSection]}</h1>
@@ -808,7 +841,18 @@ const AdminDashboardPage = ({
             ) : null}
 
             {activeSection === 'reports_log' ? (
-              <AdminReportsLogSection items={filteredReportLogs} dataMaskingEnabled={dataMaskingEnabled} />
+              <AdminReportsLogSection
+                items={filteredReportLogs}
+                dataMaskingEnabled={dataMaskingEnabled}
+                sourceFilter={reportSourceFilter}
+                severityFilter={reportSeverityFilter}
+                actionFilter={effectiveReportActionFilter}
+                actionOptions={reportActionOptions}
+                onSourceFilterChange={setReportSourceFilter}
+                onSeverityFilterChange={setReportSeverityFilter}
+                onActionFilterChange={setReportActionFilter}
+                onResetFilters={resetReportFilters}
+              />
             ) : null}
 
             {activeSection === 'user_management' ? (

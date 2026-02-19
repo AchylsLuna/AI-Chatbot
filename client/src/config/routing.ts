@@ -6,6 +6,7 @@ const PAGE_ROUTES: Record<AppPage, string> = {
   doctor_dashboard: '/doctor-dashboard',
   admin: '/admin',
   admin_login: '/admin-login',
+  doctor_login: '/doctor-login',
   login: '/login',
   otp: '/otp',
   forgot_password: '/forgot-password',
@@ -25,6 +26,7 @@ const LEGACY_ROUTE_ALIASES: Record<string, AppPage> = {
   '/dashboard/user-management': 'doctor_dashboard',
   '/doctor_dashboard': 'doctor_dashboard',
   '/admin_login': 'admin_login',
+  '/doctor_login': 'doctor_login',
   '/forgot_password': 'forgot_password',
   '/dashboard/clinical_reports': 'doctor_dashboard',
   '/dashboard/care_alerts': 'doctor_dashboard',
@@ -34,6 +36,7 @@ const LEGACY_ROUTE_ALIASES: Record<string, AppPage> = {
   '/dashboard/user_management': 'doctor_dashboard',
   '/doctor': 'doctor_dashboard',
   '/admin/login': 'admin_login',
+  '/doctor/login': 'doctor_login',
 }
 
 const getBasePrefix = () => {
@@ -69,9 +72,14 @@ export const normalizePath = (path: string) => {
   return cleaned
 }
 
-export const hasKnownRoute = (path: string) => {
+export const isLegacyDashboardPath = (path: string) => {
   const normalized = normalizePath(path)
-  if (normalized === '/dashboard' || normalized.startsWith('/dashboard/')) return true
+  return normalized === '/dashboard' || normalized.startsWith('/dashboard/')
+}
+
+export const hasKnownRoute = (path: string) => {
+  if (isLegacyDashboardPath(path)) return true
+  const normalized = normalizePath(path)
 
   const isCanonicalRoute = Object.values(PAGE_ROUTES).some(
     (route) => normalizePath(route) === normalized
@@ -84,7 +92,7 @@ export const hasKnownRoute = (path: string) => {
 
 export const resolvePageFromPath = (path: string): AppPage => {
   const normalized = normalizePath(path)
-  if (normalized === '/dashboard' || normalized.startsWith('/dashboard/')) {
+  if (isLegacyDashboardPath(path)) {
     return 'doctor_dashboard'
   }
 

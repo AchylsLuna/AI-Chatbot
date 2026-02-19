@@ -39,8 +39,8 @@ const quickSupportPrompts = [
 
 const roleLabel = (role?: UserRole | null) => {
   if (role === 'system_admin') return 'Super Admin'
-  if (role === 'admin') return 'Admin / Doctor'
-  if (role === 'nurse') return 'Nurse'
+  if (role === 'admin') return 'Admin'
+  if (role === 'nurse') return 'Doctor'
   if (role === 'user') return 'User'
   return 'Guest'
 }
@@ -172,13 +172,13 @@ const buildReply = (
     return `${guestHint}OTP is currently optional in this build. Standard sign-in uses email and password.`
   }
   if (normalized.includes('admin')) {
-    return `${guestHint}Admin Login supports Super Admin, Admin (Doctor), and Nurse accounts.`
+    return `${guestHint}Admin Log in supports Super Admin and Admin accounts.`
   }
   if (normalized.includes('doctor') || normalized.includes('dashboard')) {
-    return `${guestHint}Doctor's Dashboard is available for Nurse, Admin, and Super Admin after Admin Login.`
+    return `${guestHint}Doctor Dashboard is available after Doctor Sign in. Admin and Super Admin can also open it for oversight.`
   }
   if (normalized.includes('login') || normalized.includes('register') || normalized.includes('sign up')) {
-    return `${guestHint}Register first, then sign in to access protected pages.`
+    return `${guestHint}Choose User Sign in, Doctor Sign in, or Admin Log in based on your role. Register first for new user accounts.`
   }
 
   return `${guestHint}${roleHint}I can introduce the system, explain booking requirements/steps, and guide navigation across appointments, login, and dashboard modules.`

@@ -28,7 +28,7 @@ const featureCards = [
   },
   {
     title: 'Role-Safe Access',
-    detail: 'User, nurse, admin, and super admin routes are separated clearly.',
+    detail: 'User, doctor, admin, and super admin routes are separated clearly.',
   },
 ]
 
@@ -175,14 +175,7 @@ const LandingPage = ({
               onClick={() => onNavigate?.('login')}
               className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
             >
-              User Sign in
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate?.('admin_login')}
-              className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
-            >
-              Doctor Sign in
+              Log in
             </button>
             <button
               type="button"
@@ -208,8 +201,8 @@ const LandingPage = ({
               Book appointments and monitor status with role-safe access. The interface is
               streamlined for speed, clarity, and daily use.
             </p>
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              {isAuthenticated ? (
+            {isAuthenticated ? (
+              <div className="mt-5 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => onNavigate?.('appointments')}
@@ -217,32 +210,8 @@ const LandingPage = ({
                 >
                   Open appointments
                 </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate?.('login')}
-                    className="rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
-                  >
-                    User Sign in
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate?.('admin_login')}
-                    className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
-                  >
-                    Doctor Sign in
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate?.('signup')}
-                    className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
-                  >
-                    Sign up
-                  </button>
-                </>
-              )}
-            </div>
+              </div>
+            ) : null}
           </div>
         </section>
 

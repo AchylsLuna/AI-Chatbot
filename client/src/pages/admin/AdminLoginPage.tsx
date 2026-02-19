@@ -36,11 +36,11 @@ const AdminLoginPage = ({
   const [formError, setFormError] = useState<string | null>(null)
 
   const hasAdminLoginAccess = authUser
-    ? authUser.role === 'nurse' || authUser.role === 'admin' || authUser.role === 'system_admin'
+    ? authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
-  const hasAdminWorkspaceAccess = authUser
-    ? authUser.role === 'nurse' || authUser.role === 'admin' || authUser.role === 'system_admin'
-    : false
+  const hasDoctorOversightAccess = hasAdminLoginAccess
+  const fallbackAuthRoute: AppPage = authUser?.role === 'nurse' ? 'doctor_login' : 'login'
+  const fallbackAuthLabel = authUser?.role === 'nurse' ? 'Go to Doctor Sign in' : 'Go to User Sign in'
 
   return (
     <AuthSplitLayout layout="center" centerBorderless>
@@ -65,7 +65,7 @@ const AdminLoginPage = ({
           </p>
           <h2 className="mt-3 text-3xl font-semibold text-[color:var(--agent-ink)]">Admin Login</h2>
           <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-            Use Super Admin, Admin (Doctor), or Nurse account to continue.
+            Use Super Admin or Admin account to continue.
           </p>
         </div>
 
@@ -85,14 +85,14 @@ const AdminLoginPage = ({
                   <button onClick={() => onNavigate?.('admin')} className="agent-button w-full">
                     Open Admin Dashboard
                   </button>
-                  {hasAdminWorkspaceAccess && (
+                  {hasDoctorOversightAccess && (
                     <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button-ghost w-full">
                       Open Doctor Dashboard
                     </button>
                   )}
                   <button
                     onClick={onLogout}
-                    className={`agent-button-ghost w-full ${hasAdminWorkspaceAccess ? 'sm:col-span-2' : 'sm:col-span-1'}`}
+                    className={`agent-button-ghost w-full ${hasDoctorOversightAccess ? 'sm:col-span-2' : 'sm:col-span-1'}`}
                   >
                     Sign out
                   </button>
@@ -101,15 +101,14 @@ const AdminLoginPage = ({
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-rose-300">
-                  This account does not have admin portal access. Sign out and use Super Admin,
-                  Admin, or Nurse account.
+                  This account does not have admin portal access. Use an Admin or Super Admin account.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <button onClick={onLogout} className="agent-button-ghost w-full">
                     Sign out
                   </button>
-                  <button onClick={() => onNavigate?.('login')} className="agent-button w-full">
-                    Staff login
+                  <button onClick={() => onNavigate?.(fallbackAuthRoute)} className="agent-button w-full">
+                    {fallbackAuthLabel}
                   </button>
                 </div>
               </div>

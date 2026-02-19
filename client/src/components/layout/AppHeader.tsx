@@ -42,10 +42,13 @@ const AppHeader = ({ theme, onToggleTheme, onNavigate }: AppHeaderProps) => (
           Admin
         </button>
         <button onClick={() => onNavigate('login')} className={navButtonClass}>
-          Login
+          User Sign in
+        </button>
+        <button onClick={() => onNavigate('doctor_login')} className={navButtonClass}>
+          Doctor Sign in
         </button>
         <button onClick={() => onNavigate('admin_login')} className={navButtonClass}>
-          Admin Login
+          Admin Log in
         </button>
         <button
           onClick={() => onNavigate('signup')}
