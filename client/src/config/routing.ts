@@ -6,6 +6,7 @@ const PAGE_ROUTES: Record<AppPage, string> = {
   doctor_dashboard: '/doctor-dashboard',
   admin: '/admin',
   admin_login: '/admin-login',
+  doctor_login: '/doctor-login',
   login: '/login',
   otp: '/otp',
   forgot_password: '/forgot-password',

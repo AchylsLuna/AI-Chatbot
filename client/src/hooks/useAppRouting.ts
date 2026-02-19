@@ -135,6 +135,7 @@ const useAppRouting = () => {
   const isLanding = currentPage === 'landing'
   const isAuthPage =
     currentPage === 'admin_login' ||
+    currentPage === 'doctor_login' ||
     currentPage === 'login' ||
     currentPage === 'otp' ||
     currentPage === 'signup' ||

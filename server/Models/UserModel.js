@@ -29,13 +29,22 @@ const UserSchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ["user", "doctor", "admin"],
+            enum: ["user", "nurse", "admin", "system_admin"],
             default: "user",
         },
         status: {
             type: String,
             enum: ["active", "disabled"],
             default: "active",
+        },
+        department: {
+            type: String,
+            trim: true,
+            required: function() { return this.role === 'doctor'; }
+        },
+        licenseUrl: { // Or licensePath, depending on where you store it
+            type: String,
+            required: function() { return this.role === 'doctor'; }
         },
         passwordHashed: {
             type: String,

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon server.js --watch . --ext js,json",
     "start": "node server.js",
-    "create-admin": "node scripts/createAdmin.js"
+    "create-admin": "node scripts/createAdmin.js",
+    "create-doctor": "node scripts/createDoctor.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",

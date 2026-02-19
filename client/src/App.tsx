@@ -13,6 +13,7 @@ import AdminDashboard from './pages/AdminDashboard'
 import AdminLoginPage from './pages/AdminLoginPage'
 import AppointmentsPage from './pages/AppointmentsPage'
 import DoctorDashboardPage from './pages/DoctorDashboardPage'
+import DoctorLoginPage from './pages/DoctorLoginPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
@@ -39,11 +40,11 @@ function App() {
     reservations,
     latestReservation,
     pendingOtpChallenge,
-    handleUpdateReservation,
     handleProviderLogin,
     handleLogin,
     handleVerifyOtp,
     handleCancelOtp,
+    handleResendOtp,
     handleSignupSuccess,
     handleLogout,
     idleWarningOpen,
@@ -114,6 +115,7 @@ function App() {
       isAuthLoading={isAuthLoading}
       onVerifyOtp={handleVerifyOtp}
       onCancelOtp={handleCancelOtp}
+      onResendOtp={handleResendOtp}
       onNavigate={navigateToPage}
     />
   )
@@ -211,11 +213,10 @@ function App() {
           allowedContent: (
             withWorkspaceBoundary(
               <DoctorDashboardPage
-                reservations={reservations}
                 authUser={authUser}
+                reservations={reservations}
                 onNavigate={navigateToPage}
                 onLogout={handleLogout}
-                onUpdateReservation={handleUpdateReservation}
                 sessionStatus={sessionStatus}
                 theme={theme}
                 onToggleTheme={toggleTheme}
@@ -277,6 +278,33 @@ function App() {
         )
       } else {
         pageContent = adminLoginPage
+      }
+      break
+
+    case 'doctor_login':
+      if (authUser?.role === 'user') {
+        pageContent = (
+          <AccessDeniedCard
+            title="Doctor login only"
+            detail="This login is for doctor and admin accounts only. Switch account to continue."
+            onSwitchAccount={() => {
+              void handleLogout()
+            }}
+            onBackToOverview={() => navigateToPage('landing')}
+          />
+        )
+      } else {
+        pageContent = (
+          <DoctorLoginPage
+            authError={authError}
+            isAuthLoading={isAuthLoading}
+            onLogin={handleLogin}
+            onProviderLogin={auth0Enabled ? () => handleProviderLogin('doctor_dashboard') : undefined}
+            authProvider={authProvider}
+            isBiometricReady={isBiometricReady}
+            onNavigate={navigateToPage}
+          />
+        )
       }
       break
 

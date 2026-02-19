@@ -1,25 +1,40 @@
-### **5. Deployment Guide (`docs/DEPLOYMENT.md`)**
-How to put this on a real server (like AWS, DigitalOcean, or Vercel).
+# Deployment
 
-**File:** `docs/DEPLOYMENT.md`
+This project is a two-part app: an Express API server (server/) and a Vite React client (client/). See startup wiring in [server/server.js].
 
-```markdown
-# Deployment Guide
+**Prerequisites**
+- Node.js 18+
+- MongoDB (Atlas or self-hosted) with network access
+- SMTP credentials for email OTP (configured via env)
 
-## Checklist Before Deploying
-- [ ] MongoDB Network Access set to **Production IP only** (Whitelist).
-- [ ] `NODE_ENV` set to `production` in environment variables.
-- [ ] `console.log` statements removed or minimized.
+**Key environment variables (server/.env)**
+- MONGO_URI — MongoDB connection string
+- DB_NAME — DB name 
+- PORT — server port (default 5000)  
+- CLIENT_ORIGIN — allowed client origin for CORS (set to your front-end URL)  
+- BACKUP_PASSWORD — password used to encrypt audit backups (rotate frequently)  
+- EMAIL_USER, EMAIL_PASS, EMAIL_HOST — SMTP settings used by [server/Utils/emailService.js]
 
-## Option 1: Render / Vercel (PaaS)
-1. Push code to GitHub.
-2. Connect repository to Render/Vercel.
-3. Add Environment Variables in the dashboard settings.
-4. Deploy.
+**Install & run (development)**
+1. Server
+   - cd server
+   - npm install
+   - set .env file
+   - npm run dev
+2. Client
+   - cd client
+   - npm install
+   - npm run dev
 
-## Option 2: VPS (Ubuntu/DigitalOcean)
-1. Install Node.js and PM2:
-   ```bash
-   sudo apt update
-   sudo apt install nodejs npm
-   sudo npm install -g pm2
+**Production build suggestions**
+- Build client: cd client && npm run build — deploy `dist/` to static host / CDN (or serve via reverse proxy).
+- Configure server env variables for production, including secure BACKUP_PASSWORD and SMTP creds.
+- Run server using a process manager (pm2, systemd, Docker). Use `npm start` to run the built server script ([server/package.json]).
+
+**Database & backups**
+- Use managed snapshots (Atlas) or regular `mongodump` exports.
+- Use the audit log backup endpoint ([server/Controllers/adminController.js#downloadAuditBackup]) to produce an encrypted ZIP; do not commit `audit_logs_backup.zip.enc` (it's in [.gitignore]).
+
+**Scripts**
+- Create admin user (dev): `npm run create-admin` in `server/` (see [server/scripts/createAdmin.js])
+- Archive appointments (maintenance): `node server/scripts/runArchiveAppointments.js` (see [server/scripts/runArchiveAppointments.js] and [server/Utils/archiveService.js])

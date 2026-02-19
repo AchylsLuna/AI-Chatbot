@@ -12,6 +12,12 @@ export async function register(req, res) {
             return res.status(400).json({ message: "Missing Fields." });
         }
 
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com|yahoo\.com|outlook\.com)$/i;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ 
+                message: "Email is invalid" 
+            });
+        }
         const emailExists = await User.findOne({ email });
         if (emailExists) {
             return res.status(409).json({ message: "Email is already registered." });
@@ -191,6 +197,9 @@ export async function verifyOTP(req, res) {
 
         console.log("[Successful Login]:", req.body.email);
 
+        // Map 'doctor' role to 'admin' for client compatibility
+        const clientRole = user.role === 'doctor' ? 'admin' : user.role;
+
         return res.status(200).json({
             message: "Login successful.",
             token,
@@ -199,12 +208,53 @@ export async function verifyOTP(req, res) {
                 firstName: user.firstName,
                 lastName: user.lastName,
                 email: user.email,
-                role: user.role
+                role: clientRole
             }
         });
     } catch (error) {
         console.error("OTP Verification Error:", error);
         res.status(500).json({ message: "Verification failed." });   
+    }
+}
+
+export async function resendOTP(req, res) {
+    try {
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ message: "Missing userId." });
+        }
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        if (user.status !== "active") {
+            return res.status(401).json({ message: "Account is disabled. Contact an Admin." });
+        }
+
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        user.otp = otpCode;
+        user.otpExpires = Date.now() + 10 * 60 * 1000;
+        await user.save();
+
+        try {
+            await sendOTP(user.email, otpCode);
+        } catch (emailError) {
+            console.error("Email sending failed:", emailError);
+            return res.status(500).json({ message: "Failed to send OTP. Please try again." });
+        }
+
+        return res.status(200).json({
+            message: "OTP resent to your email.",
+            userId: user._id,
+        });
+    } catch (error) {
+        console.error("Resend OTP Error:", error);
+        res.status(500).json({ message: "Failed to resend OTP." });
     }
 }
 
@@ -318,5 +368,57 @@ export async function googleCallback(req, res) {
     } catch (error) {
         console.error("Google Auth Error:", error);
         return res.redirect('/login-failed');
+    }
+}
+
+export async function registerDoctor(req, res) {
+    try {
+        const { email, firstName, lastName, password, department } = req.body;
+        const licenseFile = req.file; // Populated by multer
+
+        if (!firstName || !lastName || !password || !email || !department) {
+            return res.status(400).json({ message: "Missing required field" });
+        }
+        if (!licenseFile) {
+            return res.status(400).json({message: "Medical license file is required"})
+        }
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com|yahoo\.com|outlook\.com)$/i;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ 
+                message: "Email is invalid" 
+            });
+        }
+        const emailExists = await User.findOne({ email });
+        if (emailExists) {
+            return res.status(409).json({ message: "Email is already registered." });
+        }
+
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({ 
+                message: "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character." 
+            });
+        }
+
+        const doctor = new User({
+            email,
+            firstName,
+            lastName,
+            role: "doctor",
+            department,
+            licenseUrl: licenseFile.path, 
+            status: "disabled" // Prevents login until Admin verifies the license
+        });
+
+        await doctor.setPassword(password);
+        await doctor.save();
+
+        return res.status(201).json({ 
+            message: "Doctor registration submitted successfully. Pending approval." 
+        });
+
+    } catch (error) {
+        console.error("Doctor Registration Failed:", error);
+        return res.status(500).json({ message: "Registration Failed." });
     }
 }

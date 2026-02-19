@@ -141,6 +141,14 @@ export const api = {
     }
     return parseApiSchema(authSessionSchema, mapped, 'OTP verification')
   },
+  resendOtp: async (userId: string): Promise<void> => {
+    const response = await request(`${API_BASE}/resend-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    })
+    await handleResponse(response)
+  },
   signup: async (draft: SignupDraft): Promise<AuthSession> => {
     const safeEmail = draft.email ?? draft.username ?? ''
     const safeFullName = draft.fullName ?? ''

@@ -9,6 +9,7 @@ type OtpPageProps = {
   isAuthLoading: boolean
   onVerifyOtp: (code: string) => void
   onCancelOtp: () => void
+  onResendOtp?: () => void
   onNavigate?: (page: AppPage) => void
 }
 
@@ -18,9 +19,12 @@ const OtpPage = ({
   isAuthLoading,
   onVerifyOtp,
   onCancelOtp,
+  onResendOtp,
   onNavigate,
 }: OtpPageProps) => {
   const [code, setCode] = useState('')
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendSuccess, setResendSuccess] = useState(false)
   const expiryLabel = (() => {
     if (!challenge?.expiresAt) return ''
     const date = new Date(challenge.expiresAt)
@@ -30,6 +34,18 @@ const OtpPage = ({
       minute: '2-digit',
     }).format(date)
   })()
+
+  const handleResendOtp = async () => {
+    if (!onResendOtp) return
+    setResendLoading(true)
+    try {
+      await onResendOtp()
+      setResendSuccess(true)
+      setTimeout(() => setResendSuccess(false), 3000)
+    } finally {
+      setResendLoading(false)
+    }
+  }
 
   return (
     <AuthSplitLayout layout="center">
@@ -106,9 +122,23 @@ const OtpPage = ({
             >
               {isAuthLoading ? 'Verifying...' : 'Verify and continue'}
             </button>
+            <button
+              type="button"
+              onClick={handleResendOtp}
+              disabled={resendLoading || isAuthLoading}
+              className="agent-button-ghost w-full disabled:cursor-not-allowed"
+            >
+              {resendLoading ? 'Sending...' : 'Resend OTP'}
+            </button>
             <button type="button" onClick={onCancelOtp} className="agent-button-ghost w-full">
               Cancel
             </button>
+
+            {resendSuccess && (
+              <p className="rounded-xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-xs font-semibold text-emerald-300">
+                OTP resent successfully. Check your email.
+              </p>
+            )}
           </form>
         )}
 

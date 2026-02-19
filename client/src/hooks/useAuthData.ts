@@ -433,8 +433,8 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     }
 
     if (isDoctorDashboardTarget && !hasDoctorWorkspaceRole) {
-      setAuthError('Super Admin, Admin, or Nurse account required for Doctor Dashboard.')
-      navigateToPage('admin_login')
+      setAuthError('Nurse, Admin, or Super Admin account required for Doctor Dashboard.')
+      navigateToPage('doctor_login')
       return
     }
 
@@ -493,6 +493,21 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const handleCancelOtp = () => {
     setPendingOtpChallenge(null)
     navigateToPage('login')
+  }
+
+  const handleResendOtp = async () => {
+    if (!pendingOtpChallenge) {
+      setAuthError('No active OTP challenge. Start login again.')
+      navigateToPage('login')
+      return
+    }
+
+    setAuthError(null)
+    try {
+      await api.resendOtp(pendingOtpChallenge.challengeId)
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Failed to resend OTP')
+    }
   }
 
   const handleSignupSuccess = (session: AuthSession) => {
@@ -588,6 +603,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     handleLogin,
     handleVerifyOtp,
     handleCancelOtp,
+    handleResendOtp,
     handleSignupSuccess,
     handleLogout,
     idleWarningOpen,

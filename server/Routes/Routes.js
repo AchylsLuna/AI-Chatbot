@@ -4,6 +4,7 @@ import {
     login,
     logout,
     verifyOTP,
+    resendOTP,
     getSettings,
     updateSettings,
     debugUser,
@@ -19,6 +20,7 @@ import {
 import authMiddleware from '../Middleware/authMiddleware.js';
 import { authorizeRoles } from '../Middleware/rbacMiddleware.js';
 import User from '../Models/UserModel.js';
+import { uploadLicense, handleUploadError } from '../Middleware/uploadMiddleware.js';
 import { loginLimiter } from '../Middleware/rateLimiter.js';
 import { body, validationResult } from 'express-validator';
 import passport from 'passport';
@@ -56,6 +58,26 @@ router.post('/register',
     validate,
     register
 );
+router.post('/register/doctor',
+    uploadLicense.single('license'), 
+    handleUploadError, // Much cleaner!
+    [
+        body('firstName').trim().notEmpty().escape().withMessage('First name is required'),
+        body('lastName').trim().notEmpty().escape().withMessage('Last name is required'),
+        body('email').isEmail().normalizeEmail().withMessage('Invalid email'),
+        body('password').isLength({ min: 8 }).withMessage('Password too short'),
+        body('department').trim().notEmpty().escape().withMessage('Department is required')
+    ],
+    validate,
+    async (req, res, next) => {
+        try {
+            const controller = await import('../Controllers/UserController.js');
+            return controller.registerDoctor(req, res, next);
+        } catch (err) {
+            next(err);
+        }
+    }
+);
 
 router.post('/login',
     loginLimiter,
@@ -72,6 +94,13 @@ router.post('/verify-otp',
         body('userId').isMongoId()
     ],
     verifyOTP
+);
+router.post('/resend-otp',
+    [
+        body('userId').isMongoId()
+    ],
+    validate,
+    resendOTP
 );
 
 router.post('/logout', authMiddleware, logout);

@@ -1,27 +1,36 @@
 # Hospital AI & Blockchain Server
 
-A secure backend system for managing patient data, appointments, and medical records using Node.js, Express, and MongoDB.
+A secure backend and UI for appointment booking, staff dashboards, and audit-backed operations.
 
-## Features
-- **Authentication:** Secure Login, MFA (Email OTP), and Session Management.
-- **Security:** Rate limiting, Helmet headers, Data sanitization (NoSQL/XSS).
-- **Role-Based Access:** Granular permissions for Admins, Doctors, and Patients.
-- **Audit Logging:** Tracks all sensitive actions.
+**Highlights**
+- Auth: Local login, OTP (email) and role-based access (User, Nurse, Admin, Super Admin). See controllers: [server/Controllers/UserController.js].
+- Role-based dashboards: User appointments, Nurse/Admin doctor dashboard, Admin workspace. Client routing and access control in [client/src/config/accessControl.ts].
+- Audit logging and encrypted backups: admin download implemented in [server/Controllers/adminController.js]. Decrypt helper in [decrypt_backup/decrypt_backup.js].
+- Appointment archival service: [server/Utils/archiveService.js] with a script at [server/scripts/runArchiveAppointments.js].
 
-## Tech Stack
-- **Runtime:** Node.js
-- **Framework:** Express.js
-- **Database:** MongoDB Atlas (Mongoose)
-- **Auth:** JWT (Stateful Sessions), Bcrypt, Nodemailer
+**Quickstart (development)**
+1. MongoDB: provide a running MongoDB and set `MONGO_URI`.
+2. Server
+   - cd server
+   - npm install
+   - copy `.env` values
+   - npm run dev
+3. Client
+   - cd client
+   - npm install
+   - npm run dev
 
-## Getting Started
+**Important files**
+- API routes: [server/Routes/Routes.js]
+- Server entry: [server/server.js]
+- Client API helpers: [client/src/services/api.ts]
 
-### 1. Prerequisites
-- Node.js (v18+)
-- MongoDB Atlas Connection String
+**Scripts**
+- Start server (dev): `npm run dev` (server/)
+- Start client (dev): `npm run dev` (client/)
 
-### Installation
-```bash
-git clone [https://github.com/yourusername/hospital-app.git](https://github.com/yourusername/hospital-app.git)
-cd server
-npm install
+**Docs**
+- API: [docs/API.md] 
+- Deployment: [docs/DEPLOYMENT.md]
+- Maintenance: [docs/MAINTENANCE.md]
+- Security: [docs/SECURITY.md]

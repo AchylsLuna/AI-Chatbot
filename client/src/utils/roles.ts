@@ -4,7 +4,7 @@ import type { UserRole } from '../types'
 const roleLabels: Record<UserRole, string> = {
   user: 'User',
   nurse: 'Nurse',
-  admin: 'Admin / Doctor',
+  admin: 'Admin',
   system_admin: 'Super Admin',
 }
 
@@ -22,7 +22,7 @@ export const getWorkspaceRoleLabel = (role?: UserRole | null) => {
 }
 
 export const getDefaultPageForRole = (role?: UserRole | null): AppPage => {
-  if (role === 'nurse' || role === 'admin' || role === 'system_admin') {
+  if (role === 'doctor' || role === 'nurse' || role === 'admin' || role === 'system_admin') {
     return 'doctor_dashboard'
   }
   return 'appointments'
