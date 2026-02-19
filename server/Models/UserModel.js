@@ -29,6 +29,7 @@ const UserSchema = new mongoose.Schema(
         },
         role: {
             type: String,
+            set: (value) => (value === "doctor" ? "nurse" : value),
             enum: ["user", "nurse", "admin", "system_admin"],
             default: "user",
         },
@@ -40,11 +41,11 @@ const UserSchema = new mongoose.Schema(
         department: {
             type: String,
             trim: true,
-            required: function() { return this.role === 'doctor'; }
+            required: function() { return this.role === 'nurse'; }
         },
         licenseUrl: { // Or licensePath, depending on where you store it
             type: String,
-            required: function() { return this.role === 'doctor'; }
+            required: function() { return this.role === 'nurse'; }
         },
         passwordHashed: {
             type: String,
@@ -67,6 +68,7 @@ const UserSchema = new mongoose.Schema(
             },
         }
     },
+    { timestamps: true }
 );
 UserSchema.methods.setPassword = async function (password) {
     this.passwordHashed = await bcrypt.hash(password, 10);

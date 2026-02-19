@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
@@ -10,13 +10,22 @@ import './Config/passport.js'; // [NEW] Import the config we just made
 
 import router from './Routes/Routes.js';
 
+const envFilePath = fileURLToPath(new URL('./.env', import.meta.url));
+if (typeof process.loadEnvFile === 'function') {
+    try {
+        process.loadEnvFile(envFilePath);
+    } catch {
+        // no-op when .env is missing
+    }
+}
+
 const app = express();
 
 const config = {
     PORT: process.env.PORT || 5000,
     MONGO_URI: process.env.MONGO_URI,
     ORIGIN: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
-    DB_NAME: 'hospital_ai_blockchain',
+    DB_NAME: process.env.DB_NAME || 'hospital_ai_blockchain',
 };
 
 if (!config.MONGO_URI) {
@@ -31,7 +40,7 @@ app.use(
     cors({
         origin: config.ORIGIN,
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     })
 );
 

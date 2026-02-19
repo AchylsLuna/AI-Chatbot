@@ -35,6 +35,8 @@ type SidebarProps = {
   variant?: 'default' | 'dashboard' | 'reference'
   heightMode?: 'content' | 'viewport'
   stickyOffset?: 'compact' | 'header'
+  isCollapsed?: boolean
+  onToggleCollapse?: () => void
   showBrand?: boolean
   brandTitle: string
   brandSubtitle: string
@@ -186,6 +188,8 @@ const Sidebar = ({
   variant = 'default',
   heightMode = 'content',
   stickyOffset = 'compact',
+  isCollapsed = false,
+  onToggleCollapse,
   showBrand = true,
   brandTitle,
   brandSubtitle,
@@ -311,7 +315,18 @@ const Sidebar = ({
 
   if (variant === 'reference') {
     return (
-      <aside className={`reference-sidebar ${referenceViewportClass} ${className ?? ''}`}>
+      <aside
+        className={`reference-sidebar ${isCollapsed ? 'is-collapsed' : ''} ${referenceViewportClass} ${className ?? ''}`}
+      >
+        {onToggleCollapse ? (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="mb-2 rounded-md border border-[color:var(--reference-border)] px-2 py-1 text-xs font-semibold text-[color:var(--reference-muted)]"
+          >
+            {isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          </button>
+        ) : null}
         {showBrand ? (
           <button type="button" onClick={onBrandClick} className="reference-sidebar-brand">
             <AppLogoBadge className="h-10 w-10" />
@@ -391,8 +406,17 @@ const Sidebar = ({
   if (variant === 'dashboard') {
     return (
       <aside
-        className={`${className ?? ''} ${dashboardViewportClass} flex w-full flex-col rounded-3xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-4 shadow-[var(--card-shadow-soft)] lg:w-[282px]`}
+        className={`${className ?? ''} ${isCollapsed ? 'is-collapsed' : ''} ${dashboardViewportClass} flex w-full flex-col rounded-3xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-4 shadow-[var(--card-shadow-soft)] lg:w-[282px]`}
       >
+        {onToggleCollapse ? (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="mb-2 rounded-md border border-[color:var(--card-border)] px-2 py-1 text-xs font-semibold text-[color:var(--agent-muted)]"
+          >
+            {isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          </button>
+        ) : null}
         {showBrand ? (
           <button
             type="button"
@@ -479,8 +503,17 @@ const Sidebar = ({
 
   return (
     <aside
-      className={`${className ?? ''} w-full rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-4 lg:w-[260px]`}
+      className={`${className ?? ''} ${isCollapsed ? 'is-collapsed' : ''} w-full rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-4 lg:w-[260px]`}
     >
+      {onToggleCollapse ? (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="mb-2 rounded-md border border-[color:var(--card-border)] px-2 py-1 text-xs font-semibold text-[color:var(--agent-muted)]"
+        >
+          {isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        </button>
+      ) : null}
       {showBrand ? (
         <button
           type="button"

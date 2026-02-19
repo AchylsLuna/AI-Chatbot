@@ -22,7 +22,7 @@ export const getWorkspaceRoleLabel = (role?: UserRole | null) => {
 }
 
 export const getDefaultPageForRole = (role?: UserRole | null): AppPage => {
-  if (role === 'doctor' || role === 'nurse' || role === 'admin' || role === 'system_admin') {
+  if (role === 'nurse' || role === 'admin' || role === 'system_admin') {
     return 'doctor_dashboard'
   }
   return 'appointments'

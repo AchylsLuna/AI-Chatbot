@@ -1,36 +1,50 @@
-# Hospital AI & Blockchain Server
+# AI Healthcare Backend + Database (Frontend UI Unchanged)
 
-A secure backend and UI for appointment booking, staff dashboards, and audit-backed operations.
+This repository keeps your existing UI intact and stabilizes the backend/database layer that powers it.
 
-**Highlights**
-- Auth: Local login, OTP (email) and role-based access (User, Nurse, Admin, Super Admin). See controllers: [server/Controllers/UserController.js].
-- Role-based dashboards: User appointments, Nurse/Admin doctor dashboard, Admin workspace. Client routing and access control in [client/src/config/accessControl.ts].
-- Audit logging and encrypted backups: admin download implemented in [server/Controllers/adminController.js]. Decrypt helper in [decrypt_backup/decrypt_backup.js].
-- Appointment archival service: [server/Utils/archiveService.js] with a script at [server/scripts/runArchiveAppointments.js].
+## Scope of this phase
+- Backend: Node.js + Express (`server/`)
+- Database: MongoDB + Mongoose
+- UI: **untouched** (no redesign/replacement)
 
-**Quickstart (development)**
-1. MongoDB: provide a running MongoDB and set `MONGO_URI`.
-2. Server
-   - cd server
-   - npm install
-   - copy `.env` values
-   - npm run dev
-3. Client
-   - cd client
-   - npm install
-   - npm run dev
+## Core decisions implemented
+- Internal doctor role is `nurse`
+- OTP verification is required for login completion
+- API base path is `/api`
+- Ledger is DB-backed (no blockchain write dependency)
 
-**Important files**
-- API routes: [server/Routes/Routes.js]
-- Server entry: [server/server.js]
-- Client API helpers: [client/src/services/api.ts]
+## Quick start
+1. Install dependencies:
+   - `npm run install-all`
+2. Start MongoDB (Docker):
+   - `npm run db:up`
+3. Configure backend env:
+   - Copy `server/.env.example` to `server/.env` and set secrets
+4. Run backend:
+   - `npm run dev:server`
+5. (Optional) Run frontend:
+   - `npm run dev:client`
 
-**Scripts**
-- Start server (dev): `npm run dev` (server/)
-- Start client (dev): `npm run dev` (client/)
+## Backend scripts
+- Start backend (dev): `npm run dev:server`
+- Start backend (prod mode): `npm run start:server`
+- Run data migration: `npm run backend:migrate`
+- Seed core users: `npm run backend:seed`
+- Stop DB container: `npm run db:down`
 
-**Docs**
-- API: [docs/API.md] 
-- Deployment: [docs/DEPLOYMENT.md]
-- Maintenance: [docs/MAINTENANCE.md]
-- Security: [docs/SECURITY.md]
+## Backend API coverage
+Implemented and active under `/api`:
+- Auth: register, login, OTP challenge/verify/resend, logout, session
+- Appointments: list/create/update + reservations alias
+- Settings: get/update current user settings
+- Admin/support: users, ledger, access requests, AI alert audit action, encrypted audit backup
+- Health check: `GET /api/health`
+
+Full endpoint details: `server/docs/API.md`
+
+## Documentation
+- API reference: `server/docs/API.md`
+- Deployment/runtime: `server/docs/DEPLOYMENT.md`
+- Maintenance runbook: `server/docs/MAINTENANCE.md`
+- Security notes: `server/docs/SECURITY.md`
+- DB schema: `server/docs/DB_SCHEMA.md`

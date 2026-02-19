@@ -1,25 +1,37 @@
-# Maintenance & Operations
+# Maintenance Runbook
 
-**Regular tasks**
-- Database backups: schedule regular `mongodump` or provider snapshots. Keep backups encrypted and rotate encryption keys.
-- Rotate secrets: BACKUP_PASSWORD, JWT keys, SMTP credentials, and DB accounts periodically.
-- Patch dependencies: monitor `npm audit` and update server/client dependencies in [server/package.json] and [client/package.json].
+## Regular operations
+- Keep dependencies updated in `server/package.json`.
+- Monitor MongoDB storage, indexes, and backup health.
+- Rotate secrets (`JWT_SECRET`, `BACKUP_PASSWORD`, SMTP credentials).
 
-**Audit & logs**
-- Audit events are written via the `AuditLog` model ([server/Models/AuditLogModel.js]). RBAC denied attempts are logged by [server/Middleware/rbacMiddleware.js].
-- Use the admin encrypted backup endpoint to export audit logs: [`downloadAuditBackup`] in [server/Controllers/adminController.js]. Backups are encrypted AES-256; IV is prepended to the stream.
+## Data migration
+- Run role/status normalization safely (idempotent):
+  - `npm run backend:migrate`
+- Migration actions:
+  - `doctor -> nurse`
+  - appointment status remap to `Booked|Recorded|Failed`
+  - backfill normalized appointment fields
 
-**Archival**
-- Archive old appointments using the archive service: [`archiveOldAppointments`] in [server/Utils/archiveService.js].
-- Run scheduled archival with the helper script: [server/scripts/runArchiveAppointments.js] (supports `--dry` and `--days`).
+## Core seed users
+- Seed/update core accounts safely (idempotent):
+  - `npm run backend:seed`
+- Seed roles:
+  - `admin` or `system_admin`
+  - `nurse` (doctor-equivalent)
+  - `user`
 
-**Recovery & decryption**
-- Encrypted audit backup files are compatible with the repo helper: [decrypt_backup/decrypt_backup.js]. Keep the BACKUP_PASSWORD secure; do not store it in plaintext in the repository.
+## Audit backups
+- Endpoint: `GET /api/admin/audit-logs/download`
+- Output: encrypted `.zip.enc` stream.
+- Ensure `BACKUP_PASSWORD` is managed securely and rotated.
 
-**Health checks & monitoring**
-- Monitor app logs, DB replication health, and SMTP connectivity.
-- Ensure disk space for temp archives and log rotation.
-
-**Maintenance windows**
-- Schedule downtime for major schema migrations or bulk operations.
-- Before mass archive or restore, create DB backup and note current DB `oplog` / timestamps.
+## Troubleshooting
+- `401` responses:
+  - verify token/cookie and active session in `Sessions` collection.
+- `403` responses:
+  - verify role against RBAC policy.
+- OTP delivery issues:
+  - validate SMTP env vars and provider restrictions.
+- Empty datasets:
+  - expected behavior for `ledger`/`access-requests` when no records exist.

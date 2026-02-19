@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   workspaceGhostButtonClass,
   workspaceMutedTextClass,
@@ -65,7 +65,7 @@ const SidebarAccountCard = ({
     setSaving(true)
     try {
       await api.updateUserSettings({ notifications: next })
-    } catch (err) {
+    } catch {
       // revert on error
       setNotifications(notifications)
     } finally {

@@ -1,35 +1,30 @@
-# Security Overview
+# Security Notes
 
-This project includes layered protections and operational guidance.
+## Built-in controls
+- Helmet security headers
+- Mongo sanitize middleware
+- Route-level input validation (`express-validator`)
+- JWT + session-backed auth validation
+- RBAC enforcement with denied-access audit logging
+- Password hashing via bcrypt
+- OTP-based login completion
 
-**Built-in protections**
-- HTTP security headers via Helmet: configured in [server/server.js].
-- NoSQL injection protection: `express-mongo-sanitize` used in [server/server.js].
-- Input validation: express-validator used per-route in [server/Routes/Routes.js].
-- RBAC middleware logs and enforces role checks: [server/Middleware/rbacMiddleware.js].
-- Password hashing: bcrypt is used in the user model [server/Models/UserModel.js] (see `setPassword` usage in scripts).
-- MFA: implemented via email OTP using`nodemailer` helper [server/Utils/emailService.js].
+## Role model
+Canonical backend roles:
+- `user`
+- `nurse` (doctor-equivalent)
+- `admin`
+- `system_admin`
 
-**Sensitive data & backups**
-- Audit backups produced by admin endpoint are encrypted with AES-256 before download. See [`downloadAuditBackup`] in [server/Controllers/adminController.js]. The repo includes a local decrypt helper [decrypt_backup/decrypt_backup.js] for authorized operators.
-- Keep `BACKUP_PASSWORD` out of source control and rotate regularly.
+Legacy `doctor` role values are normalized to `nurse`.
 
-**Recommendations & operational guidance**
-- Run the server under a dedicated service account (non-root) and use a process supervisor (systemd/pm2/docker).
-- Secure SMTP credentials used by [server/Utils/emailService.js].
-- Enforce strong secrets for admin accounts; change default credentials immediately (see [server/scripts/createAdmin.js]).
-- Monitor audit logs and alert on suspicious patterns (frequent ACCESS_DENIED events from the same IP, role escalation attempts).
-- Disable or tightly control the audit-download endpoint in production (limit to secure admin sessions and IP allowlists).
+## Sensitive operations
+- Audit backup endpoint is admin-restricted and encrypted.
+- Access denied attempts are logged via audit middleware.
 
-**Incident response**
-- Revoke compromised credentials and rotate BACKUP_PASSWORD and DB credentials.
-- Revoke API tokens/sessions and force password reset for affected users.
-- Preserve logs and backups for forensic analysis.
-
-**Relevant code locations**
-- Server entry: [server/server.js]  
-- Route definitions: [server/Routes/Routes.js]  
-- RBAC: [server/Middleware/rbacMiddleware.js]  
-- Audit backup: [server/Controllers/adminController.js]  
-- Email helper: [server/Utils/emailService.js]  
-- Archive service: [server/Utils/archiveService.js]
+## Operational safeguards
+- Keep secrets out of source control.
+- Restrict CORS to known frontend origin.
+- Use HTTPS in production.
+- Rotate admin credentials and backup encryption password regularly.
+- Limit admin endpoint exposure with network controls where possible.

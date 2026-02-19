@@ -5,6 +5,8 @@ export type ReservationStatus = 'Booked' | 'Recorded' | 'Failed'
 export type Reservation = {
   id: string
   patientName: string
+  doctorName?: string
+  nurseName?: string
   symptoms: string
   department: string
   priority: 'Low' | 'Routine' | 'High'
@@ -20,6 +22,15 @@ export type ReservationDraft = {
   symptoms: string
   requestedTime: string
   summary: TriageSummary
+}
+
+export type ReservationCreateDraft = {
+  patientName: string
+  symptoms: string
+  requestedTime: string
+  major?: string
+  doctorName?: string
+  summary?: TriageSummary
 }
 
 export type AppointmentUpdateDraft = {

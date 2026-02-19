@@ -33,6 +33,7 @@ type DashboardWidgetBlocksProps = {
   summaryValue: string
   summaryLabel: string
   secondaryLabel: string
+  showSummaryPanel?: boolean
   activityTitle: string
   activityItems: DashboardActivityItem[]
   chartTitle: string
@@ -65,6 +66,7 @@ const DashboardWidgetBlocks = ({
   summaryValue,
   summaryLabel,
   secondaryLabel,
+  showSummaryPanel = true,
   activityTitle,
   activityItems,
   chartTitle,
@@ -90,22 +92,24 @@ const DashboardWidgetBlocks = ({
     <div className="space-y-4">
       <div className="reference-dashboard-grid">
         <article className="reference-card reference-summary-card">
-          <div className="reference-progress-wrap">
-            <div
-              className="reference-progress-ring"
-              style={{
-                background: `conic-gradient(var(--reference-blue-500) ${ringPercent}%, var(--reference-border) ${ringPercent}% 100%)`,
-              }}
-              aria-hidden="true"
-            >
-              <div className="reference-progress-inner">
-                <span>{summaryValue}</span>
+          {showSummaryPanel ? (
+            <div className="reference-progress-wrap">
+              <div
+                className="reference-progress-ring"
+                style={{
+                  background: `conic-gradient(var(--reference-blue-500) ${ringPercent}%, var(--reference-border) ${ringPercent}% 100%)`,
+                }}
+                aria-hidden="true"
+              >
+                <div className="reference-progress-inner">
+                  <span>{summaryValue}</span>
+                </div>
               </div>
+              <p className="reference-widget-title">{summaryTitle}</p>
+              <p className="reference-widget-subtle">{summaryLabel}</p>
+              <p className="reference-widget-subtle">{secondaryLabel}</p>
             </div>
-            <p className="reference-widget-title">{summaryTitle}</p>
-            <p className="reference-widget-subtle">{summaryLabel}</p>
-            <p className="reference-widget-subtle">{secondaryLabel}</p>
-          </div>
+          ) : null}
 
           <div className="reference-activity-block">
             <h3 className="reference-section-title">{activityTitle}</h3>

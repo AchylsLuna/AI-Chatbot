@@ -4,10 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "nodemon server.js --watch . --ext js,json",
+    "dev": "node server.js",
     "start": "node server.js",
     "create-admin": "node scripts/createAdmin.js",
-    "create-doctor": "node scripts/createDoctor.js"
+    "create-doctor": "node scripts/createDoctor.js",
+    "migrate": "node scripts/migrateData.js",
+    "seed:core": "node scripts/seedCoreUsers.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",

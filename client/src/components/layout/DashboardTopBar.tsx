@@ -1,15 +1,17 @@
 import { useMemo } from 'react'
 
 type DashboardTopBarProps = {
-  title: string
+  title?: string
   searchValue: string
   onSearchChange: (value: string) => void
   searchPlaceholder?: string
-  profileName: string
-  profileCaption: string
+  searchLabel?: string
+  profileName?: string
+  profileCaption?: string
   notificationCount?: number
   messageCount?: number
   showMessages?: boolean
+  showNotifications?: boolean
   showProfile?: boolean
   borderlessActions?: boolean
 }
@@ -39,12 +41,14 @@ const DashboardTopBar = ({
   searchValue,
   onSearchChange,
   searchPlaceholder = 'Search records',
-  profileName,
-  profileCaption,
+  searchLabel,
+  profileName = '',
+  profileCaption = '',
   notificationCount = 0,
   messageCount = 0,
-  showMessages = true,
-  showProfile = true,
+  showMessages = false,
+  showNotifications = false,
+  showProfile = false,
   borderlessActions = false,
 }: DashboardTopBarProps) => {
   const initials = useMemo(() => {
@@ -55,24 +59,30 @@ const DashboardTopBar = ({
     return `${tokens[0][0] ?? ''}${tokens[1][0] ?? ''}`.toUpperCase()
   }, [profileName])
 
+  const hasActions = showMessages || showNotifications || showProfile
+
   return (
-    <section className="reference-topbar">
-      <h1 className="reference-page-title">{title}</h1>
+    <section className={`reference-topbar ${title ? '' : 'reference-topbar--search-only'}`}>
+      {title ? <h1 className="reference-page-title">{title}</h1> : null}
 
-      <label className="reference-search" htmlFor="reference-dashboard-search">
-        <span className="text-[color:var(--agent-muted-soft)]" aria-hidden="true">
-          <SearchIcon />
-        </span>
-        <input
-          id="reference-dashboard-search"
-          value={searchValue}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder={searchPlaceholder}
-          className="reference-search-input"
-        />
-      </label>
+      <div className="reference-search-field">
+        {searchLabel ? <p className="reference-search-label">{searchLabel}</p> : null}
+        <label className="reference-search" htmlFor="reference-dashboard-search">
+          <span className="text-[color:var(--agent-muted-soft)]" aria-hidden="true">
+            <SearchIcon />
+          </span>
+          <input
+            id="reference-dashboard-search"
+            value={searchValue}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder={searchPlaceholder}
+            className="reference-search-input"
+          />
+        </label>
+      </div>
 
-      <div className="reference-top-actions">
+      {hasActions ? (
+        <div className="reference-top-actions">
         {showMessages ? (
           <button
             type="button"
@@ -83,14 +93,16 @@ const DashboardTopBar = ({
             {messageCount > 0 ? <span className="reference-chip-badge">{messageCount}</span> : null}
           </button>
         ) : null}
-        <button
-          type="button"
-          className={`reference-icon-chip${borderlessActions ? ' is-borderless' : ''}`}
-          aria-label={`Notifications (${notificationCount})`}
-        >
-          <BellIcon />
-          {notificationCount > 0 ? <span className="reference-chip-badge">{notificationCount}</span> : null}
-        </button>
+        {showNotifications ? (
+          <button
+            type="button"
+            className={`reference-icon-chip${borderlessActions ? ' is-borderless' : ''}`}
+            aria-label={`Notifications (${notificationCount})`}
+          >
+            <BellIcon />
+            {notificationCount > 0 ? <span className="reference-chip-badge">{notificationCount}</span> : null}
+          </button>
+        ) : null}
 
         {showProfile ? (
           <div className="reference-profile-chip" aria-label="Current profile">
@@ -102,6 +114,7 @@ const DashboardTopBar = ({
           </div>
         ) : null}
       </div>
+      ) : null}
     </section>
   )
 }

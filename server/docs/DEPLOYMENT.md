@@ -1,40 +1,47 @@
-# Deployment
+# Deployment & Runtime
 
-This project is a two-part app: an Express API server (server/) and a Vite React client (client/). See startup wiring in [server/server.js].
-
-**Prerequisites**
+## Stack
 - Node.js 18+
-- MongoDB (Atlas or self-hosted) with network access
-- SMTP credentials for email OTP (configured via env)
+- Express API
+- MongoDB (recommended via Docker Compose for local)
 
-**Key environment variables (server/.env)**
-- MONGO_URI — MongoDB connection string
-- DB_NAME — DB name 
-- PORT — server port (default 5000)  
-- CLIENT_ORIGIN — allowed client origin for CORS (set to your front-end URL)  
-- BACKUP_PASSWORD — password used to encrypt audit backups (rotate frequently)  
-- EMAIL_USER, EMAIL_PASS, EMAIL_HOST — SMTP settings used by [server/Utils/emailService.js]
+## Environment variables
+Use `server/.env.example` as the baseline.
 
-**Install & run (development)**
-1. Server
-   - cd server
-   - npm install
-   - set .env file
-   - npm run dev
-2. Client
-   - cd client
-   - npm install
-   - npm run dev
+Required values:
+- `PORT`
+- `MONGO_URI`
+- `DB_NAME`
+- `JWT_SECRET`
+- `CLIENT_ORIGIN`
+- `BACKUP_PASSWORD`
 
-**Production build suggestions**
-- Build client: cd client && npm run build — deploy `dist/` to static host / CDN (or serve via reverse proxy).
-- Configure server env variables for production, including secure BACKUP_PASSWORD and SMTP creds.
-- Run server using a process manager (pm2, systemd, Docker). Use `npm start` to run the built server script ([server/package.json]).
+OTP email transport:
+- `EMAIL_USER`
+- `EMAIL_PASS`
+- `EMAIL_HOST`
 
-**Database & backups**
-- Use managed snapshots (Atlas) or regular `mongodump` exports.
-- Use the audit log backup endpoint ([server/Controllers/adminController.js#downloadAuditBackup]) to produce an encrypted ZIP; do not commit `audit_logs_backup.zip.enc` (it's in [.gitignore]).
+Optional:
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `CLIENT_URL`
+- `FRONTEND_URL`
 
-**Scripts**
-- Create admin user (dev): `npm run create-admin` in `server/` (see [server/scripts/createAdmin.js])
-- Archive appointments (maintenance): `node server/scripts/runArchiveAppointments.js` (see [server/scripts/runArchiveAppointments.js] and [server/Utils/archiveService.js])
+## Local deployment (backend-first)
+1. Start MongoDB:
+   - `npm run db:up`
+2. Install dependencies:
+   - `npm run install-all`
+3. Configure env:
+   - `cp server/.env.example server/.env`
+4. Start backend:
+   - `npm run dev:server`
+5. Optional data setup:
+   - `npm run backend:migrate`
+   - `npm run backend:seed`
+
+## Production notes
+- Run backend via process manager (systemd/pm2/container).
+- Restrict CORS (`CLIENT_ORIGIN`) to trusted frontend URL.
+- Use strong secrets for `JWT_SECRET` and `BACKUP_PASSWORD`.
+- Store backups and logs securely.

@@ -177,13 +177,6 @@ const LandingPage = ({
               <>
                 <button
                   type="button"
-                  onClick={() => onNavigate?.('admin_login')}
-                  className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
-                >
-                  Staff Login
-                </button>
-                <button
-                  type="button"
                   onClick={() => onNavigate?.('login')}
                   className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
                 >

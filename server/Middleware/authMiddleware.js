@@ -15,11 +15,20 @@ const verifyToken = async (req, res, next) => {
     }
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
-        const activeSession = await Sessions.findOne({token:token});
+        const activeSession = await Sessions.findOne({ token: token });
         if (!activeSession) {
-            return res.status(401).json({ message: "Session expired. Please log in again."});
+            return res.status(401).json({ message: "Session expired. Please log in again." });
         }
-        req.user = decoded;
+
+        const rawRole = decoded?.role;
+        const normalizedRole = rawRole === "doctor" ? "nurse" : rawRole;
+
+        req.user = {
+            ...decoded,
+            id: decoded?.id || decoded?._id || activeSession.userId?.toString?.(),
+            role: normalizedRole,
+            sessionId: activeSession._id?.toString?.(),
+        };
         next();
     } catch (error) {
         res.status(401).json({ message: "Invalid or expired token." });

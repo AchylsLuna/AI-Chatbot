@@ -2,10 +2,15 @@
   "name": "ai-chatbot-monorepo",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "dev": "sh -c \"npm run dev:server & npm run dev:client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "start:server": "npm run start --prefix server",
+    "backend:migrate": "npm run migrate --prefix server",
+    "backend:seed": "npm run seed:core --prefix server",
+    "db:up": "docker compose up -d mongo",
+    "db:down": "docker compose down",
     "install-all": "npm install --prefix server && npm install --prefix client"
   },
-  "devDependencies": {
-    "concurrently": "^8.0.1"
-  }
+  "devDependencies": {}
 }
