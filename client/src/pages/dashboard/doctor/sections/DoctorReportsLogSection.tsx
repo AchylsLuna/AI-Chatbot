@@ -1,6 +1,7 @@
 import { workspaceMutedTextClass, workspacePanelClass, workspaceSubtleTextClass } from '../../../../styles/workspaceUi'
 import { maskIdentifier, maskPersonName } from '../../../../utils/privacy'
 import { formatDashboardDateTime } from '../../shared/dashboardEvents'
+import { resolveReportLogMetadata } from '../../shared/reportLogMetadata'
 import type { DashboardLogItem } from '../../shared/types'
 
 type DoctorReportsLogSectionProps = {
@@ -28,6 +29,7 @@ const DoctorReportsLogSection = ({ items, dataMaskingEnabled }: DoctorReportsLog
       {items.map((item) => {
         const title = dataMaskingEnabled ? maskPersonName(item.title) : item.title
         const detail = dataMaskingEnabled ? maskIdentifier(item.detail) : item.detail
+        const metadata = resolveReportLogMetadata(item, dataMaskingEnabled)
 
         return (
           <article key={item.id} className={`${workspacePanelClass} p-5`}>
@@ -42,9 +44,33 @@ const DoctorReportsLogSection = ({ items, dataMaskingEnabled }: DoctorReportsLog
               </span>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-[color:var(--agent-muted-soft)]">
-              <span>Actor: {item.actor}</span>
-              <span>{formatDashboardDateTime(item.createdAt)}</span>
+            <div className="mt-3 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3">
+              <dl className="space-y-1.5 text-xs text-[color:var(--agent-muted-soft)]">
+                <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                  <dt className="font-semibold text-[color:var(--agent-ink)]">User ID</dt>
+                  <dd className="break-all">{metadata.userId}</dd>
+                </div>
+                <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                  <dt className="font-semibold text-[color:var(--agent-ink)]">Action</dt>
+                  <dd className="break-all">{metadata.action}</dd>
+                </div>
+                <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                  <dt className="font-semibold text-[color:var(--agent-ink)]">Details</dt>
+                  <dd className="break-all">{metadata.details}</dd>
+                </div>
+                <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                  <dt className="font-semibold text-[color:var(--agent-ink)]">IP Address</dt>
+                  <dd className="break-all">{metadata.ipAddress}</dd>
+                </div>
+                <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                  <dt className="font-semibold text-[color:var(--agent-ink)]">User Agent</dt>
+                  <dd className="break-all">{metadata.userAgent}</dd>
+                </div>
+                <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                  <dt className="font-semibold text-[color:var(--agent-ink)]">Timestamp</dt>
+                  <dd>{formatDashboardDateTime(metadata.timestamp)}</dd>
+                </div>
+              </dl>
             </div>
           </article>
         )

@@ -2,11 +2,11 @@ import {
   workspaceGhostButtonClass,
   workspaceMutedTextClass,
   workspacePanelClass,
-  workspacePrimaryButtonClass,
   workspaceSubtleTextClass,
 } from '../../../../styles/workspaceUi'
 import { maskIdentifier, maskPersonName } from '../../../../utils/privacy'
 import { formatDashboardDateTime } from '../../shared/dashboardEvents'
+import { resolveReportLogMetadata } from '../../shared/reportLogMetadata'
 import type { DashboardLogItem } from '../../shared/types'
 
 type AdminReportsLogSectionProps = {
@@ -18,12 +18,6 @@ const severityClass = (severity: DashboardLogItem['severity']) => {
   if (severity === 'Critical') return 'border-rose-300/70 bg-rose-100 text-rose-700'
   if (severity === 'Warning') return 'border-amber-300/70 bg-amber-100 text-amber-700'
   return 'border-sky-300/70 bg-sky-100 text-sky-700'
-}
-
-const escapeCsvCell = (value: string) => {
-  const escaped = value.replace(/"/g, '""')
-  if (/[",\n]/.test(value)) return `"${escaped}"`
-  return escaped
 }
 
 const downloadTextFile = (filename: string, content: string, mimeType: string) => {
@@ -40,32 +34,26 @@ const downloadTextFile = (filename: string, content: string, mimeType: string) =
 }
 
 const AdminReportsLogSection = ({ items, dataMaskingEnabled }: AdminReportsLogSectionProps) => {
-  const exportRows = items.map((item) => ({
-    id: item.id,
-    actor: item.actor,
-    source: item.source,
-    title: dataMaskingEnabled ? maskPersonName(item.title) : item.title,
-    detail: dataMaskingEnabled ? maskIdentifier(item.detail) : item.detail,
-    severity: item.severity,
-    createdAt: formatDashboardDateTime(item.createdAt),
-  }))
+  const exportRows = items.map((item) => {
+    const metadata = resolveReportLogMetadata(item, dataMaskingEnabled)
+
+    return {
+      id: item.id,
+      actor: item.actor,
+      source: item.source,
+      title: dataMaskingEnabled ? maskPersonName(item.title) : item.title,
+      detail: dataMaskingEnabled ? maskIdentifier(item.detail) : item.detail,
+      severity: item.severity,
+      createdAt: formatDashboardDateTime(item.createdAt),
+      action: metadata.action,
+      details: metadata.details,
+      ipAddress: metadata.ipAddress,
+      userAgent: metadata.userAgent,
+      timestamp: metadata.timestamp,
+    }
+  })
 
   const exportTimestamp = new Date().toISOString().replace(/[:.]/g, '-')
-
-  const handleDownloadCsv = () => {
-    const header = ['ID', 'Actor', 'Source', 'Title', 'Detail', 'Severity', 'Created At']
-    const rows = exportRows.map((item) => [
-      item.id,
-      item.actor,
-      item.source,
-      item.title,
-      item.detail,
-      item.severity,
-      item.createdAt,
-    ])
-    const csv = [header, ...rows].map((line) => line.map((value) => escapeCsvCell(String(value))).join(',')).join('\n')
-    downloadTextFile(`reports-log-${exportTimestamp}.csv`, csv, 'text/csv;charset=utf-8')
-  }
 
   const handleDownloadBackup = () => {
     const payload = {
@@ -87,9 +75,6 @@ const AdminReportsLogSection = ({ items, dataMaskingEnabled }: AdminReportsLogSe
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className={`text-sm ${workspaceMutedTextClass}`}>Download the currently displayed report log records.</p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={workspacePrimaryButtonClass} onClick={handleDownloadCsv}>
-              Download CSV
-            </button>
             <button type="button" className={workspaceGhostButtonClass} onClick={handleDownloadBackup}>
               Download Backup
             </button>
@@ -105,6 +90,7 @@ const AdminReportsLogSection = ({ items, dataMaskingEnabled }: AdminReportsLogSe
         items.map((item) => {
           const title = dataMaskingEnabled ? maskPersonName(item.title) : item.title
           const detail = dataMaskingEnabled ? maskIdentifier(item.detail) : item.detail
+          const metadata = resolveReportLogMetadata(item, dataMaskingEnabled)
 
           return (
             <article key={item.id} className={`${workspacePanelClass} p-5`}>
@@ -119,9 +105,29 @@ const AdminReportsLogSection = ({ items, dataMaskingEnabled }: AdminReportsLogSe
                 </span>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-[color:var(--agent-muted-soft)]">
-                <span>Actor: {item.actor}</span>
-                <span>{formatDashboardDateTime(item.createdAt)}</span>
+              <div className="mt-3 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3">
+                <dl className="space-y-1.5 text-xs text-[color:var(--agent-muted-soft)]">
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                    <dt className="font-semibold text-[color:var(--agent-ink)]">Action</dt>
+                    <dd className="break-all">{metadata.action}</dd>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                    <dt className="font-semibold text-[color:var(--agent-ink)]">Details</dt>
+                    <dd className="break-all">{metadata.details}</dd>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                    <dt className="font-semibold text-[color:var(--agent-ink)]">IP Address</dt>
+                    <dd className="break-all">{metadata.ipAddress}</dd>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                    <dt className="font-semibold text-[color:var(--agent-ink)]">User Agent</dt>
+                    <dd className="break-all">{metadata.userAgent}</dd>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                    <dt className="font-semibold text-[color:var(--agent-ink)]">Timestamp</dt>
+                    <dd>{formatDashboardDateTime(metadata.timestamp)}</dd>
+                  </div>
+                </dl>
               </div>
             </article>
           )

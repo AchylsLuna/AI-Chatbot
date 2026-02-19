@@ -8,6 +8,12 @@ export type DashboardLogItem = {
   source: 'Auth' | 'Reservation' | 'System'
   title: string
   detail: string
+  userId?: string
+  action?: string
+  details?: string
+  ipAddress?: string
+  userAgent?: string
+  timestamp?: string
   createdAt: string
   severity: DashboardLogSeverity
 }
