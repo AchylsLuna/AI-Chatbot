@@ -6,6 +6,7 @@ export type AuthSession = {
   user: {
     username: string
     role: UserRole
+    accountType?: string | null
     authMethod?: string
     mfa?: boolean
     sessionId?: string | null

@@ -8,9 +8,14 @@
     "start:server": "npm run start --prefix server",
     "backend:migrate": "npm run migrate --prefix server",
     "backend:seed": "npm run seed:core --prefix server",
+    "backend:seed:test": "NODE_ENV=development CORE_ADMIN_EMAIL=test.admin@aihealthcare.com CORE_ADMIN_PASSWORD=AdminTest2026 CORE_ADMIN_FIRST_NAME=Test CORE_ADMIN_LAST_NAME=Admin CORE_NURSE_EMAIL=test.doctor@aihealthcare.com CORE_NURSE_PASSWORD=DoctorTest2026 CORE_NURSE_FIRST_NAME=Test CORE_NURSE_LAST_NAME=Doctor CORE_USER_EMAIL=test.patient@aihealthcare.com CORE_USER_PASSWORD=PatientTest2026 CORE_USER_FIRST_NAME=Test CORE_USER_LAST_NAME=Patient npm run seed:core --prefix server",
     "db:up": "docker compose up -d mongo",
     "db:down": "docker compose down",
-    "install-all": "npm install --prefix server && npm install --prefix client"
+    "install-all": "npm install --prefix server && npm install --prefix client",
+    "check:client": "npm run typecheck --prefix client && npm run lint --prefix client && npm run build --prefix client",
+    "check:server": "node --check server/server.js && node --input-type=module -e \"import('./server/Config/env.js').then(() => console.log('Server env config valid'))\"",
+    "audit:prod": "npm audit --prefix client --omit=dev && npm audit --prefix server --omit=dev",
+    "audit:all": "sh -c 'npm audit --prefix client; c=$?; npm audit --prefix server; s=$?; test $c -eq 0 -a $s -eq 0'"
   },
   "devDependencies": {}
 }

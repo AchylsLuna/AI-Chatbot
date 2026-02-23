@@ -3,8 +3,8 @@ import type { UserRole } from '../types'
 
 export const requiresAuth: Partial<Record<AppPage, UserRole[]>> = {
   appointments: ['user'],
-  doctor_dashboard: ['nurse', 'admin', 'system_admin'],
-  admin: ['nurse', 'admin', 'system_admin'],
+  doctor_dashboard: ['nurse'],
+  admin: ['admin', 'system_admin'],
 }
 
 export const canAccessPage = (page: AppPage, role?: UserRole | null) => {

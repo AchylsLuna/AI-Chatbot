@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   buildRoute,
+  buildRouteFromCanonicalPath,
   hasKnownRoute,
   normalizePath,
+  resolveCanonicalPath,
   resolvePageFromPath,
 } from '../config/routing'
 import type { AppPage } from '../types/navigation'
@@ -10,6 +12,7 @@ import type { AppPage } from '../types/navigation'
 type NavigateOptions = {
   replace?: boolean
   scroll?: boolean
+  path?: string
 }
 
 export type NavigateToPage = (page: AppPage, options?: NavigateOptions) => void
@@ -46,8 +49,14 @@ const useAppRouting = () => {
 
     if (typeof window === 'undefined') return
 
-    const target = buildRoute(page)
-    const nextPath = normalizePath(target)
+    const requestedPath = options?.path
+      ? resolveCanonicalPath(options.path)
+      : normalizePath(buildRoute(page))
+    const nextPath =
+      resolvePageFromPath(requestedPath) === page
+        ? requestedPath
+        : normalizePath(buildRoute(page))
+    const target = buildRouteFromCanonicalPath(nextPath)
     const currentPath = normalizePath(window.location.pathname)
     const state = { appRoute: true, appPage: page }
 
@@ -91,6 +100,15 @@ const useAppRouting = () => {
       }
 
       const resolved = resolvePageFromPath(window.location.pathname)
+      const canonicalPath = resolveCanonicalPath(window.location.pathname)
+      const currentPath = normalizePath(window.location.pathname)
+      if (canonicalPath !== currentPath) {
+        window.history.replaceState(
+          { ...(window.history.state ?? {}), appRoute: true, appPage: resolved },
+          '',
+          buildRouteFromCanonicalPath(canonicalPath, window.location.search, window.location.hash)
+        )
+      }
       setCurrentPage(resolved)
       const stack = routeStackRef.current
       const secondToLast = stack[stack.length - 2]
@@ -111,7 +129,8 @@ const useAppRouting = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const resolvedPage = resolvePageFromPath(window.location.pathname)
+    const canonicalPath = resolveCanonicalPath(window.location.pathname)
+    const resolvedPage = resolvePageFromPath(canonicalPath)
 
     if (!hasKnownRoute(window.location.pathname)) {
       window.history.replaceState(
@@ -125,9 +144,9 @@ const useAppRouting = () => {
     }
 
     window.history.replaceState(
-      { appRoute: true, appPage: resolvedPage },
+      { ...(window.history.state ?? {}), appRoute: true, appPage: resolvedPage },
       '',
-      buildRoute(resolvedPage)
+      buildRouteFromCanonicalPath(canonicalPath, window.location.search, window.location.hash)
     )
     routeStackRef.current = [resolvedPage]
   }, [])

@@ -4,11 +4,17 @@ import DashboardTopBar from '../components/layout/DashboardTopBar'
 import DashboardWidgetBlocks from '../components/layout/DashboardWidgetBlocks'
 import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
 import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
+import WorkspaceSidebarShell from '../components/layout/WorkspaceSidebarShell'
 import {
   workspaceFieldClass,
   workspaceGhostButtonClass,
   workspacePrimaryButtonClass,
 } from '../styles/workspaceUi'
+import { buildRouteFromCanonicalPath, normalizePath } from '../config/routing'
+import {
+  getAppointmentsTabPath,
+  resolveAppointmentsTabFromPath,
+} from '../config/workspaceTabRoutes'
 import type { AppPage } from '../types/navigation'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import type { AuthSession, Reservation } from '../types'
@@ -121,7 +127,10 @@ const AppointmentsPage = ({
   onToggleDataMasking,
   onLogout,
 }: AppointmentsPageProps) => {
-  const [activeSection, setActiveSection] = useState<UserSidebarSection>('dashboard')
+  const [activeSection, setActiveSection] = useState<UserSidebarSection>(() => {
+    if (typeof window === 'undefined') return 'dashboard'
+    return resolveAppointmentsTabFromPath(window.location.pathname) ?? 'dashboard'
+  })
   const [searchQuery, setSearchQuery] = useState('')
 
   const [currentPassword, setCurrentPassword] = useState('')
@@ -147,6 +156,33 @@ const AppointmentsPage = ({
   }, [notificationPrefs])
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+
+  const setSection = (next: UserSidebarSection) => {
+    setActiveSection(next)
+    if (typeof window === 'undefined') return
+
+    const targetPath = getAppointmentsTabPath(next)
+    if (normalizePath(window.location.pathname) === normalizePath(targetPath)) return
+
+    window.history.pushState(
+      { ...(window.history.state ?? {}), appRoute: true, appPage: 'appointments' },
+      '',
+      buildRouteFromCanonicalPath(targetPath)
+    )
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handlePopState = () => {
+      setActiveSection(resolveAppointmentsTabFromPath(window.location.pathname) ?? 'dashboard')
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [])
 
   const sortedReservations = useMemo(
     () =>
@@ -255,7 +291,7 @@ const AppointmentsPage = ({
             <button
               type="button"
               className={workspacePrimaryButtonClass}
-              onClick={() => setActiveSection('dashboard')}
+              onClick={() => setSection('dashboard')}
             >
               Back to dashboard
             </button>
@@ -444,132 +480,131 @@ const AppointmentsPage = ({
 
   return (
     <WorkspaceCanvas>
-      <div className="mx-auto w-full max-w-[1536px] px-4 pb-10 pt-5 sm:px-6 lg:px-8">
-        <div className="reference-shell">
-          <Sidebar
-            variant="reference"
-            className="xl:self-start"
-            heightMode="viewport"
-            stickyOffset="compact"
-            brandTitle="AI Health Care"
-            brandSubtitle="Patient workspace"
-            sectionLabel="Main"
-            items={sidebarItems}
-            activeKey={activeSection}
-            onSelect={(key) => {
-              if (isUserSidebarSection(key)) {
-                setActiveSection(key)
-              }
-            }}
-            auxiliaryLabel="Utilities"
-            secondaryItems={utilityItems}
-            onSelectAuxiliary={(key) => {
-              if (isUserSidebarSection(key)) {
-                setActiveSection(key)
-              }
-            }}
-            footerProfile={{
-              name: profileName,
-              subtitle: 'Welcome back',
-              onClick: () => setActiveSection('settings'),
-            }}
-          />
-
-          <section className="reference-main">
-            {activeSection !== 'settings' ? (
-              <DashboardTopBar
-                title={sectionTitleMap[activeSection]}
-                searchValue={searchQuery}
-                searchPlaceholder={sectionSearchPlaceholderMap[activeSection]}
-                onSearchChange={setSearchQuery}
-                profileName={profileName}
-                profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
-                messageCount={Math.min(metrics.total, 99)}
-                notificationCount={Math.min(metrics.failed + 1, 99)}
-                showMessages={false}
-                showProfile={false}
-                borderlessActions
-              />
-            ) : null}
-
-            {activeSection === 'dashboard' ? (
-              <>
-                <DashboardStatStrip
-                  metrics={[
-                    { key: 'total', label: 'Total', value: metrics.total },
-                    { key: 'booked', label: 'Booked', value: metrics.booked },
-                    { key: 'recorded', label: 'Recorded', value: metrics.recorded },
-                    { key: 'failed', label: 'Failed', value: metrics.failed },
-                  ]}
-                />
-
-                <div className="reference-action-row">
-                  <button
-                    type="button"
-                    className={workspacePrimaryButtonClass}
-                    onClick={() => setActiveSection('appointments')}
-                  >
-                    Open appointments
-                  </button>
-                  <button
-                    type="button"
-                    className={workspaceGhostButtonClass}
-                    onClick={() => setActiveSection('settings')}
-                  >
-                    Account settings
-                  </button>
-                  <button
-                    type="button"
-                    className={workspaceGhostButtonClass}
-                    onClick={() => setShowLogoutConfirm(true)}
-                  >
-                    Logout
-                  </button>
-                </div>
-
-                <DashboardWidgetBlocks
-                  summaryTitle="Care completion"
-                  summaryValue={`${completionRate}%`}
-                  summaryLabel="Verified"
-                  secondaryLabel="Patient flow"
-                  activityTitle="Recent activities"
-                  activityItems={activityItems}
-                  chartTitle="Appointment status trend"
-                  chartSeries={[
-                    { key: 'booked', label: 'Booked', color: '#3b82f6', values: weeklySeries.booked },
-                    { key: 'recorded', label: 'Recorded', color: '#10b981', values: weeklySeries.recorded },
-                    { key: 'failed', label: 'Failed', color: '#ef4444', values: weeklySeries.failed },
-                  ]}
-                  recommendationTitle="Recommended care tracks"
-                  recommendationItems={recommendationItems}
-                  featuredTitle="Featured care departments"
-                  featuredItems={featuredItems}
-                />
-              </>
-            ) : null}
-
-            {activeSection === 'appointments' ? renderAppointmentsList() : null}
-            {activeSection === 'settings' ? renderSettings() : null}
-            {activeSection === 'notifications'
-              ? renderPlaceholderSection(
-                  'Notifications',
-                  'Alerts and updates will surface here. This panel is frontend-only for now.'
-                )
-              : null}
-            <ConfirmModal
-              open={showLogoutConfirm}
-              title="Confirm logout"
-              message="Are you sure you want to logout?"
-              confirmLabel="Logout"
-              cancelLabel="Cancel"
-              onConfirm={() => {
-                setShowLogoutConfirm(false)
-                onLogout?.()
+      <div className="w-full px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+        <WorkspaceSidebarShell
+          mobileTitle="Patient workspace"
+          stickyOffsetMode="auto"
+          sidebar={
+            <Sidebar
+              variant="reference"
+              mobileMode="drawer"
+              fullRail
+              brandTitle="AI Health Care"
+              brandSubtitle="Patient workspace"
+              sectionLabel="Main"
+              items={sidebarItems}
+              activeKey={activeSection}
+              onSelect={(key) => {
+                if (isUserSidebarSection(key)) {
+                  setSection(key)
+                }
               }}
-              onCancel={() => setShowLogoutConfirm(false)}
+              auxiliaryLabel="Utilities"
+              secondaryItems={utilityItems}
+              onSelectAuxiliary={(key) => {
+                if (isUserSidebarSection(key)) {
+                  setSection(key)
+                }
+              }}
             />
-          </section>
-        </div>
+          }
+          content={
+            <section className="reference-main">
+              {activeSection !== 'settings' ? (
+                <DashboardTopBar
+                  title={sectionTitleMap[activeSection]}
+                  searchValue={searchQuery}
+                  searchPlaceholder={sectionSearchPlaceholderMap[activeSection]}
+                  onSearchChange={setSearchQuery}
+                  profileName={profileName}
+                  profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
+                  messageCount={Math.min(metrics.total, 99)}
+                  notificationCount={Math.min(metrics.failed + 1, 99)}
+                  showMessages={false}
+                  showProfile={false}
+                  borderlessActions
+                />
+              ) : null}
+
+              {activeSection === 'dashboard' ? (
+                <>
+                  <DashboardStatStrip
+                    metrics={[
+                      { key: 'total', label: 'Total', value: metrics.total },
+                      { key: 'booked', label: 'Booked', value: metrics.booked },
+                      { key: 'recorded', label: 'Recorded', value: metrics.recorded },
+                      { key: 'failed', label: 'Failed', value: metrics.failed },
+                    ]}
+                  />
+
+                  <div className="reference-action-row">
+                    <button
+                      type="button"
+                      className={workspacePrimaryButtonClass}
+                      onClick={() => setSection('appointments')}
+                    >
+                      Open appointments
+                    </button>
+                    <button
+                      type="button"
+                      className={workspaceGhostButtonClass}
+                      onClick={() => setSection('settings')}
+                    >
+                      Account settings
+                    </button>
+                    <button
+                      type="button"
+                      className={workspaceGhostButtonClass}
+                      onClick={() => setShowLogoutConfirm(true)}
+                    >
+                      Logout
+                    </button>
+                  </div>
+
+                  <DashboardWidgetBlocks
+                    summaryTitle="Care completion"
+                    summaryValue={`${completionRate}%`}
+                    summaryLabel="Verified"
+                    secondaryLabel="Patient flow"
+                    activityTitle="Recent activities"
+                    activityItems={activityItems}
+                    chartTitle="Appointment status trend"
+                    chartSeries={[
+                      { key: 'booked', label: 'Booked', color: '#3b82f6', values: weeklySeries.booked },
+                      { key: 'recorded', label: 'Recorded', color: '#10b981', values: weeklySeries.recorded },
+                      { key: 'failed', label: 'Failed', color: '#ef4444', values: weeklySeries.failed },
+                    ]}
+                    recommendationTitle="Recommended care tracks"
+                    recommendationItems={recommendationItems}
+                    featuredTitle="Featured care departments"
+                    featuredItems={featuredItems}
+                  />
+                </>
+              ) : null}
+
+              {activeSection === 'appointments' ? renderAppointmentsList() : null}
+              {activeSection === 'settings' ? renderSettings() : null}
+              {activeSection === 'notifications'
+                ? renderPlaceholderSection(
+                    'Notifications',
+                    'Alerts and updates will surface here. This panel is frontend-only for now.'
+                  )
+                : null}
+              <ConfirmModal
+                open={showLogoutConfirm}
+                title="Confirm logout"
+                message="Are you sure you want to logout?"
+                confirmLabel="Logout"
+                cancelLabel="Cancel"
+                onConfirm={() => {
+                  setShowLogoutConfirm(false)
+                  onLogout?.()
+                }}
+                onCancel={() => setShowLogoutConfirm(false)}
+              />
+            </section>
+          }
+        />
       </div>
     </WorkspaceCanvas>
   )

@@ -38,10 +38,10 @@ const quickSupportPrompts = [
 ]
 
 const roleLabel = (role?: UserRole | null) => {
-  if (role === 'system_admin') return 'Super Admin'
-  if (role === 'admin') return 'Admin / Doctor'
-  if (role === 'nurse') return 'Nurse'
-  if (role === 'user') return 'User'
+  if (role === 'system_admin') return 'Admin'
+  if (role === 'admin') return 'Admin'
+  if (role === 'nurse') return 'Doctor'
+  if (role === 'user') return 'Patient'
   return 'Guest'
 }
 
@@ -172,10 +172,10 @@ const buildReply = (
     return `${guestHint}OTP is currently optional in this build. Standard sign-in uses email and password.`
   }
   if (normalized.includes('admin')) {
-    return `${guestHint}Admin Login supports Super Admin, Admin (Doctor), and Nurse accounts.`
+    return `${guestHint}Admin Login supports Admin and Doctor accounts.`
   }
   if (normalized.includes('doctor') || normalized.includes('dashboard')) {
-    return `${guestHint}Doctor's Dashboard is available for Nurse, Admin, and Super Admin after Admin Login.`
+    return `${guestHint}Doctor's Dashboard is available for Doctor and Admin accounts after sign-in.`
   }
   if (normalized.includes('login') || normalized.includes('register') || normalized.includes('sign up')) {
     return `${guestHint}Register first, then sign in to access protected pages.`

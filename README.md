@@ -14,6 +14,8 @@ This repository keeps your existing UI intact and stabilizes the backend/databas
 - Ledger is DB-backed (no blockchain write dependency)
 
 ## Quick start
+0. Node.js baseline:
+   - Use Node `>=22.13` (recommended via `.nvmrc`: `22.13.0`)
 1. Install dependencies:
    - `npm run install-all`
 2. Start MongoDB (Docker):
@@ -48,3 +50,15 @@ Full endpoint details: `server/docs/API.md`
 - Maintenance runbook: `server/docs/MAINTENANCE.md`
 - Security notes: `server/docs/SECURITY.md`
 - DB schema: `server/docs/DB_SCHEMA.md`
+
+## GitHub Desktop troubleshooting
+- If GitHub Desktop shows no patch, verify tracked file changes with `git status`.
+- Changes in ignored paths like `node_modules/` and `dist/` do not appear as Git patches.
+- For diagnosis, run `git status --short --ignored` to see ignored-folder churn.
+
+## Dependency audit notes (February 22, 2026)
+- `npm run audit:prod` is clean (`0` vulnerabilities for client/server production dependencies).
+- `npm run audit:all` still reports dev-only advisories in the client lint/tooling chain (`eslint`/`minimatch`/`ajv` transitive advisories).
+- Current npm remediation guidance proposes unsafe/breaking changes (including `eslint@4` downgrade), so those findings are tracked for upstream toolchain resolution.
+- Follow-up owner: repository maintainers.
+- Next review target: on the next dependency refresh cycle or when npm advisory data for ESLint v9+ is updated.

@@ -23,7 +23,16 @@ import type {
   ReservationDraft,
 } from '../types'
 import { sanitizeText } from '../utils/sanitize'
-import { getDefaultPageForRole } from '../utils/roles'
+import {
+  getDefaultDashboardPage,
+  isAdminRole,
+  isDoctorRole,
+} from '../utils/dashboardRoutes'
+import { resolveAuthPageFromPath } from '../config/routing'
+import {
+  isWorkspacePathForPage,
+  resolveWorkspaceCanonicalPath,
+} from '../config/workspaceTabRoutes'
 import type { NavigateToPage } from './useAppRouting'
 
 type UseAuthDataArgs = {
@@ -59,8 +68,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const [authError, setAuthError] = useState<string | null>(null)
   const [isAuthLoading, setIsAuthLoading] = useState(Boolean(initialStoredToken))
   const [postLoginPage, setPostLoginPage] = useState<AppPage | null>(null)
+  const [postLoginPath, setPostLoginPath] = useState<string | null>(null)
   const [pendingOtpChallenge, setPendingOtpChallenge] = useState<
-    (LoginOtpChallenge & { targetPage?: AppPage | null }) | null
+    (LoginOtpChallenge & { targetPage?: AppPage | null; targetPath?: string | null }) | null
   >(null)
   const [isBiometricReady, setIsBiometricReady] = useState(false)
   const [idleWarningOpen, setIdleWarningOpen] = useState(false)
@@ -232,7 +242,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
         setApiReady(true)
         if (redirectTarget) {
           const resolvedRedirectTarget =
-            session.user.role === 'user' ? getDefaultPageForRole(session.user.role) : redirectTarget
+            session.user.role === 'user'
+              ? getDefaultDashboardPage(session.user.role, session.user.accountType)
+              : redirectTarget
           navigateToPage(resolvedRedirectTarget, { replace: true })
         }
       } catch (error) {
@@ -280,9 +292,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
         }
         if (!isMounted) return
         if (currentPage !== 'login' && currentPage !== 'admin_login' && currentPage !== 'otp') {
+          const targetPath = resolveWorkspaceCanonicalPath(window.location.pathname)
           setPostLoginPage(currentPage)
-          const needsAdminLogin = currentPage === 'admin' || currentPage === 'doctor_dashboard'
-          navigateToPage(needsAdminLogin ? 'admin_login' : 'login', { replace: true })
+          setPostLoginPath(
+            targetPath && isWorkspacePathForPage(targetPath, currentPage) ? targetPath : null
+          )
+          navigateToPage(resolveAuthPageFromPath(window.location.pathname), { replace: true })
         }
       })()
       return () => {
@@ -291,9 +306,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     }
 
     if (currentPage !== 'login' && currentPage !== 'admin_login' && currentPage !== 'otp') {
+      const targetPath = resolveWorkspaceCanonicalPath(window.location.pathname)
       setPostLoginPage(currentPage)
-      const needsAdminLogin = currentPage === 'admin' || currentPage === 'doctor_dashboard'
-      navigateToPage(needsAdminLogin ? 'admin_login' : 'login', { replace: true })
+      setPostLoginPath(
+        targetPath && isWorkspacePathForPage(targetPath, currentPage) ? targetPath : null
+      )
+      navigateToPage(resolveAuthPageFromPath(window.location.pathname), { replace: true })
     }
   }, [auth0Enabled, authToken, authUser, currentPage, isAuthLoading, navigateToPage])
 
@@ -403,9 +421,21 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     }
   }
 
+  const resolveTargetWorkspacePath = (
+    targetPath: string | null | undefined,
+    page: AppPage
+  ) => {
+    if (!targetPath) return null
+    const canonical = resolveWorkspaceCanonicalPath(targetPath)
+    if (!canonical) return null
+    if (!isWorkspacePathForPage(canonical, page)) return null
+    return canonical
+  }
+
   const finalizeAuthenticatedSession = (
     session: AuthSession,
-    preferredTargetPage?: AppPage | null
+    preferredTargetPage?: AppPage | null,
+    preferredTargetPath?: string | null
   ) => {
     setAuthTokenState(session.token)
     setAuthUser(session.user)
@@ -414,27 +444,44 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     }
     setApiReady(true)
 
-    const defaultPageByRole = getDefaultPageForRole(session.user.role)
+    const defaultPageByRole = getDefaultDashboardPage(session.user.role, session.user.accountType)
     const resolvedTargetPage = preferredTargetPage ?? defaultPageByRole
     const finalTargetPage = session.user.role === 'user' ? defaultPageByRole : resolvedTargetPage
     const isAdminDashboardTarget = finalTargetPage === 'admin'
     const isDoctorDashboardTarget = finalTargetPage === 'doctor_dashboard'
-    const hasAdminWorkspaceRole =
-      session.user.role === 'nurse' || session.user.role === 'admin' || session.user.role === 'system_admin'
-    const hasDoctorWorkspaceRole = hasAdminWorkspaceRole
+    const hasAdminWorkspaceRole = isAdminRole(session.user.role, session.user.accountType)
+    const hasDoctorWorkspaceRole = isDoctorRole(session.user.role, session.user.accountType)
 
     setPendingOtpChallenge(null)
     setPostLoginPage(null)
+    setPostLoginPath(null)
 
     if (isAdminDashboardTarget && !hasAdminWorkspaceRole) {
-      setAuthError('Nurse, Admin, or Super Admin account required for Admin Workspace.')
+      if (hasDoctorWorkspaceRole) {
+        navigateToPage('doctor_dashboard')
+        return
+      }
+      setAuthError('Admin account required for Admin Workspace.')
       navigateToPage('admin_login')
       return
     }
 
     if (isDoctorDashboardTarget && !hasDoctorWorkspaceRole) {
-      setAuthError('Nurse, Admin, or Super Admin account required for Doctor Dashboard.')
+      if (hasAdminWorkspaceRole) {
+        navigateToPage('admin')
+        return
+      }
+      setAuthError('Doctor account required for Doctor Dashboard.')
       navigateToPage('doctor_login')
+      return
+    }
+
+    const resolvedTargetPath =
+      resolveTargetWorkspacePath(preferredTargetPath, finalTargetPage) ??
+      resolveTargetWorkspacePath(postLoginPath, finalTargetPage)
+
+    if (resolvedTargetPath) {
+      navigateToPage(finalTargetPage, { path: resolvedTargetPath })
       return
     }
 
@@ -453,8 +500,19 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
 
       // If server returned an OTP challenge, set it and navigate to OTP flow
       if ((result as any)?.challengeId) {
-        const challenge = result as unknown as LoginOtpChallenge & { targetPage?: AppPage | null }
-        setPendingOtpChallenge({ ...challenge, targetPage: targetPage ?? postLoginPage ?? null })
+        const challenge = result as unknown as LoginOtpChallenge & {
+          targetPage?: AppPage | null
+          targetPath?: string | null
+        }
+        const resolvedTargetPage = targetPage ?? postLoginPage ?? null
+        const resolvedTargetPath = resolvedTargetPage
+          ? resolveTargetWorkspacePath(postLoginPath, resolvedTargetPage)
+          : null
+        setPendingOtpChallenge({
+          ...challenge,
+          targetPage: resolvedTargetPage,
+          targetPath: resolvedTargetPath,
+        })
         navigateToPage('otp')
         return
       }
@@ -462,7 +520,10 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       // Otherwise it's an auth session
       const session = result as unknown as AuthSession
       const resolvedTargetPage = targetPage ?? postLoginPage ?? null
-      finalizeAuthenticatedSession(session, resolvedTargetPage)
+      const resolvedTargetPath = resolvedTargetPage
+        ? resolveTargetWorkspacePath(postLoginPath, resolvedTargetPage)
+        : null
+      finalizeAuthenticatedSession(session, resolvedTargetPage, resolvedTargetPath)
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'Login failed')
     } finally {
@@ -482,7 +543,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     try {
       const session = await api.verifyOtpLogin(pendingOtpChallenge.challengeId, code)
       const resolvedTargetPage = pendingOtpChallenge.targetPage ?? postLoginPage ?? null
-      finalizeAuthenticatedSession(session, resolvedTargetPage)
+      const resolvedTargetPath =
+        pendingOtpChallenge.targetPath ??
+        (resolvedTargetPage
+          ? resolveTargetWorkspacePath(postLoginPath, resolvedTargetPage)
+          : null)
+      finalizeAuthenticatedSession(session, resolvedTargetPage, resolvedTargetPath)
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'OTP verification failed')
     } finally {
@@ -518,11 +584,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       localStorage.setItem('pulse-ledger-token', session.token)
     }
     setApiReady(true)
-    navigateToPage(getDefaultPageForRole(session.user.role))
+    navigateToPage(getDefaultDashboardPage(session.user.role, session.user.accountType))
   }
 
-  const handleLogout = async (target?: 'login' | 'landing' | 'admin_login') => {
-    const prevRole = authUser?.role
+  const handleLogout = async (
+    target?: 'login' | 'landing' | 'admin_login' | 'doctor_login'
+  ) => {
     if (auth0Enabled) {
       void logoutAuth0Session()
     }
@@ -544,21 +611,11 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setPendingOtpChallenge(null)
     setApiReady(false)
     setPostLoginPage(null)
+    setPostLoginPath(null)
 
     // Determine where to navigate after logout
     if (target) {
       navigateToPage(target)
-      return
-    }
-
-    if (prevRole === 'user') {
-      navigateToPage('login')
-      return
-    }
-
-    if (prevRole) {
-      // Any staff/admin role -> admin login
-      navigateToPage('admin_login')
       return
     }
 

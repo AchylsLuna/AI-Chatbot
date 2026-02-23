@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef } from 'react'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
 import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
-import SidebarAccountCard from '../components/layout/SidebarAccountCard'
+import WorkspaceSidebarShell from '../components/layout/WorkspaceSidebarShell'
 import WorkspaceTopShell from '../components/layout/WorkspaceTopShell'
 import {
   workspaceGhostButtonClass,
@@ -12,6 +12,8 @@ import {
   workspacePrimaryButtonClass,
   workspaceSubtleTextClass,
 } from '../styles/workspaceUi'
+import { buildRouteFromCanonicalPath, normalizePath } from '../config/routing'
+import { getDoctorTabPath, resolveDoctorTabFromPath } from '../config/workspaceTabRoutes'
 import type { AppPage } from '../types/navigation'
 import type { AuthSession, Reservation } from '../types'
 import { maskIdentifier, maskPersonName } from '../utils/privacy'
@@ -29,7 +31,7 @@ type DoctorDashboardPageProps = {
   onToggleDataMasking: () => void
 }
 
-type DoctorSection = 'appointments' | 'queue' | 'analytics'
+type DoctorSection = 'appointments' | 'queue' | 'analytics' | 'settings'
 
 type AppointmentListItem = {
   id: string
@@ -65,16 +67,10 @@ const primaryItems: SidebarItem[] = [
 
 const utilityItems: SidebarItem[] = [
   {
-    key: 'admin_dashboard',
-    label: 'Admin workspace',
-    caption: 'Staff and system management',
-    icon: 'shield',
-  },
-  {
-    key: 'landing',
-    label: 'Landing',
-    caption: 'Public overview page',
-    icon: 'home',
+    key: 'settings',
+    label: 'Account Settings',
+    caption: 'Profile, theme, and privacy',
+    icon: 'settings',
   },
 ]
 
@@ -163,7 +159,10 @@ const DoctorDashboardPage = ({
   dataMaskingEnabled,
   onToggleDataMasking,
 }: DoctorDashboardPageProps) => {
-  const [activeSection, setActiveSection] = useState<DoctorSection>('appointments')
+  const [activeSection, setActiveSection] = useState<DoctorSection>(() => {
+    if (typeof window === 'undefined') return 'appointments'
+    return resolveDoctorTabFromPath(window.location.pathname) ?? 'appointments'
+  })
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentListItem | null>(null)
   const [showAppointmentDetail, setShowAppointmentDetail] = useState(false)
@@ -171,11 +170,10 @@ const DoctorDashboardPage = ({
 
   // Auto-logout after 15 minutes of inactivity (900000 ms)
   const INACTIVITY_MS = 15 * 60 * 1000
-  const timerRef = useRef<number | null>(null)
+  const timerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
 
   const resetInactivityTimer = () => {
     if (timerRef.current) window.clearTimeout(timerRef.current)
-    // @ts-ignore - window.setTimeout returns number in browser
     timerRef.current = window.setTimeout(() => {
       setShowLogoutConfirm(false)
       // auto logout after inactivity
@@ -197,6 +195,38 @@ const DoctorDashboardPage = ({
   const confirmAndLogout = () => {
     setShowLogoutConfirm(true)
   }
+
+  const setSection = (next: DoctorSection) => {
+    setActiveSection(next)
+    setSelectedAppointment(null)
+    setShowAppointmentDetail(false)
+
+    if (typeof window === 'undefined') return
+
+    const targetPath = getDoctorTabPath(next)
+    if (normalizePath(window.location.pathname) === normalizePath(targetPath)) return
+
+    window.history.pushState(
+      { ...(window.history.state ?? {}), appRoute: true, appPage: 'doctor_dashboard' },
+      '',
+      buildRouteFromCanonicalPath(targetPath)
+    )
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handlePopState = () => {
+      setActiveSection(resolveDoctorTabFromPath(window.location.pathname) ?? 'appointments')
+      setSelectedAppointment(null)
+      setShowAppointmentDetail(false)
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [])
 
   const appointmentItems = useMemo<AppointmentListItem[]>(() => {
     const orderedReservations = [...reservations].sort(
@@ -295,6 +325,16 @@ const DoctorDashboardPage = ({
     ]
   }, [appointmentItems])
 
+  const settingsMetrics = useMemo(
+    () => [
+      { key: 'settings-account', label: 'Account', value: authUser?.username ?? 'Unknown', caption: 'Signed in user' },
+      { key: 'settings-role', label: 'Role', value: getWorkspaceRoleLabel(authUser?.role), caption: 'Workspace role' },
+      { key: 'settings-theme', label: 'Theme', value: theme === 'dark' ? 'Dark' : 'Light', caption: 'Current theme' },
+      { key: 'settings-masking', label: 'Masking', value: dataMaskingEnabled ? 'On' : 'Off', caption: 'Data protection' },
+    ],
+    [authUser?.role, authUser?.username, dataMaskingEnabled, theme]
+  )
+
   const sectionMeta = {
     appointments: {
       title: 'Appointments',
@@ -314,323 +354,335 @@ const DoctorDashboardPage = ({
       searchPlaceholder: 'Filter analytics by department or status',
       metrics: analyticsMetrics,
     },
+    settings: {
+      title: 'Account Settings',
+      description: 'Manage your doctor workspace preferences and session details.',
+      searchPlaceholder: 'Search settings',
+      metrics: settingsMetrics,
+    },
   } as const
 
   const activeMeta = sectionMeta[activeSection]
 
   return (
     <WorkspaceCanvas>
-      <div className="mx-auto w-full max-w-[1500px] px-4 pb-10 pt-5 sm:px-6 lg:px-8">
-        <div className="grid items-start gap-6 xl:grid-cols-[17.75rem_minmax(0,1fr)]">
-          <Sidebar
-            variant="dashboard"
-            className="xl:self-start"
-            heightMode="viewport"
-            stickyOffset="header"
-            brandTitle="AI Health Care"
-            brandSubtitle="Doctor workspace"
-            onBrandClick={() => onNavigate?.('landing')}
-            sectionLabel="Primary"
-            items={primaryItems}
-            activeKey={activeSection}
-            onSelect={(key) => {
-              if (key === 'appointments' || key === 'queue' || key === 'analytics') {
-                setActiveSection(key)
-                setSelectedAppointment(null)
-                setShowAppointmentDetail(false)
-              }
-            }}
-            auxiliaryLabel="Utilities"
-            secondaryItems={utilityItems}
-            supportItem={{ key: 'logout', label: 'Logout', icon: 'shield' }}
-            onSelectAuxiliary={(key) => {
-              if (key === 'logout') {
-                confirmAndLogout()
-                return
-              }
-              if (key === 'admin_dashboard' && authUser?.role !== 'user') {
-                onNavigate?.('admin')
-                return
-              }
-              if (key === 'landing') {
-                onNavigate?.('landing')
-              }
-            }}
-            profileExtra={
-              <div className="space-y-2.5">
-                <SidebarAccountCard
-                  username={authUser?.username ?? 'Unknown'}
-                  roleLabel={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
-                  sessionStatus={sessionStatus}
-                  theme={theme}
-                  onToggleTheme={onToggleTheme}
-                  dataMaskingEnabled={dataMaskingEnabled}
-                  onToggleDataMasking={onToggleDataMasking}
-                />
-                <button type="button" className={`${workspaceGhostButtonClass} w-full`} onClick={confirmAndLogout}>
-                  Logout
-                </button>
-              </div>
-            }
-          />
-
-          <section className="space-y-6">
-            <WorkspaceTopShell
-              eyebrow="Doctor session"
-              title={activeMeta.title}
-              description={activeMeta.description}
-              searchValue={searchQuery}
-              searchPlaceholder={activeMeta.searchPlaceholder}
-              onSearchChange={setSearchQuery}
-              quickActions={
-                <>
-                  {authUser?.role !== 'user' && (
-                    <button
-                      type="button"
-                      className={workspacePrimaryButtonClass}
-                      onClick={() => onNavigate?.('admin')}
-                    >
-                      Admin workspace
-                    </button>
-                  )}
-                  <button type="button" className={workspaceGhostButtonClass} onClick={confirmAndLogout}>
-                    Logout
-                  </button>
-                </>
-              }
-              metrics={activeMeta.metrics}
-            />
-
-            <ConfirmModal
-              open={showLogoutConfirm}
-              title="Confirm logout"
-              message="Are you sure you want to logout now?"
-              confirmLabel="Logout"
-              cancelLabel="Cancel"
-              onConfirm={() => {
-                setShowLogoutConfirm(false)
-                onLogout()
+      <div className="w-full px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+        <WorkspaceSidebarShell
+          mobileTitle="Doctor workspace"
+          stickyOffsetMode="auto"
+          sidebar={
+            <Sidebar
+              variant="dashboard"
+              mobileMode="drawer"
+              fullRail
+              brandTitle="AI Health Care"
+              brandSubtitle="Doctor workspace"
+              onBrandClick={() => onNavigate?.('landing')}
+              sectionLabel="Primary"
+              items={primaryItems}
+              activeKey={activeSection}
+              onSelect={(key) => {
+                if (key === 'appointments' || key === 'queue' || key === 'analytics' || key === 'settings') {
+                  setSection(key)
+                }
               }}
-              onCancel={() => setShowLogoutConfirm(false)}
+              auxiliaryLabel="Utilities"
+              secondaryItems={utilityItems}
+              supportItem={{ key: 'logout', label: 'Logout', icon: 'shield' }}
+              onSelectAuxiliary={(key) => {
+                if (key === 'settings') {
+                  setSection('settings')
+                  return
+                }
+                if (key === 'logout') {
+                  confirmAndLogout()
+                  return
+                }
+              }}
             />
+          }
+          content={
+            <section className="space-y-6">
+              <WorkspaceTopShell
+                eyebrow="Doctor session"
+                title={activeMeta.title}
+                description={activeMeta.description}
+                searchValue={searchQuery}
+                searchPlaceholder={activeMeta.searchPlaceholder}
+                onSearchChange={setSearchQuery}
+                metrics={activeMeta.metrics}
+              />
 
-            {/* APPOINTMENTS VIEW */}
-            {activeSection === 'appointments' ? (
-              <section className={`${workspacePanelClass} p-5`}>
-                <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Appointment list</h2>
-                <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                  Complete queue of patient appointments with priority flags and triage data.
-                </p>
+              <ConfirmModal
+                open={showLogoutConfirm}
+                title="Confirm logout"
+                message="Are you sure you want to logout now?"
+                confirmLabel="Logout"
+                cancelLabel="Cancel"
+                onConfirm={() => {
+                  setShowLogoutConfirm(false)
+                  onLogout()
+                }}
+                onCancel={() => setShowLogoutConfirm(false)}
+              />
 
-                {filteredAppointments.length === 0 ? (
-                  <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                    <p className={`text-sm ${workspaceMutedTextClass}`}>
-                      No appointments match your search query.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mt-4 space-y-3">
-                    {filteredAppointments.map((apt) => {
-                      const displayName = dataMaskingEnabled ? maskPersonName(apt.patientName) : apt.patientName
-                      const displayId = dataMaskingEnabled ? maskIdentifier(apt.id) : apt.id
+              {/* APPOINTMENTS VIEW */}
+              {activeSection === 'appointments' ? (
+                <section className={`${workspacePanelClass} p-5`}>
+                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Appointment list</h2>
+                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                    Complete queue of patient appointments with priority flags and triage data.
+                  </p>
 
-                      return (
-                        <div
-                          key={apt.id}
-                          className={`${workspacePanelClass} cursor-pointer p-4 transition-all hover:shadow-md`}
-                          onClick={() => {
-                            setSelectedAppointment(apt)
-                            setShowAppointmentDetail(true)
-                          }}
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
-                                {apt.flagged && (
-                                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" title="Flagged" />
-                                )}
+                  {filteredAppointments.length === 0 ? (
+                    <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>
+                        No appointments match your search query.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      {filteredAppointments.map((apt) => {
+                        const displayName = dataMaskingEnabled ? maskPersonName(apt.patientName) : apt.patientName
+                        const displayId = dataMaskingEnabled ? maskIdentifier(apt.id) : apt.id
+
+                        return (
+                          <div
+                            key={apt.id}
+                            className={`${workspacePanelClass} cursor-pointer p-4 transition-all hover:shadow-md`}
+                            onClick={() => {
+                              setSelectedAppointment(apt)
+                              setShowAppointmentDetail(true)
+                            }}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
+                                  {apt.flagged && (
+                                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" title="Flagged" />
+                                  )}
+                                </div>
+                                <p className={`text-xs ${workspaceMutedTextClass}`}>{displayId}</p>
+                                <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>{apt.symptoms}</p>
                               </div>
-                              <p className={`text-xs ${workspaceMutedTextClass}`}>{displayId}</p>
-                              <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>{apt.symptoms}</p>
+                              <div className="flex flex-col gap-2">
+                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(apt.priority)}`}>
+                                  {apt.priority}
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex flex-col gap-2">
-                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(apt.priority)}`}>
-                                {apt.priority}
+
+                            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
+                              <span className={workspaceMutedTextClass}>{apt.department}</span>
+                              <span className={workspaceMutedTextClass}>{formatTime(apt.requestedTime)}</span>
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 font-semibold ${statusChipClass(apt.status)}`}>
+                                {apt.status}
                               </span>
                             </div>
                           </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </section>
+              ) : null}
 
-                          <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
-                            <span className={workspaceMutedTextClass}>{apt.department}</span>
-                            <span className={workspaceMutedTextClass}>{formatTime(apt.requestedTime)}</span>
-                            <span className={`inline-flex rounded-full border px-2.5 py-1 font-semibold ${statusChipClass(apt.status)}`}>
-                              {apt.status}
-                            </span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </section>
-            ) : null}
+              {/* QUEUE MANAGEMENT VIEW */}
+              {activeSection === 'queue' ? (
+                <section className={`${workspacePanelClass} p-5`}>
+                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Patient queue</h2>
+                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                    Active queue of pending patients awaiting doctor review and status updates.
+                  </p>
 
-            {/* QUEUE MANAGEMENT VIEW */}
-            {activeSection === 'queue' ? (
-              <section className={`${workspacePanelClass} p-5`}>
-                <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Patient queue</h2>
-                <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                  Active queue of pending patients awaiting doctor review and status updates.
-                </p>
+                  {queueItems.length === 0 ? (
+                    <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>
+                        No pending patients in the queue.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                              Patient
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                              Department
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                              Time
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                              Priority
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                              Action
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[color:var(--card-border)]">
+                          {queueItems.map((item) => {
+                            const displayName = dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName
 
-                {queueItems.length === 0 ? (
-                  <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                    <p className={`text-sm ${workspaceMutedTextClass}`}>
-                      No pending patients in the queue.
+                            return (
+                              <tr key={item.id}>
+                                <td className="px-3 py-3">
+                                  <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
+                                </td>
+                                <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.department}</td>
+                                <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{formatTime(item.requestedTime)}</td>
+                                <td className="px-3 py-3">
+                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(item.priority)}`}>
+                                    {item.priority}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <button
+                                    type="button"
+                                    className={`${workspacePrimaryButtonClass} text-xs`}
+                                    onClick={() => {
+                                      setSelectedAppointment(item)
+                                      setShowAppointmentDetail(true)
+                                    }}
+                                  >
+                                    View
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              ) : null}
+
+              {/* ANALYTICS VIEW */}
+              {activeSection === 'analytics' ? (
+                <section className="space-y-4">
+                  <div className={`${workspacePanelClass} p-5`}>
+                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Department breakdown</h2>
+                    <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                      Appointment distribution across departments.
                     </p>
-                  </div>
-                ) : (
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
-                      <thead>
-                        <tr>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
-                            Patient
-                          </th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
-                            Department
-                          </th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
-                            Time
-                          </th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
-                            Priority
-                          </th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
-                            Action
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[color:var(--card-border)]">
-                        {queueItems.map((item) => {
-                          const displayName = dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName
 
-                          return (
-                            <tr key={item.id}>
-                              <td className="px-3 py-3">
-                                <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
-                              </td>
-                              <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.department}</td>
-                              <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{formatTime(item.requestedTime)}</td>
-                              <td className="px-3 py-3">
-                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(item.priority)}`}>
-                                  {item.priority}
-                                </span>
-                              </td>
-                              <td className="px-3 py-3">
-                                <button
-                                  type="button"
-                                  className={`${workspacePrimaryButtonClass} text-xs`}
-                                  onClick={() => {
-                                    setSelectedAppointment(item)
-                                    setShowAppointmentDetail(true)
-                                  }}
-                                >
-                                  View
-                                </button>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                    <div className="mt-4 space-y-2">
+                      {Array.from(
+                        new Map(
+                          appointmentItems.map((item) => [
+                            item.department,
+                            appointmentItems.filter((i) => i.department === item.department).length,
+                          ])
+                        ).entries()
+                      ).map(([dept, count]) => (
+                        <div key={dept} className="flex items-center justify-between">
+                          <span className={`text-sm ${workspaceHeadingTextClass}`}>{dept}</span>
+                          <div className="flex items-center gap-3">
+                            <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
+                              <div
+                                className="h-full bg-blue-500"
+                                style={{
+                                  width: `${(count / appointmentItems.length) * 100}%`,
+                                }}
+                              />
+                            </div>
+                            <span className={`w-8 text-right text-sm font-semibold ${workspaceHeadingTextClass}`}>{count}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )}
-              </section>
-            ) : null}
 
-            {/* ANALYTICS VIEW */}
-            {activeSection === 'analytics' ? (
-              <section className="space-y-4">
-                <div className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Department breakdown</h2>
+                  <div className={`${workspacePanelClass} p-5`}>
+                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Status distribution</h2>
+                    <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                      Current appointment status breakdown.
+                    </p>
+
+                    <div className="mt-4 space-y-2">
+                      {[
+                        {
+                          label: 'Booked',
+                          count: appointmentItems.filter((i) => i.status === 'Booked').length,
+                          color: 'bg-sky-500',
+                        },
+                        {
+                          label: 'Recorded',
+                          count: appointmentItems.filter((i) => i.status === 'Recorded').length,
+                          color: 'bg-emerald-500',
+                        },
+                        {
+                          label: 'Failed',
+                          count: appointmentItems.filter((i) => i.status === 'Failed').length,
+                          color: 'bg-rose-500',
+                        },
+                      ].map(({ label, count, color }) => (
+                        <div key={label} className="flex items-center justify-between">
+                          <span className={`text-sm ${workspaceHeadingTextClass}`}>{label}</span>
+                          <div className="flex items-center gap-3">
+                            <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
+                              <div
+                                className={color}
+                                style={{
+                                  width: `${appointmentItems.length > 0 ? (count / appointmentItems.length) * 100 : 0}%`,
+                                }}
+                              />
+                            </div>
+                            <span className={`w-8 text-right text-sm font-semibold ${workspaceHeadingTextClass}`}>{count}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              {activeSection === 'settings' ? (
+                <section className={`${workspacePanelClass} p-5`}>
+                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Account settings</h2>
                   <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Appointment distribution across departments.
+                    Manage profile visibility and workspace preferences from a single tab.
                   </p>
 
-                  <div className="mt-4 space-y-2">
-                    {Array.from(
-                      new Map(
-                        appointmentItems.map((item) => [
-                          item.department,
-                          appointmentItems.filter((i) => i.department === item.department).length,
-                        ])
-                      ).entries()
-                    ).map(([dept, count]) => (
-                      <div key={dept} className="flex items-center justify-between">
-                        <span className={`text-sm ${workspaceHeadingTextClass}`}>{dept}</span>
-                        <div className="flex items-center gap-3">
-                          <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
-                            <div
-                              className="h-full bg-blue-500"
-                              style={{
-                                width: `${(count / appointmentItems.length) * 100}%`,
-                              }}
-                            />
-                          </div>
-                          <span className={`w-8 text-right text-sm font-semibold ${workspaceHeadingTextClass}`}>{count}</span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="reference-card-soft p-3">
+                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Account</p>
+                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{authUser?.username ?? 'Unknown'}</p>
+                    </div>
+                    <div className="reference-card-soft p-3">
+                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Role</p>
+                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{getWorkspaceRoleLabel(authUser?.role)}</p>
+                    </div>
+                    <div className="reference-card-soft p-3">
+                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Theme</p>
+                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{theme === 'dark' ? 'Dark' : 'Light'}</p>
+                    </div>
+                    <div className="reference-card-soft p-3">
+                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Data masking</p>
+                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{dataMaskingEnabled ? 'On' : 'Off'}</p>
+                    </div>
                   </div>
-                </div>
 
-                <div className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Status distribution</h2>
-                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Current appointment status breakdown.
-                  </p>
-
-                  <div className="mt-4 space-y-2">
-                    {[
-                      {
-                        label: 'Booked',
-                        count: appointmentItems.filter((i) => i.status === 'Booked').length,
-                        color: 'bg-sky-500',
-                      },
-                      {
-                        label: 'Recorded',
-                        count: appointmentItems.filter((i) => i.status === 'Recorded').length,
-                        color: 'bg-emerald-500',
-                      },
-                      {
-                        label: 'Failed',
-                        count: appointmentItems.filter((i) => i.status === 'Failed').length,
-                        color: 'bg-rose-500',
-                      },
-                    ].map(({ label, count, color }) => (
-                      <div key={label} className="flex items-center justify-between">
-                        <span className={`text-sm ${workspaceHeadingTextClass}`}>{label}</span>
-                        <div className="flex items-center gap-3">
-                          <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
-                            <div
-                              className={color}
-                              style={{
-                                width: `${appointmentItems.length > 0 ? (count / appointmentItems.length) * 100 : 0}%`,
-                              }}
-                            />
-                          </div>
-                          <span className={`w-8 text-right text-sm font-semibold ${workspaceHeadingTextClass}`}>{count}</span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
+                      Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
+                    </button>
+                    <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
+                      Turn data masking {dataMaskingEnabled ? 'Off' : 'On'}
+                    </button>
                   </div>
-                </div>
-              </section>
-            ) : null}
-          </section>
-        </div>
+
+                  <p className={`mt-4 text-xs ${workspaceSubtleTextClass}`}>Session: {sessionStatus}</p>
+                </section>
+              ) : null}
+            </section>
+          }
+        />
       </div>
 
       {/* APPOINTMENT DETAIL MODAL */}

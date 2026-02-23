@@ -19,12 +19,11 @@ Required values:
 OTP email transport:
 - `EMAIL_USER`
 - `EMAIL_PASS`
-- `EMAIL_HOST`
+- `EMAIL_FROM`
 
 Optional:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `CLIENT_URL`
 - `FRONTEND_URL`
 
 ## Local deployment (backend-first)

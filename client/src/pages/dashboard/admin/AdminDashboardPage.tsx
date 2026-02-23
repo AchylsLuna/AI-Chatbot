@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import DashboardTopBar from '../../../components/layout/DashboardTopBar'
 import Sidebar, { type SidebarItem } from '../../../components/layout/Sidebar'
 import WorkspaceCanvas from '../../../components/layout/WorkspaceCanvas'
+import WorkspaceSidebarShell from '../../../components/layout/WorkspaceSidebarShell'
 import type { AuthSession, Reservation } from '../../../types'
 import type { AppPage } from '../../../types/navigation'
 import { maskIdentifier, maskPersonName } from '../../../utils/privacy'
@@ -69,7 +70,6 @@ const utilityItems: SidebarItem[] = [
   { key: 'settings', label: 'Settings', icon: 'settings' },
 ]
 
-const sidebarCollapsedKey = 'pulse-ledger-admin-sidebar-collapsed'
 const notificationPrefKey = 'pulse-ledger-admin-notification-preferences'
 const userMetaKey = 'pulse-ledger-admin-user-management-meta'
 const doctorMetaKey = 'pulse-ledger-admin-doctor-management-meta'
@@ -87,7 +87,6 @@ const defaultNotificationPrefs: NotificationPreferences = {
 
 const PAGINATION_PAGE_SIZE = 10
 const MAX_PAGE_BUTTONS = 10
-const SIDEBAR_COLLAPSE_BREAKPOINT = 1200
 
 const parseDate = (value: string) => {
   const timestamp = new Date(value).getTime()
@@ -393,14 +392,6 @@ const AdminDashboardPage = ({
   const [reportSeverityFilter, setReportSeverityFilter] = useState<ReportLogSeverityFilter>('all')
   const [reportActionFilter, setReportActionFilter] = useState<ReportLogActionFilter>('all')
   const [managementTab, setManagementTab] = useState<AdminUserManagementTab>('users')
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.localStorage.getItem(sidebarCollapsedKey) === 'true'
-  })
-  const [isNarrowViewport, setIsNarrowViewport] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.innerWidth < SIDEBAR_COLLAPSE_BREAKPOINT
-  })
 
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => {
     if (typeof window === 'undefined') return defaultNotificationPrefs
@@ -432,26 +423,6 @@ const AdminDashboardPage = ({
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const handleResize = () => {
-      setIsNarrowViewport(window.innerWidth < SIDEBAR_COLLAPSE_BREAKPOINT)
-    }
-
-    handleResize()
-    window.addEventListener('resize', handleResize)
-
-    return () => {
-      window.removeEventListener('resize', handleResize)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || isNarrowViewport) return
-    window.localStorage.setItem(sidebarCollapsedKey, isSidebarCollapsed ? 'true' : 'false')
-  }, [isNarrowViewport, isSidebarCollapsed])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -740,55 +711,49 @@ const AdminDashboardPage = ({
     user_management: 'User Management',
     settings: 'Settings',
   }
-  const effectiveSidebarCollapsed = isNarrowViewport ? true : isSidebarCollapsed
 
   return (
     <WorkspaceCanvas>
-      <div className="w-full overflow-x-auto">
-        <div
-          className={`reference-shell h-screen min-w-[1080px] ${
-            effectiveSidebarCollapsed ? 'reference-shell--sidebar-collapsed' : ''
-          }`}
-        >
-          <Sidebar
-            variant="reference"
-            className="self-start"
-            heightMode="viewport"
-            stickyOffset="compact"
-            isCollapsed={effectiveSidebarCollapsed}
-            onToggleCollapse={
-              isNarrowViewport ? undefined : () => setIsSidebarCollapsed((previous) => !previous)
-            }
-            brandTitle="AI Health Care"
-            brandSubtitle="Admin workspace"
-            sectionLabel="Main"
-            items={sidebarItems}
-            activeKey={activeSection}
-            onSelect={(key) => {
-              if (isAdminSidebarSection(key)) {
-                setSection(key)
-              }
-            }}
-            auxiliaryLabel="Utilities"
-            secondaryItems={utilityItems}
-            onSelectAuxiliary={(key) => {
-              if (isAdminSidebarSection(key)) {
-                setSection(key)
-                return
-              }
-              if (key === 'logout') {
-                onLogout()
-              }
-            }}
-            supportItem={{ key: 'logout', label: 'Log out', icon: 'shield' }}
-            footerProfile={{
-              name: authUser?.username ?? 'Admin',
-              subtitle: 'Admin workspace',
-              onClick: () => setSection('settings'),
-            }}
-          />
-
-          <section className="reference-main h-screen overflow-y-auto px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[1500px] px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+        <WorkspaceSidebarShell
+          mobileTitle="Admin workspace"
+          stickyOffsetMode="auto"
+          sidebar={
+            <Sidebar
+              variant="reference"
+              mobileMode="drawer"
+              fullRail
+              brandTitle="AI Health Care"
+              brandSubtitle="Admin workspace"
+              sectionLabel="Main"
+              items={sidebarItems}
+              activeKey={activeSection}
+              onSelect={(key) => {
+                if (isAdminSidebarSection(key)) {
+                  setSection(key)
+                }
+              }}
+              auxiliaryLabel="Utilities"
+              secondaryItems={utilityItems}
+              onSelectAuxiliary={(key) => {
+                if (isAdminSidebarSection(key)) {
+                  setSection(key)
+                  return
+                }
+                if (key === 'logout') {
+                  onLogout()
+                }
+              }}
+              supportItem={{ key: 'logout', label: 'Log out', icon: 'shield' }}
+              footerProfile={{
+                name: authUser?.username ?? 'Admin',
+                subtitle: 'Admin workspace',
+                onClick: () => setSection('settings'),
+              }}
+            />
+          }
+          content={
+            <section className="reference-main px-4 pb-10 pt-5 sm:px-6 lg:px-8">
             {activeSection === 'dashboard' ? (
               <h1 className="reference-page-title">{sectionTitleMap[activeSection]}</h1>
             ) : activeSection !== 'settings' ? (
@@ -938,8 +903,9 @@ const AdminDashboardPage = ({
                 passwordMessage={passwordMessage}
               />
             ) : null}
-          </section>
-        </div>
+            </section>
+          }
+        />
       </div>
     </WorkspaceCanvas>
   )

@@ -3,8 +3,9 @@ import AuditLog from "../Models/AuditLogModel.js";
 import AccessRequest from "../Models/AccessRequestModel.js";
 import LedgerEntry from "../Models/LedgerEntryModel.js";
 import { Parser } from "json2csv";
-import archiver from "archiver";
 import crypto from "crypto";
+import { ZipFile } from "yazl";
+import { appConfig } from "../Config/env.js";
 
 const normalizeRole = (role) => (role === "doctor" ? "nurse" : role);
 
@@ -128,19 +129,38 @@ export async function downloadAuditBackup(req, res) {
         });
 
         const algorithm = "aes-256-cbc";
-        const password = process.env.BACKUP_PASSWORD || "default_secret_password";
-        const key = crypto.scryptSync(password, "salt", 32);
+        const key = crypto.scryptSync(appConfig.backupPassword, "salt", 32);
         const iv = crypto.randomBytes(16);
 
         res.attachment("audit_logs_backup.zip.enc");
         res.write(iv);
 
         const cipher = crypto.createCipheriv(algorithm, key, iv);
-        const archive = archiver("zip", { zlib: { level: 9 } });
+        const zipFile = new ZipFile();
+        let streamFailed = false;
 
-        archive.pipe(cipher).pipe(res);
-        archive.append(csv, { name: "audit_logs.csv" });
-        await archive.finalize();
+        const handleStreamError = (streamError) => {
+            if (streamFailed) return;
+            streamFailed = true;
+            console.error("Backup stream failed", streamError);
+
+            if (!res.headersSent) {
+                res.status(500).json({ message: "Failed to generate backup." });
+                return;
+            }
+
+            if (!res.destroyed) {
+                res.destroy(streamError);
+            }
+        };
+
+        zipFile.outputStream.on("error", handleStreamError);
+        cipher.on("error", handleStreamError);
+        res.on("error", handleStreamError);
+
+        zipFile.outputStream.pipe(cipher).pipe(res);
+        zipFile.addBuffer(Buffer.from(csv, "utf8"), "audit_logs.csv");
+        zipFile.end();
     } catch (error) {
         console.error("Backup failed", error);
         if (!res.headersSent) {

@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import passport from 'passport';
+import { isGoogleAuthEnabled } from '../Config/passport.js';
 import authMiddleware from '../Middleware/authMiddleware.js';
 import { authorizeRoles } from '../Middleware/rbacMiddleware.js';
 import { uploadLicense, handleUploadError } from '../Middleware/uploadMiddleware.js';
 import { loginLimiter } from '../Middleware/rateLimiter.js';
+import { appConfig } from '../Config/env.js';
 import {
     register,
     registerDoctor,
@@ -48,14 +50,25 @@ router.get('/health', (_req, res) => {
 });
 
 // Google Login Trigger
-router.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+if (isGoogleAuthEnabled) {
+    router.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-// Google Callback
-router.get(
-    '/auth/google/callback',
-    passport.authenticate('google', { session: false, failureRedirect: '/login-failed' }),
-    googleCallback
-);
+    // Google Callback
+    router.get(
+        '/auth/google/callback',
+        passport.authenticate('google', { session: false, failureRedirect: '/login-failed' }),
+        googleCallback
+    );
+} else {
+    const googleOauthDisabled = (_req, res) => {
+        return res.status(503).json({
+            message: 'Google OAuth is not configured on this server.',
+        });
+    };
+
+    router.get('/auth/google', googleOauthDisabled);
+    router.get('/auth/google/callback', googleOauthDisabled);
+}
 
 // User routes
 router.post(
@@ -131,8 +144,14 @@ router.put(
     updateSettings
 );
 
-// DEBUG route - local only
-router.get('/debug/user', debugUser);
+if (appConfig.enableDebugRoutes) {
+    router.get(
+        '/debug/user',
+        authMiddleware,
+        authorizeRoles('admin', 'system_admin'),
+        debugUser
+    );
+}
 
 // Appointment routes
 router.get('/appointments', authMiddleware, getAppointments);

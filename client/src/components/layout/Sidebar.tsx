@@ -33,8 +33,10 @@ export type SidebarAuxItem = {
 type SidebarProps = {
   className?: string
   variant?: 'default' | 'dashboard' | 'reference'
+  mobileMode?: 'drawer'
+  fullRail?: boolean
   heightMode?: 'content' | 'viewport'
-  stickyOffset?: 'compact' | 'header'
+  stickyOffset?: 'compact' | 'header' | 'auto'
   isCollapsed?: boolean
   onToggleCollapse?: () => void
   showBrand?: boolean
@@ -167,15 +169,6 @@ const SidebarGlyph = ({ icon }: { icon?: SidebarIcon }) => {
   }
 }
 
-const defaultSidebarItemClass =
-  'w-full rounded-xl border px-3 py-2.5 text-left transition flex items-start gap-2.5'
-
-const dashboardSidebarItemClass =
-  'w-full rounded-2xl border border-transparent px-3 py-2.5 text-left transition flex items-start gap-3'
-
-const sectionHeadingClass =
-  'text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]'
-
 const renderProfileInitials = (name: string, fallback = 'U') => {
   const tokens = name.trim().split(/\s+/).filter(Boolean)
   if (!tokens.length) return fallback
@@ -183,9 +176,16 @@ const renderProfileInitials = (name: string, fallback = 'U') => {
   return `${tokens[0][0] ?? ''}${tokens[1][0] ?? ''}`.toUpperCase()
 }
 
+const resolveAutoOffset = (): 'compact' | 'header' => {
+  if (typeof document === 'undefined') return 'compact'
+  return document.querySelector('[data-workspace-header="true"]') ? 'header' : 'compact'
+}
+
 const Sidebar = ({
   className,
   variant = 'default',
+  mobileMode = 'drawer',
+  fullRail = true,
   heightMode = 'content',
   stickyOffset = 'compact',
   isCollapsed = false,
@@ -214,18 +214,13 @@ const Sidebar = ({
 }: SidebarProps) => {
   const mainItems = (primaryItems ?? items ?? []).filter(Boolean)
   const utilityItems = (secondaryItems ?? auxiliaryItems ?? []).filter(Boolean)
-  const referenceViewportClass =
+  const resolvedStickyOffset = stickyOffset === 'auto' ? resolveAutoOffset() : stickyOffset
+  const viewportClass =
     heightMode === 'viewport'
-      ? `reference-sidebar--viewport ${
-          stickyOffset === 'header' ? 'reference-sidebar--offset-header' : 'reference-sidebar--offset-compact'
-        }`
+      ? `workspace-sidebar--viewport workspace-sidebar--offset-${resolvedStickyOffset}`
       : ''
-  const dashboardViewportClass =
-    heightMode === 'viewport'
-      ? `dashboard-sidebar--viewport ${
-          stickyOffset === 'header' ? 'dashboard-sidebar--offset-header' : 'dashboard-sidebar--offset-compact'
-        }`
-      : ''
+  const allowLegacyCollapse = !fullRail && Boolean(onToggleCollapse)
+  const showCollapsedState = allowLegacyCollapse && isCollapsed
 
   const handleAuxSelect = (key: string) => {
     if (onSelectAuxiliary) {
@@ -238,345 +233,140 @@ const Sidebar = ({
   const renderItem = (
     item: SidebarItem | SidebarAuxItem,
     onClick: () => void,
-    isActive: boolean,
-    mode: 'default' | 'dashboard' | 'reference'
+    isActive: boolean
   ) => {
-    if (mode === 'reference') {
-      return (
-        <button
-          key={item.key}
-          type="button"
-          onClick={onClick}
-          className={`reference-sidebar-item ${isActive ? 'is-active' : ''}`}
-        >
-          <span className="reference-sidebar-icon" aria-hidden="true">
-            <SidebarGlyph icon={item.icon} />
-          </span>
-          <span className="min-w-0">
-            <span className="reference-sidebar-label">{item.label}</span>
-            {item.caption ? <span className="reference-sidebar-caption">{item.caption}</span> : null}
-          </span>
-        </button>
-      )
-    }
-
-    if (mode === 'dashboard') {
-      return (
-        <button
-          key={item.key}
-          type="button"
-          onClick={onClick}
-          className={`${dashboardSidebarItemClass} ${
-            isActive
-              ? 'border-[color:var(--agent-accent)] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-ink)] shadow-[inset_3px_0_0_var(--agent-accent)]'
-              : 'bg-transparent text-[color:var(--agent-muted)] hover:border-[color:var(--card-border)] hover:bg-[color:var(--agent-overlay)] hover:text-[color:var(--agent-ink)]'
-          }`}
-        >
-          <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]">
-            <SidebarGlyph icon={item.icon} />
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">{item.label}</span>
-            {item.caption ? (
-              <span className="mt-0.5 block truncate text-xs text-[color:var(--agent-muted-soft)]">
-                {item.caption}
-              </span>
-            ) : null}
-          </span>
-        </button>
-      )
-    }
-
     return (
       <button
         key={item.key}
         type="button"
         onClick={onClick}
-        className={`${defaultSidebarItemClass} ${
-          isActive
-            ? 'border-[color:var(--agent-accent)] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-ink)]'
-            : 'border-transparent bg-transparent text-[color:var(--agent-muted)] hover:border-[color:var(--card-border)] hover:bg-[color:var(--agent-overlay)]'
-        }`}
+        className={`workspace-sidebar-item ${isActive ? 'is-active' : ''}`}
+        aria-current={isActive ? 'page' : undefined}
+        data-sidebar-nav-item="true"
       >
-        <span className="mt-0.5 grid h-8 w-8 place-items-center rounded-lg border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]">
+        <span className="workspace-sidebar-icon" aria-hidden="true">
           <SidebarGlyph icon={item.icon} />
         </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold">{item.label}</span>
-          {item.caption ? (
-            <span className="mt-0.5 block truncate text-xs text-[color:var(--agent-muted-soft)]">
-              {item.caption}
-            </span>
-          ) : null}
+        <span className="workspace-sidebar-copy">
+          <span className="workspace-sidebar-label">{item.label}</span>
+          {item.caption ? <span className="workspace-sidebar-caption">{item.caption}</span> : null}
         </span>
       </button>
     )
   }
 
-  if (variant === 'reference') {
-    return (
-      <aside
-        className={`reference-sidebar ${isCollapsed ? 'is-collapsed' : ''} ${referenceViewportClass} ${className ?? ''}`}
-      >
-        {onToggleCollapse ? (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="mb-2 rounded-md border border-[color:var(--reference-border)] px-2 py-1 text-xs font-semibold text-[color:var(--reference-muted)]"
-          >
-            {isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          </button>
-        ) : null}
-        {showBrand ? (
-          <button type="button" onClick={onBrandClick} className="reference-sidebar-brand">
-            <AppLogoBadge className="h-10 w-10" />
-            <div>
-              <p className="reference-sidebar-brand-title">{brandTitle}</p>
-              <p className="reference-sidebar-brand-subtitle">{brandSubtitle}</p>
-            </div>
-          </button>
-        ) : null}
-
-        {mainItems.length > 0 ? (
-          <div className={showBrand ? 'mt-4' : ''}>
-            <p className="reference-sidebar-heading">{sectionLabel}</p>
-            <nav className="mt-2 space-y-1.5">
-              {mainItems.map((item) => renderItem(item, () => onSelect(item.key), activeKey === item.key, 'reference'))}
-            </nav>
-          </div>
-        ) : null}
-
-        {(utilityItems.length > 0 || supportItem) && (
-          <div className="reference-sidebar-divider">
-            {utilityItems.length > 0 ? (
-              <>
-                <p className="reference-sidebar-heading">{auxiliaryLabel}</p>
-                <div className="mt-2 space-y-1.5">
-                  {utilityItems.map((item) =>
-                    renderItem(item, () => handleAuxSelect(item.key), activeKey === item.key, 'reference')
-                  )}
-                </div>
-              </>
-            ) : null}
-
-            {supportItem ? (
-              <div className={utilityItems.length > 0 ? 'mt-3 border-t border-[color:var(--reference-border)] pt-3' : ''}>
-                <p className="reference-sidebar-heading">Support</p>
-                <div className="mt-2">
-                  {renderItem(
-                    supportItem,
-                    () => handleAuxSelect(supportItem.key),
-                    activeKey === supportItem.key,
-                    'reference'
-                  )}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        )}
-
-        {(footerProfile || profileExtra) ? (
-          <div className="mt-auto border-t border-[color:var(--reference-border)] pt-3">
-            {footerProfile ? (
-              <button
-                type="button"
-                className="reference-sidebar-profile flex items-center gap-3 w-full"
-                onClick={footerProfile.onClick}
-                disabled={!footerProfile.onClick}
-              >
-                <span className="reference-sidebar-profile-avatar shrink-0">
-                  {footerProfile.avatarText ?? renderProfileInitials(footerProfile.name)}
-                </span>
-                <span className="min-w-0 text-left overflow-hidden">
-                  <span className="reference-sidebar-profile-subtitle block truncate">{footerProfile.subtitle}</span>
-                  <span className="reference-sidebar-profile-name block truncate">{footerProfile.name}</span>
-                </span>
-                <span className="reference-sidebar-chevron" aria-hidden="true">
-                  ›
-                </span>
-              </button>
-            ) : null}
-            {profileExtra ? <div className="mt-2">{profileExtra}</div> : null}
-          </div>
-        ) : null}
-      </aside>
-    )
-  }
-
-  if (variant === 'dashboard') {
-    return (
-      <aside
-        className={`${className ?? ''} ${isCollapsed ? 'is-collapsed' : ''} ${dashboardViewportClass} flex w-full flex-col rounded-3xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-4 shadow-[var(--card-shadow-soft)] lg:w-[282px]`}
-      >
-        {onToggleCollapse ? (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="mb-2 rounded-md border border-[color:var(--card-border)] px-2 py-1 text-xs font-semibold text-[color:var(--agent-muted)]"
-          >
-            {isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          </button>
-        ) : null}
-        {showBrand ? (
-          <button
-            type="button"
-            onClick={onBrandClick}
-            className="w-full rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3.5 text-left"
-          >
-            <div className="flex items-center gap-3">
-              <AppLogoBadge className="h-10 w-10" />
-              <div>
-                <p className="text-base font-semibold text-[color:var(--agent-ink)]">{brandTitle}</p>
-                <p className="text-xs text-[color:var(--agent-muted)]">{brandSubtitle}</p>
-              </div>
-            </div>
-          </button>
-        ) : null}
-
-        {mainItems.length > 0 ? (
-          <div className={showBrand ? 'mt-4' : ''}>
-            <p className={sectionHeadingClass}>{sectionLabel}</p>
-            <nav className="mt-2.5 space-y-1.5">
-              {mainItems.map((item) => renderItem(item, () => onSelect(item.key), activeKey === item.key, 'dashboard'))}
-            </nav>
-          </div>
-        ) : null}
-
-        {(utilityItems.length > 0 || supportItem) && (
-          <div className="mt-4 border-t border-[color:var(--card-border)] pt-4">
-            {utilityItems.length > 0 ? (
-              <>
-                <p className={sectionHeadingClass}>{auxiliaryLabel}</p>
-                <div className="mt-2 space-y-1.5">
-                  {utilityItems.map((item) =>
-                    renderItem(item, () => handleAuxSelect(item.key), activeKey === item.key, 'dashboard')
-                  )}
-                </div>
-              </>
-            ) : null}
-
-            {supportItem ? (
-              <div className={utilityItems.length > 0 ? 'mt-3 border-t border-[color:var(--card-border)] pt-3' : ''}>
-                <p className={sectionHeadingClass}>Support</p>
-                <div className="mt-2">
-                  {renderItem(
-                    supportItem,
-                    () => handleAuxSelect(supportItem.key),
-                    activeKey === supportItem.key,
-                    'dashboard'
-                  )}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        )}
-
-        {(statusValue || profileValue || profileExtra) ? (
-          <div className="mt-auto border-t border-[color:var(--card-border)] pt-4">
-            {statusValue ? (
-              <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-                  {statusLabel ?? 'Status'}
-                </p>
-                <p className="mt-1.5 text-xs font-semibold text-[color:var(--agent-ink)]">{statusValue}</p>
-              </div>
-            ) : null}
-
-            {profileValue ? (
-              <div className="mt-3 rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-                  {profileLabel ?? 'Profile'}
-                </p>
-                <p className="mt-1.5 text-sm font-semibold text-[color:var(--agent-ink)]">{profileValue}</p>
-                {profileCaption ? (
-                  <p className="text-xs text-[color:var(--agent-muted)]">{profileCaption}</p>
-                ) : null}
-              </div>
-            ) : null}
-
-            {profileExtra ? <div className="mt-3">{profileExtra}</div> : null}
-          </div>
-        ) : null}
-      </aside>
-    )
-  }
-
   return (
     <aside
-      className={`${className ?? ''} ${isCollapsed ? 'is-collapsed' : ''} w-full rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-4 lg:w-[260px]`}
+      className={`workspace-sidebar ${showCollapsedState ? 'is-collapsed' : ''} ${viewportClass} ${className ?? ''}`}
+      data-sidebar-root="true"
+      data-sidebar-variant={variant}
+      data-sidebar-mobile-mode={mobileMode}
     >
-      {onToggleCollapse ? (
+      {allowLegacyCollapse ? (
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="mb-2 rounded-md border border-[color:var(--card-border)] px-2 py-1 text-xs font-semibold text-[color:var(--agent-muted)]"
+          className="workspace-sidebar-collapse-toggle"
         >
-          {isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          {showCollapsedState ? 'Expand sidebar' : 'Collapse sidebar'}
         </button>
       ) : null}
+
       {showBrand ? (
         <button
           type="button"
-          onClick={onBrandClick}
-          className="w-full rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3 text-left"
+          onClick={() => onBrandClick?.()}
+          className="workspace-sidebar-brand"
+          data-sidebar-nav-item={onBrandClick ? 'true' : undefined}
         >
-          <div className="flex items-center gap-3">
-            <AppLogoBadge className="h-9 w-9" />
-            <div>
-              <p className="text-sm font-semibold text-[color:var(--agent-ink)]">{brandTitle}</p>
-              <p className="text-xs text-[color:var(--agent-muted)]">{brandSubtitle}</p>
-            </div>
-          </div>
+          <AppLogoBadge className="h-10 w-10" />
+          <span className="min-w-0 text-left">
+            <span className="workspace-sidebar-brand-title">{brandTitle}</span>
+            <span className="workspace-sidebar-brand-subtitle">{brandSubtitle}</span>
+          </span>
         </button>
       ) : null}
 
-      <p
-        className={`${showBrand ? 'mt-4' : ''} text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]`}
-      >
-        {sectionLabel}
-      </p>
+      <div className="workspace-sidebar-scroll">
+        {mainItems.length > 0 ? (
+          <section>
+            <p className="workspace-sidebar-heading">{sectionLabel}</p>
+            <nav className="workspace-sidebar-nav" aria-label={`${sectionLabel} navigation`}>
+              {mainItems.map((item) => renderItem(item, () => onSelect(item.key), activeKey === item.key))}
+            </nav>
+          </section>
+        ) : null}
 
-      <nav className="mt-2.5 space-y-1.5">
-        {mainItems.map((item) => renderItem(item, () => onSelect(item.key), activeKey === item.key, 'default'))}
-      </nav>
+        {utilityItems.length > 0 ? (
+          <section className="workspace-sidebar-divider">
+            <p className="workspace-sidebar-heading">{auxiliaryLabel}</p>
+            <nav className="workspace-sidebar-nav" aria-label={`${auxiliaryLabel} navigation`}>
+              {utilityItems.map((item) =>
+                renderItem(item, () => handleAuxSelect(item.key), activeKey === item.key)
+              )}
+            </nav>
+          </section>
+        ) : null}
+      </div>
 
-      {utilityItems.length > 0 ? (
-        <div className="mt-4 border-t border-[color:var(--card-border)] pt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-            {auxiliaryLabel}
-          </p>
-          <div className="mt-2 space-y-1.5">
-            {utilityItems.map((item) =>
-              renderItem(item, () => handleAuxSelect(item.key), activeKey === item.key, 'default')
+      {supportItem ? (
+        <section className="workspace-sidebar-support">
+          <p className="workspace-sidebar-heading">Support</p>
+          <div className="workspace-sidebar-nav">
+            {renderItem(
+              supportItem,
+              () => handleAuxSelect(supportItem.key),
+              activeKey === supportItem.key
             )}
           </div>
-        </div>
+        </section>
       ) : null}
 
-      {(statusValue || profileValue || profileExtra) && (
-        <div className="mt-4 border-t border-[color:var(--card-border)] pt-4">
+      {(statusValue || profileValue || footerProfile || profileExtra) ? (
+        <div className="workspace-sidebar-footer">
           {statusValue ? (
-            <div className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-                {statusLabel ?? 'Status'}
-              </p>
-              <p className="mt-1.5 text-xs font-semibold text-[color:var(--agent-ink)]">{statusValue}</p>
+            <div className="workspace-sidebar-meta-card">
+              <p className="workspace-sidebar-meta-label">{statusLabel ?? 'Status'}</p>
+              <p className="workspace-sidebar-meta-value">{statusValue}</p>
             </div>
           ) : null}
 
           {profileValue ? (
-            <div className="mt-3 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-                {profileLabel ?? 'Profile'}
-              </p>
-              <p className="mt-1.5 text-sm font-semibold text-[color:var(--agent-ink)] truncate">{profileValue}</p>
-              {profileCaption ? <p className="text-xs text-[color:var(--agent-muted)] truncate">{profileCaption}</p> : null}
+            <div className="workspace-sidebar-meta-card">
+              <p className="workspace-sidebar-meta-label">{profileLabel ?? 'Profile'}</p>
+              <p className="workspace-sidebar-profile-value">{profileValue}</p>
+              {profileCaption ? <p className="workspace-sidebar-meta-caption">{profileCaption}</p> : null}
             </div>
           ) : null}
 
-          {profileExtra ? <div className="mt-3">{profileExtra}</div> : null}
+          {footerProfile ? (
+            <button
+              type="button"
+              className="workspace-sidebar-profile"
+              onClick={footerProfile.onClick}
+              disabled={!footerProfile.onClick}
+              data-sidebar-nav-item={footerProfile.onClick ? 'true' : undefined}
+            >
+              <span className="workspace-sidebar-profile-avatar">
+                {footerProfile.avatarText ?? renderProfileInitials(footerProfile.name)}
+              </span>
+              <span className="min-w-0 text-left">
+                <span className="workspace-sidebar-profile-subtitle">{footerProfile.subtitle}</span>
+                <span className="workspace-sidebar-profile-name">{footerProfile.name}</span>
+              </span>
+              <span className="workspace-sidebar-chevron" aria-hidden="true">
+                ›
+              </span>
+            </button>
+          ) : null}
+
+          {profileExtra ? (
+            <div className={statusValue || profileValue || footerProfile ? 'mt-2.5' : ''}>
+              {profileExtra}
+            </div>
+          ) : null}
         </div>
-      )}
+      ) : null}
     </aside>
   )
 }

@@ -22,6 +22,7 @@ import {
   parseApiSchema,
   reservationsResponseSchema,
 } from '../schemas/apiSchemas'
+import { normalizeRoleForSession } from '../utils/dashboardRoutes'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api'
 let authToken: string | null = null
@@ -91,21 +92,29 @@ export const api = {
         username,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
         expiresInSeconds: 10 * 60,
-        otpPreview: undefined,
+        otpPreview:
+          typeof (payload as any).otpPreview === 'string'
+            ? (payload as any).otpPreview
+            : undefined,
       }
       return parseApiSchema(loginOtpChallengeSchema, challenge, 'OTP challenge')
     }
 
     // Otherwise expect a full auth session (token + user)
     // Map server user shape to client schema if necessary
+    const payloadUser = (payload as Record<string, unknown>)?.user as Record<string, unknown> | undefined
     const mapped = {
       token: (payload as any).token,
       user: {
-        username: (payload as any).user?.email ?? username,
-        role: (payload as any).user?.role ?? 'user',
-        authMethod: (payload as any).user?.authMethod ?? undefined,
-        mfa: (payload as any).user?.mfa ?? undefined,
-        sessionId: (payload as any).user?.sessionId ?? undefined,
+        username: (payloadUser?.email as string | undefined) ?? username,
+        role: normalizeRoleForSession(
+          payloadUser?.role as string | undefined,
+          payloadUser?.accountType as string | undefined
+        ),
+        accountType: (payloadUser?.accountType as string | undefined) ?? undefined,
+        authMethod: (payloadUser?.authMethod as string | undefined) ?? undefined,
+        mfa: (payloadUser?.mfa as boolean | undefined) ?? undefined,
+        sessionId: (payloadUser?.sessionId as string | undefined) ?? undefined,
       },
     }
     return parseApiSchema(authSessionSchema, mapped, 'login')
@@ -129,14 +138,22 @@ export const api = {
     const payload = await handleResponse(response)
 
     // Map server response to client authSession shape
+    const payloadUser = (payload as Record<string, unknown>)?.user as Record<string, unknown> | undefined
     const mapped = {
       token: (payload as any).token,
       user: {
-        username: (payload as any).user?.email ?? (payload as any).user?.username,
-        role: (payload as any).user?.role ?? 'user',
-        authMethod: (payload as any).user?.authMethod ?? undefined,
-        mfa: (payload as any).user?.mfa ?? undefined,
-        sessionId: (payload as any).user?.sessionId ?? undefined,
+        username:
+          (payloadUser?.email as string | undefined) ??
+          (payloadUser?.username as string | undefined) ??
+          '',
+        role: normalizeRoleForSession(
+          payloadUser?.role as string | undefined,
+          payloadUser?.accountType as string | undefined
+        ),
+        accountType: (payloadUser?.accountType as string | undefined) ?? undefined,
+        authMethod: (payloadUser?.authMethod as string | undefined) ?? undefined,
+        mfa: (payloadUser?.mfa as boolean | undefined) ?? undefined,
+        sessionId: (payloadUser?.sessionId as string | undefined) ?? undefined,
       },
     }
     return parseApiSchema(authSessionSchema, mapped, 'OTP verification')
@@ -171,7 +188,25 @@ export const api = {
   getSession: async (): Promise<AuthSession['user']> => {
     const response = await request(`${API_BASE}/session`, withAuth())
     const payload = await handleResponse(response)
-    return parseApiSchema(authUserSchema, payload, 'session')
+    const payloadRecord = payload as Record<string, unknown>
+    const mapped = {
+      username:
+        (payloadRecord.username as string | undefined) ??
+        (payloadRecord.email as string | undefined) ??
+        '',
+      role: normalizeRoleForSession(
+        payloadRecord.role as string | undefined,
+        payloadRecord.accountType as string | undefined
+      ),
+      accountType: (payloadRecord.accountType as string | undefined) ?? undefined,
+      authMethod: (payloadRecord.authMethod as string | undefined) ?? undefined,
+      mfa: (payloadRecord.mfa as boolean | undefined) ?? undefined,
+      sessionId:
+        (payloadRecord.sessionId as string | null | undefined) ??
+        (payloadRecord.sessionID as string | null | undefined) ??
+        undefined,
+    }
+    return parseApiSchema(authUserSchema, mapped, 'session')
   },
   getReservations: async (): Promise<Reservation[]> => {
     const payload = await handleResponse(await request(`${API_BASE}/reservations`, withAuth()))

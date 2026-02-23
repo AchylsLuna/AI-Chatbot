@@ -7,6 +7,7 @@ import DoctorReportsLogSection from './sections/DoctorReportsLogSection'
 import DoctorSettingsSection from './sections/DoctorSettingsSection'
 import WorkspaceCanvas from '../../../components/layout/WorkspaceCanvas'
 import Sidebar, { type SidebarItem } from '../../../components/layout/Sidebar'
+import WorkspaceSidebarShell from '../../../components/layout/WorkspaceSidebarShell'
 import type { AppPage } from '../../../types/navigation'
 import type {
   AppointmentUpdateDraft,
@@ -63,7 +64,6 @@ const utilityItems: SidebarItem[] = [
   { key: 'settings', label: 'Settings', icon: 'settings' },
 ]
 
-const sidebarCollapsedKey = 'pulse-ledger-doctor-sidebar-collapsed'
 const notificationPrefKey = 'pulse-ledger-staff-notification-preferences'
 
 const defaultNotificationPrefs: NotificationPreferences = {
@@ -116,7 +116,6 @@ const buildWeeklySeries = (items: Reservation[]) => {
 
 const PAGINATION_PAGE_SIZE = 10
 const MAX_PAGE_BUTTONS = 10
-const SIDEBAR_COLLAPSE_BREAKPOINT = 1200
 
 const getPageSlice = <T,>(items: T[], currentPage: number, pageSize = PAGINATION_PAGE_SIZE) => {
   const safePage = Math.max(1, Math.floor(currentPage) || 1)
@@ -151,14 +150,6 @@ const DoctorDashboardPage = ({
   const [reportSourceFilter, setReportSourceFilter] = useState<ReportLogSourceFilter>('all')
   const [reportSeverityFilter, setReportSeverityFilter] = useState<ReportLogSeverityFilter>('all')
   const [reportActionFilter, setReportActionFilter] = useState<ReportLogActionFilter>('all')
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.localStorage.getItem(sidebarCollapsedKey) === 'true'
-  })
-  const [isNarrowViewport, setIsNarrowViewport] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.innerWidth < SIDEBAR_COLLAPSE_BREAKPOINT
-  })
 
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => {
     if (typeof window === 'undefined') return defaultNotificationPrefs
@@ -184,26 +175,6 @@ const DoctorDashboardPage = ({
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const handleResize = () => {
-      setIsNarrowViewport(window.innerWidth < SIDEBAR_COLLAPSE_BREAKPOINT)
-    }
-
-    handleResize()
-    window.addEventListener('resize', handleResize)
-
-    return () => {
-      window.removeEventListener('resize', handleResize)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || isNarrowViewport) return
-    window.localStorage.setItem(sidebarCollapsedKey, isSidebarCollapsed ? 'true' : 'false')
-  }, [isNarrowViewport, isSidebarCollapsed])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -408,55 +379,49 @@ const DoctorDashboardPage = ({
     reports_log: "Report's Log",
     settings: 'Settings',
   }
-  const effectiveSidebarCollapsed = isNarrowViewport ? true : isSidebarCollapsed
 
   return (
     <WorkspaceCanvas>
-      <div className="w-full overflow-x-auto">
-        <div
-          className={`reference-shell h-screen min-w-[1080px] ${
-            effectiveSidebarCollapsed ? 'reference-shell--sidebar-collapsed' : ''
-          }`}
-        >
-          <Sidebar
-            variant="reference"
-            className="self-start"
-            heightMode="viewport"
-            stickyOffset="compact"
-            isCollapsed={effectiveSidebarCollapsed}
-            onToggleCollapse={
-              isNarrowViewport ? undefined : () => setIsSidebarCollapsed((previous) => !previous)
-            }
-            brandTitle="AI Health Care"
-            brandSubtitle="Doctor workspace"
-            sectionLabel="Main"
-            items={sidebarItems}
-            activeKey={activeSection}
-            onSelect={(key) => {
-              if (isDoctorSidebarSection(key)) {
-                setSection(key)
-              }
-            }}
-            auxiliaryLabel="Utilities"
-            secondaryItems={utilityItems}
-            onSelectAuxiliary={(key) => {
-              if (isDoctorSidebarSection(key)) {
-                setSection(key)
-                return
-              }
-              if (key === 'logout') {
-                onLogout()
-              }
-            }}
-            supportItem={{ key: 'logout', label: 'Log out', icon: 'shield' }}
-            footerProfile={{
-              name: authUser?.username ?? 'Staff',
-              subtitle: 'Doctor workspace',
-              onClick: () => setSection('settings'),
-            }}
-          />
-
-          <section className="reference-main h-screen overflow-y-auto px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+      <div className="w-full px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+        <WorkspaceSidebarShell
+          mobileTitle="Doctor workspace"
+          stickyOffsetMode="auto"
+          sidebar={
+            <Sidebar
+              variant="reference"
+              mobileMode="drawer"
+              fullRail
+              brandTitle="AI Health Care"
+              brandSubtitle="Doctor workspace"
+              sectionLabel="Main"
+              items={sidebarItems}
+              activeKey={activeSection}
+              onSelect={(key) => {
+                if (isDoctorSidebarSection(key)) {
+                  setSection(key)
+                }
+              }}
+              auxiliaryLabel="Utilities"
+              secondaryItems={utilityItems}
+              onSelectAuxiliary={(key) => {
+                if (isDoctorSidebarSection(key)) {
+                  setSection(key)
+                  return
+                }
+                if (key === 'logout') {
+                  onLogout()
+                }
+              }}
+              supportItem={{ key: 'logout', label: 'Log out', icon: 'shield' }}
+              footerProfile={{
+                name: authUser?.username ?? 'Staff',
+                subtitle: 'Doctor workspace',
+                onClick: () => setSection('settings'),
+              }}
+            />
+          }
+          content={
+            <section className="reference-main px-4 pb-10 pt-5 sm:px-6 lg:px-8">
             {activeSection === 'dashboard' ? (
               <h1 className="reference-page-title">{sectionTitleMap[activeSection]}</h1>
             ) : activeSection !== 'settings' ? (
@@ -580,8 +545,9 @@ const DoctorDashboardPage = ({
                 passwordMessage={passwordMessage}
               />
             ) : null}
-          </section>
-        </div>
+            </section>
+          }
+        />
       </div>
     </WorkspaceCanvas>
   )

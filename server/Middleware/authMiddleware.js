@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import Sessions from "../Models/SessionModel.js";
+import { appConfig } from "../Config/env.js";
 
 const verifyToken = async (req, res, next) => {
     // Check for token in Authorization header or cookies
@@ -14,7 +15,7 @@ const verifyToken = async (req, res, next) => {
         return res.status(401).json({ message: "Authentication required." });
     }
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+        const decoded = jwt.verify(token, appConfig.jwtSecret);
         const activeSession = await Sessions.findOne({ token: token });
         if (!activeSession) {
             return res.status(401).json({ message: "Session expired. Please log in again." });

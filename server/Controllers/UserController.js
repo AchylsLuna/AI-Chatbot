@@ -3,6 +3,7 @@ import AuditLog from "../Models/AuditLogModel.js";
 import jwt from "jsonwebtoken";
 import Sessions from "../Models/SessionModel.js";
 import { sendOTP } from "../Utils/emailService.js";
+import { appConfig } from "../Config/env.js";
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -18,12 +19,15 @@ const issueOtpForUser = async (user) => {
     user.otpExpires = Date.now() + OTP_EXPIRY_MS;
     await user.save();
 
-    await sendOTP(user.email, otpCode);
+    const delivery = await sendOTP(user.email, otpCode);
 
     return {
-        message: "OTP sent to your email. Please verify to complete login.",
+        message: delivery.delivered
+            ? "OTP sent to your email. Please verify to complete login."
+            : "OTP generated for local login. Use the preview code to continue.",
         userId: user._id,
         requires2FA: true,
+        otpPreview: appConfig.isProduction ? undefined : delivery.preview,
     };
 };
 
@@ -33,7 +37,7 @@ const createJwtToken = (user) => {
             id: user._id,
             role: normalizeRole(user.role),
         },
-        process.env.JWT_SECRET || "dev-secret",
+        appConfig.jwtSecret,
         { expiresIn: "7d" }
     );
 };
@@ -207,6 +211,7 @@ export async function requestOtpChallenge(req, res) {
             username: user.email,
             expiresAt: new Date(Date.now() + OTP_EXPIRY_MS).toISOString(),
             expiresInSeconds: OTP_EXPIRY_MS / 1000,
+            otpPreview: payload.otpPreview,
         });
     } catch (error) {
         console.error("OTP challenge request failed", error);
@@ -287,7 +292,11 @@ export async function resendOTP(req, res) {
         }
 
         const payload = await issueOtpForUser(user);
-        return res.status(200).json({ message: "OTP resent to your email.", userId: payload.userId });
+        return res.status(200).json({
+            message: "OTP resent to your email.",
+            userId: payload.userId,
+            otpPreview: payload.otpPreview,
+        });
     } catch (error) {
         console.error("Resend OTP failed", error);
         return res.status(500).json({ message: "Failed to resend OTP." });
@@ -449,7 +458,7 @@ export async function googleCallback(req, res) {
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
-        const frontendUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || "http://localhost:5173";
+        const frontendUrl = appConfig.frontendUrl;
         const normalizedRole = normalizeRole(user.role);
         const redirectPath =
             normalizedRole === "user" ? "/appointments" : normalizedRole === "nurse" ? "/doctor-dashboard" : "/admin";

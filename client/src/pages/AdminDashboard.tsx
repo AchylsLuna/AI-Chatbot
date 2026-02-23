@@ -2,16 +2,17 @@ import { useMemo, useState, useEffect, useRef } from 'react'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
 import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
-import SidebarAccountCard from '../components/layout/SidebarAccountCard'
+import WorkspaceSidebarShell from '../components/layout/WorkspaceSidebarShell'
 import WorkspaceTopShell from '../components/layout/WorkspaceTopShell'
 import {
   workspaceGhostButtonClass,
   workspaceHeadingTextClass,
   workspaceMutedTextClass,
   workspacePanelClass,
-  workspacePrimaryButtonClass,
   workspaceSubtleTextClass,
 } from '../styles/workspaceUi'
+import { buildRouteFromCanonicalPath, normalizePath } from '../config/routing'
+import { getAdminTabPath, resolveAdminTabFromPath } from '../config/workspaceTabRoutes'
 import type { AppPage } from '../types/navigation'
 import type { AuthSession, Reservation } from '../types'
 import { maskIdentifier, maskPersonName } from '../utils/privacy'
@@ -29,7 +30,7 @@ type AdminDashboardProps = {
   onToggleDataMasking: () => void
 }
 
-type AdminSection = 'user_management' | 'staff_management' | 'history'
+type AdminSection = 'user_management' | 'staff_management' | 'history' | 'settings'
 
 type AdminUserSummaryItem = {
   id: string
@@ -82,6 +83,12 @@ const primaryItems: SidebarItem[] = [
 
 const utilityItems: SidebarItem[] = [
   {
+    key: 'settings',
+    label: 'Account Settings',
+    caption: 'Profile, theme, and privacy',
+    icon: 'settings',
+  },
+  {
     key: 'doctor_dashboard',
     label: 'Appointment board',
     caption: 'Back to staff operations',
@@ -133,8 +140,8 @@ const FALLBACK_STAFF: AdminStaffSummaryItem[] = [
   },
   {
     id: 'STF-002',
-    name: 'Nurse Kim Perez',
-    role: 'Nurse',
+    name: 'Dr. Kim Perez',
+    role: 'Doctor',
     workspace: 'Doctor dashboard + Admin',
     status: 'Idle',
     lastAction: 'Updated booking status for triage handoff',
@@ -142,7 +149,7 @@ const FALLBACK_STAFF: AdminStaffSummaryItem[] = [
   {
     id: 'STF-003',
     name: 'Samuel Rhodes',
-    role: 'Super Admin',
+    role: 'Admin',
     workspace: 'Admin',
     status: 'Offline',
     lastAction: 'Completed access-policy review',
@@ -223,17 +230,19 @@ const AdminDashboard = ({
   dataMaskingEnabled,
   onToggleDataMasking,
 }: AdminDashboardProps) => {
-  const [activeSection, setActiveSection] = useState<AdminSection>('user_management')
+  const [activeSection, setActiveSection] = useState<AdminSection>(() => {
+    if (typeof window === 'undefined') return 'user_management'
+    return resolveAdminTabFromPath(window.location.pathname) ?? 'user_management'
+  })
   const [searchQuery, setSearchQuery] = useState('')
   // Auto-logout after 15 minutes of inactivity (900000 ms)
   const INACTIVITY_MS = 15 * 60 * 1000
-  const timerRef = useRef<number | null>(null)
+  const timerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   const resetInactivityTimer = () => {
     if (timerRef.current) window.clearTimeout(timerRef.current)
-    // @ts-ignore - window.setTimeout returns number in browser
     timerRef.current = window.setTimeout(() => {
       setShowLogoutConfirm(false)
       // auto logout after inactivity
@@ -255,6 +264,33 @@ const AdminDashboard = ({
   const confirmAndLogout = () => {
     setShowLogoutConfirm(true)
   }
+
+  const setSection = (next: AdminSection) => {
+    setActiveSection(next)
+    if (typeof window === 'undefined') return
+
+    const targetPath = getAdminTabPath(next)
+    if (normalizePath(window.location.pathname) === normalizePath(targetPath)) return
+
+    window.history.pushState(
+      { ...(window.history.state ?? {}), appRoute: true, appPage: 'admin' },
+      '',
+      buildRouteFromCanonicalPath(targetPath)
+    )
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handlePopState = () => {
+      setActiveSection(resolveAdminTabFromPath(window.location.pathname) ?? 'user_management')
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [])
 
   const userItems = useMemo<AdminUserSummaryItem[]>(() => {
     const orderedReservations = [...reservations].sort(
@@ -417,9 +453,9 @@ const AdminDashboard = ({
     const flaggedUsers = userItems.filter((item) => item.flagged).length
 
     return [
-      { key: 'users-total', label: 'Total users', value: userItems.length, caption: `${filteredUsers.length} matching` },
-      { key: 'users-active', label: 'Active users', value: activeUsers, caption: 'Booked or recorded' },
-      { key: 'users-booked', label: 'Booked users', value: bookedUsers, caption: 'Booked or recorded' },
+      { key: 'users-total', label: 'Total patients', value: userItems.length, caption: `${filteredUsers.length} matching` },
+      { key: 'users-active', label: 'Active patients', value: activeUsers, caption: 'Booked or recorded' },
+      { key: 'users-booked', label: 'Booked patients', value: bookedUsers, caption: 'Booked or recorded' },
       { key: 'users-flagged', label: 'Flagged', value: flaggedUsers, caption: 'Failed latest status' },
     ]
   }, [filteredUsers.length, userItems])
@@ -427,13 +463,16 @@ const AdminDashboard = ({
   const staffMetrics = useMemo(() => {
     const onlineStaff = staffItems.filter((item) => item.status === 'Online').length
     const adminStaff = staffItems.filter((item) => item.role.toLowerCase().includes('admin')).length
-    const nurseStaff = staffItems.filter((item) => item.role.toLowerCase().includes('nurse')).length
+    const doctorStaff = staffItems.filter((item) => {
+      const normalizedRole = item.role.toLowerCase()
+      return normalizedRole.includes('doctor') || normalizedRole.includes('nurse')
+    }).length
 
     return [
       { key: 'staff-total', label: 'Total staff', value: staffItems.length, caption: `${filteredStaff.length} matching` },
       { key: 'staff-online', label: 'Online', value: onlineStaff, caption: 'Current session visibility' },
-      { key: 'staff-admin', label: 'Admin roles', value: adminStaff, caption: 'Admin / Doctor + Super Admin' },
-      { key: 'staff-nurse', label: 'Nurses', value: nurseStaff, caption: 'Nurse workspace operators' },
+      { key: 'staff-admin', label: 'Admin roles', value: adminStaff, caption: 'Admin workspace operators' },
+      { key: 'staff-doctor', label: 'Doctors', value: doctorStaff, caption: 'Doctor workspace operators' },
     ]
   }, [filteredStaff.length, staffItems])
 
@@ -454,6 +493,16 @@ const AdminDashboard = ({
     ]
   }, [filteredHistory.length, historyItems])
 
+  const settingsMetrics = useMemo(
+    () => [
+      { key: 'settings-account', label: 'Account', value: authUser?.username ?? 'Unknown', caption: 'Signed in user' },
+      { key: 'settings-role', label: 'Role', value: getWorkspaceRoleLabel(authUser?.role), caption: 'Workspace role' },
+      { key: 'settings-theme', label: 'Theme', value: theme === 'dark' ? 'Dark' : 'Light', caption: 'Current theme' },
+      { key: 'settings-masking', label: 'Masking', value: dataMaskingEnabled ? 'On' : 'Off', caption: 'Data protection' },
+    ],
+    [authUser?.role, authUser?.username, dataMaskingEnabled, theme]
+  )
+
   const sectionMeta = {
     user_management: {
       title: 'User Management',
@@ -465,7 +514,7 @@ const AdminDashboard = ({
     staff_management: {
       title: 'Staff Management',
       description:
-        'Track staff access posture and workspace readiness for nurse, admin, and super admin roles.',
+        'Track staff access posture and workspace readiness for doctor and admin roles.',
       searchPlaceholder: 'Search staff by name, role, workspace, or status',
       metrics: staffMetrics,
     },
@@ -476,238 +525,261 @@ const AdminDashboard = ({
       searchPlaceholder: 'Search history by actor, type, subject, or severity',
       metrics: historyMetrics,
     },
+    settings: {
+      title: 'Account Settings',
+      description: 'Manage admin workspace preferences and session details.',
+      searchPlaceholder: 'Search settings',
+      metrics: settingsMetrics,
+    },
   } as const
 
   const activeMeta = sectionMeta[activeSection]
 
   return (
     <WorkspaceCanvas>
-      <div className="mx-auto w-full max-w-[1500px] px-4 pb-10 pt-5 sm:px-6 lg:px-8">
-        <div className="grid items-start gap-6 xl:grid-cols-[17.75rem_minmax(0,1fr)]">
-          <Sidebar
-            variant="dashboard"
-            className="xl:self-start"
-            heightMode="viewport"
-            stickyOffset="header"
-            brandTitle="AI Health Care"
-            brandSubtitle="Admin workspace"
-            onBrandClick={() => onNavigate?.('landing')}
-            sectionLabel="Primary"
-            items={primaryItems}
-            activeKey={activeSection}
-            onSelect={(key) => {
-              if (key === 'user_management' || key === 'staff_management' || key === 'history') {
-                setActiveSection(key)
-              }
-            }}
-            auxiliaryLabel="Utilities"
-            secondaryItems={utilityItems}
-            supportItem={{ key: 'logout', label: 'Logout', icon: 'shield' }}
-            onSelectAuxiliary={(key) => {
-              if (key === 'logout') {
-                confirmAndLogout()
-                return
-              }
-              if (key === 'doctor_dashboard') {
-                onNavigate?.('doctor_dashboard')
-                return
-              }
-              if (key === 'landing') {
-                onNavigate?.('landing')
-              }
-            }}
-            profileExtra={
-              <div className="space-y-2.5">
-                <SidebarAccountCard
-                  username={authUser?.username ?? 'Unknown'}
-                  roleLabel={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
-                  sessionStatus={sessionStatus}
-                  theme={theme}
-                  onToggleTheme={onToggleTheme}
-                  dataMaskingEnabled={dataMaskingEnabled}
-                  onToggleDataMasking={onToggleDataMasking}
-                />
-                <button type="button" className={`${workspaceGhostButtonClass} w-full`} onClick={confirmAndLogout}>
-                  Logout
-                </button>
-              </div>
-            }
-          />
-
-          <section className="space-y-6">
-            <WorkspaceTopShell
-              eyebrow="Privileged session"
-              title={activeMeta.title}
-              description={activeMeta.description}
-              searchValue={searchQuery}
-              searchPlaceholder={activeMeta.searchPlaceholder}
-              onSearchChange={setSearchQuery}
-              quickActions={
-                <>
-                  <button
-                    type="button"
-                    className={workspacePrimaryButtonClass}
-                    onClick={() => onNavigate?.('doctor_dashboard')}
-                  >
-                    Open appointment board
-                  </button>
-                  <button type="button" className={workspaceGhostButtonClass} onClick={confirmAndLogout}>
-                    Logout
-                  </button>
-                </>
-              }
-              metrics={activeMeta.metrics}
-            />
-
-            <ConfirmModal
-              open={showLogoutConfirm}
-              title="Confirm logout"
-              message="Are you sure you want to logout now?"
-              confirmLabel="Logout"
-              cancelLabel="Cancel"
-              onConfirm={() => {
-                setShowLogoutConfirm(false)
-                onLogout()
+      <div className="w-full px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+        <WorkspaceSidebarShell
+          mobileTitle="Admin workspace"
+          stickyOffsetMode="auto"
+          sidebar={
+            <Sidebar
+              variant="dashboard"
+              mobileMode="drawer"
+              fullRail
+              brandTitle="AI Health Care"
+              brandSubtitle="Admin workspace"
+              onBrandClick={() => onNavigate?.('landing')}
+              sectionLabel="Primary"
+              items={primaryItems}
+              activeKey={activeSection}
+              onSelect={(key) => {
+                if (key === 'user_management' || key === 'staff_management' || key === 'history') {
+                  setSection(key)
+                }
               }}
-              onCancel={() => setShowLogoutConfirm(false)}
+              auxiliaryLabel="Utilities"
+              secondaryItems={utilityItems}
+              supportItem={{ key: 'logout', label: 'Logout', icon: 'shield' }}
+              onSelectAuxiliary={(key) => {
+                if (key === 'settings') {
+                  setSection('settings')
+                  return
+                }
+                if (key === 'logout') {
+                  confirmAndLogout()
+                  return
+                }
+                if (key === 'doctor_dashboard') {
+                  onNavigate?.('doctor_dashboard')
+                  return
+                }
+                if (key === 'landing') {
+                  onNavigate?.('landing')
+                }
+              }}
             />
+          }
+          content={
+            <section className="space-y-6">
+              <WorkspaceTopShell
+                eyebrow="Privileged session"
+                title={activeMeta.title}
+                description={activeMeta.description}
+                searchValue={searchQuery}
+                searchPlaceholder={activeMeta.searchPlaceholder}
+                onSearchChange={setSearchQuery}
+                metrics={activeMeta.metrics}
+              />
 
-            {activeSection === 'user_management' ? (
-              <section className={`${workspacePanelClass} p-5`}>
-                <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>User directory</h2>
-                <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                  Frontend-derived user booking visibility with fallback records when activity is empty.
-                </p>
+              <ConfirmModal
+                open={showLogoutConfirm}
+                title="Confirm logout"
+                message="Are you sure you want to logout now?"
+                confirmLabel="Logout"
+                cancelLabel="Cancel"
+                onConfirm={() => {
+                  setShowLogoutConfirm(false)
+                  onLogout()
+                }}
+                onCancel={() => setShowLogoutConfirm(false)}
+              />
 
-                {filteredUsers.length === 0 ? (
-                  <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                    <p className={`text-sm ${workspaceMutedTextClass}`}>
-                      No users match your search query.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
-                      <thead>
-                        <tr>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>User</th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Bookings</th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Latest activity</th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[color:var(--card-border)]">
-                        {filteredUsers.map((item) => {
-                          const displayName = dataMaskingEnabled
-                            ? maskPersonName(item.displayName)
-                            : item.displayName
-                          const displayId = dataMaskingEnabled ? maskIdentifier(item.id) : item.id
+              {activeSection === 'user_management' ? (
+                <section className={`${workspacePanelClass} p-5`}>
+                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>User directory</h2>
+                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                    Frontend-derived user booking visibility with fallback records when activity is empty.
+                  </p>
 
-                          return (
-                            <tr key={`${item.id}-${item.displayName}`}>
+                  {filteredUsers.length === 0 ? (
+                    <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>
+                        No users match your search query.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>User</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Bookings</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Latest activity</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[color:var(--card-border)]">
+                          {filteredUsers.map((item) => {
+                            const displayName = dataMaskingEnabled
+                              ? maskPersonName(item.displayName)
+                              : item.displayName
+                            const displayId = dataMaskingEnabled ? maskIdentifier(item.id) : item.id
+
+                            return (
+                              <tr key={`${item.id}-${item.displayName}`}>
+                                <td className="px-3 py-3 align-top">
+                                  <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
+                                  <p className={`text-xs ${workspaceMutedTextClass}`}>{displayId}</p>
+                                </td>
+                                <td className={`px-3 py-3 ${workspaceHeadingTextClass}`}>{item.bookingCount}</td>
+                                <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{formatDateTime(item.latestActivity)}</td>
+                                <td className="px-3 py-3">
+                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChipClass(item.latestStatus)}`}>
+                                    {item.latestStatus}
+                                  </span>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              ) : null}
+
+              {activeSection === 'staff_management' ? (
+                <section className={`${workspacePanelClass} p-5`}>
+                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Staff directory</h2>
+                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                    Staff role visibility for doctor and admin workflows.
+                  </p>
+
+                  {filteredStaff.length === 0 ? (
+                    <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>
+                        No staff records match your search query.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Staff member</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Role</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Workspace</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Last action</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[color:var(--card-border)]">
+                          {filteredStaff.map((item) => (
+                            <tr key={item.id}>
                               <td className="px-3 py-3 align-top">
-                                <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
-                                <p className={`text-xs ${workspaceMutedTextClass}`}>{displayId}</p>
+                                <p className={`font-semibold ${workspaceHeadingTextClass}`}>{item.name}</p>
+                                <p className={`text-xs ${workspaceMutedTextClass}`}>{item.id}</p>
                               </td>
-                              <td className={`px-3 py-3 ${workspaceHeadingTextClass}`}>{item.bookingCount}</td>
-                              <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{formatDateTime(item.latestActivity)}</td>
+                              <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.role}</td>
+                              <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.workspace}</td>
+                              <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.lastAction}</td>
                               <td className="px-3 py-3">
-                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChipClass(item.latestStatus)}`}>
-                                  {item.latestStatus}
+                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${staffStatusChipClass(item.status)}`}>
+                                  {item.status}
                                 </span>
                               </td>
                             </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-            ) : null}
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              ) : null}
 
-            {activeSection === 'staff_management' ? (
-              <section className={`${workspacePanelClass} p-5`}>
-                <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Staff directory</h2>
-                <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                  Staff role visibility for nurse, admin, and super admin workflows.
-                </p>
-
-                {filteredStaff.length === 0 ? (
-                  <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                    <p className={`text-sm ${workspaceMutedTextClass}`}>
-                      No staff records match your search query.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
-                      <thead>
-                        <tr>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Staff member</th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Role</th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Workspace</th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Last action</th>
-                          <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[color:var(--card-border)]">
-                        {filteredStaff.map((item) => (
-                          <tr key={item.id}>
-                            <td className="px-3 py-3 align-top">
-                              <p className={`font-semibold ${workspaceHeadingTextClass}`}>{item.name}</p>
-                              <p className={`text-xs ${workspaceMutedTextClass}`}>{item.id}</p>
-                            </td>
-                            <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.role}</td>
-                            <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.workspace}</td>
-                            <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.lastAction}</td>
-                            <td className="px-3 py-3">
-                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${staffStatusChipClass(item.status)}`}>
-                                {item.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-            ) : null}
-
-            {activeSection === 'history' ? (
-              <section className="space-y-3">
-                {filteredHistory.length === 0 ? (
-                  <article className={`${workspacePanelClass} p-5`}>
-                    <p className={`text-sm ${workspaceMutedTextClass}`}>
-                      No history events match your search query.
-                    </p>
-                  </article>
-                ) : (
-                  filteredHistory.map((item) => (
-                    <article key={item.id} className={`${workspacePanelClass} p-5`}>
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>{item.type}</p>
-                          <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>{item.subject}</h2>
-                          <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{item.detail}</p>
-                        </div>
-                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${historySeverityChipClass(item.severity)}`}>
-                          {item.severity}
-                        </span>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-[color:var(--agent-muted-soft)]">
-                        <span>Actor: {item.actor}</span>
-                        <span>{formatDateTime(item.createdAt)}</span>
-                      </div>
+              {activeSection === 'history' ? (
+                <section className="space-y-3">
+                  {filteredHistory.length === 0 ? (
+                    <article className={`${workspacePanelClass} p-5`}>
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>
+                        No history events match your search query.
+                      </p>
                     </article>
-                  ))
-                )}
-              </section>
-            ) : null}
-          </section>
-        </div>
+                  ) : (
+                    filteredHistory.map((item) => (
+                      <article key={item.id} className={`${workspacePanelClass} p-5`}>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>{item.type}</p>
+                            <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>{item.subject}</h2>
+                            <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{item.detail}</p>
+                          </div>
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${historySeverityChipClass(item.severity)}`}>
+                            {item.severity}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-[color:var(--agent-muted-soft)]">
+                          <span>Actor: {item.actor}</span>
+                          <span>{formatDateTime(item.createdAt)}</span>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </section>
+              ) : null}
+
+              {activeSection === 'settings' ? (
+                <section className={`${workspacePanelClass} p-5`}>
+                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Account settings</h2>
+                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                    Manage profile visibility and workspace preferences from a single tab.
+                  </p>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="reference-card-soft p-3">
+                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Account</p>
+                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{authUser?.username ?? 'Unknown'}</p>
+                    </div>
+                    <div className="reference-card-soft p-3">
+                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Role</p>
+                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{getWorkspaceRoleLabel(authUser?.role)}</p>
+                    </div>
+                    <div className="reference-card-soft p-3">
+                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Theme</p>
+                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{theme === 'dark' ? 'Dark' : 'Light'}</p>
+                    </div>
+                    <div className="reference-card-soft p-3">
+                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Data masking</p>
+                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{dataMaskingEnabled ? 'On' : 'Off'}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
+                      Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
+                    </button>
+                    <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
+                      Turn data masking {dataMaskingEnabled ? 'Off' : 'On'}
+                    </button>
+                  </div>
+
+                  <p className={`mt-4 text-xs ${workspaceSubtleTextClass}`}>Session: {sessionStatus}</p>
+                </section>
+              ) : null}
+            </section>
+          }
+        />
       </div>
     </WorkspaceCanvas>
   )

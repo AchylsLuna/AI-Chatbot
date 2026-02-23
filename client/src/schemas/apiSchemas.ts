@@ -25,6 +25,7 @@ const triageSummaryProofSchema = z.object({
 export const authUserSchema = z.object({
   username: safeTextSchema,
   role: userRoleSchema,
+  accountType: safeOptionalTextSchema.nullable().optional(),
   authMethod: safeOptionalTextSchema,
   mfa: z.boolean().optional(),
   sessionId: safeOptionalTextSchema.nullable().optional(),

@@ -19,3 +19,12 @@ export const workspaceGhostButtonClass =
 
 export const workspaceChipButtonClass =
   'rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]'
+
+export const workspaceSidebarSurfaceClass =
+  'workspace-sidebar rounded-[1.2rem] border border-[color:var(--workspace-sidebar-border)] bg-[color:var(--workspace-sidebar-surface)] shadow-[var(--workspace-sidebar-shadow)]'
+
+export const workspaceSidebarHeadingClass =
+  'workspace-sidebar-heading text-[11px] font-semibold uppercase tracking-[0.14em]'
+
+export const workspaceSidebarMetaCardClass =
+  'workspace-sidebar-meta-card rounded-xl border border-[color:var(--workspace-sidebar-border)] bg-[color:var(--workspace-sidebar-surface-soft)]'
