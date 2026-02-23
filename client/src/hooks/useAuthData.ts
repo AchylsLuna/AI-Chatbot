@@ -587,6 +587,13 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     navigateToPage(getDefaultDashboardPage(session.user.role, session.user.accountType))
   }
 
+  const patchAuthUser = useCallback((updates: Partial<AuthSession['user']>) => {
+    setAuthUser((previous) => {
+      if (!previous) return previous
+      return { ...previous, ...updates }
+    })
+  }, [])
+
   const handleLogout = async (
     target?: 'login' | 'landing' | 'admin_login' | 'doctor_login'
   ) => {
@@ -662,6 +669,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     handleCancelOtp,
     handleResendOtp,
     handleSignupSuccess,
+    patchAuthUser,
     handleLogout,
     idleWarningOpen,
     idleRemainingSeconds,

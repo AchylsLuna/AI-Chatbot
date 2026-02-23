@@ -9,7 +9,7 @@ import useAuthData from './hooks/useAuthData'
 import useAppRouting from './hooks/useAppRouting'
 import useScrollReveal from './hooks/useScrollReveal'
 import useAppTheme from './hooks/useAppTheme'
-import { isAdminRole, isDoctorRole } from './utils/dashboardRoutes'
+import { getDefaultDashboardPage, isAdminRole, isDoctorRole } from './utils/dashboardRoutes'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminLoginPage from './pages/AdminLoginPage'
 import DoctorDashboardPage from './pages/DoctorDashboardPage'
@@ -46,6 +46,7 @@ function App() {
     handleCancelOtp,
     handleResendOtp,
     handleSignupSuccess,
+    patchAuthUser,
     handleLogout,
     idleWarningOpen,
     idleRemainingSeconds,
@@ -97,6 +98,12 @@ function App() {
     navigateToPage('doctor_dashboard', { replace: true })
   }, [authUser, currentPage, isDoctorAuthenticated, navigateToPage])
 
+  useEffect(() => {
+    if (!authUser) return
+    if (currentPage !== 'landing') return
+    navigateToPage(getDefaultDashboardPage(authUser.role, authUser.accountType), { replace: true })
+  }, [authUser, currentPage, navigateToPage])
+
   useScrollReveal(`${currentPage}-${isCheckingSession}-${authUser?.role ?? 'guest'}`)
 
   const loginPage = (
@@ -139,7 +146,7 @@ function App() {
       authError={authError}
       isAuthLoading={isAuthLoading}
       onLogin={handleLogin}
-      onProviderLogin={auth0Enabled ? () => handleProviderLogin('doctor_dashboard') : undefined}
+      onProviderLogin={auth0Enabled ? () => handleProviderLogin('admin') : undefined}
       authProvider={authProvider}
       isBiometricReady={isBiometricReady}
       onLogout={handleLogout}
@@ -203,7 +210,9 @@ function App() {
 
   switch (currentPage) {
     case 'landing':
-      pageContent = (
+      pageContent = isCheckingSession ? (
+        <AuthLoadingCard label="Restoring your session..." />
+      ) : (
         <LandingPage
           onNavigate={navigateToPage}
           latestReservation={latestReservation}
@@ -263,8 +272,8 @@ function App() {
               <DoctorDashboardPage
                 authUser={authUser}
                 reservations={reservations}
-                onNavigate={navigateToPage}
                 onLogout={handleLogout}
+                onPatchAuthUser={patchAuthUser}
                 sessionStatus={sessionStatus}
                 theme={theme}
                 onToggleTheme={toggleTheme}

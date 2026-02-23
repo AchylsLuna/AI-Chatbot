@@ -89,12 +89,6 @@ const utilityItems: SidebarItem[] = [
     icon: 'settings',
   },
   {
-    key: 'doctor_dashboard',
-    label: 'Appointment board',
-    caption: 'Back to staff operations',
-    icon: 'calendar',
-  },
-  {
     key: 'landing',
     label: 'Landing',
     caption: 'Public overview page',
@@ -234,6 +228,7 @@ const AdminDashboard = ({
     if (typeof window === 'undefined') return 'user_management'
     return resolveAdminTabFromPath(window.location.pathname) ?? 'user_management'
   })
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   // Auto-logout after 15 minutes of inactivity (900000 ms)
   const INACTIVITY_MS = 15 * 60 * 1000
@@ -537,8 +532,10 @@ const AdminDashboard = ({
 
   return (
     <WorkspaceCanvas>
-      <div className="w-full px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+      <div className="w-full">
         <WorkspaceSidebarShell
+          className={`workspace-shell--full-side${isSidebarCollapsed ? ' workspace-shell--rail-collapsed' : ''}`}
+          contentClassName="px-4 pb-10 pt-5 sm:px-6 lg:px-8"
           mobileTitle="Admin workspace"
           stickyOffsetMode="auto"
           sidebar={
@@ -546,9 +543,10 @@ const AdminDashboard = ({
               variant="dashboard"
               mobileMode="drawer"
               fullRail
+              isCollapsed={isSidebarCollapsed}
+              onToggleCollapse={() => setIsSidebarCollapsed((previous) => !previous)}
               brandTitle="AI Health Care"
               brandSubtitle="Admin workspace"
-              onBrandClick={() => onNavigate?.('landing')}
               sectionLabel="Primary"
               items={primaryItems}
               activeKey={activeSection}
@@ -559,23 +557,19 @@ const AdminDashboard = ({
               }}
               auxiliaryLabel="Utilities"
               secondaryItems={utilityItems}
-              supportItem={{ key: 'logout', label: 'Logout', icon: 'shield' }}
               onSelectAuxiliary={(key) => {
                 if (key === 'settings') {
                   setSection('settings')
                   return
                 }
-                if (key === 'logout') {
-                  confirmAndLogout()
-                  return
-                }
-                if (key === 'doctor_dashboard') {
-                  onNavigate?.('doctor_dashboard')
-                  return
-                }
                 if (key === 'landing') {
                   onNavigate?.('landing')
                 }
+              }}
+              footerProfile={{
+                name: authUser?.username ?? 'Admin',
+                subtitle: 'Admin workspace',
+                onClick: () => setSection('settings'),
               }}
             />
           }
@@ -588,6 +582,11 @@ const AdminDashboard = ({
                 searchValue={searchQuery}
                 searchPlaceholder={activeMeta.searchPlaceholder}
                 onSearchChange={setSearchQuery}
+                profileName={authUser?.username ?? 'Admin'}
+                profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
+                showNotifications
+                notificationCount={Math.min(filteredHistory.length, 99)}
+                onSignOut={confirmAndLogout}
                 metrics={activeMeta.metrics}
               />
 

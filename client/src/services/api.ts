@@ -107,6 +107,8 @@ export const api = {
       token: (payload as any).token,
       user: {
         username: (payloadUser?.email as string | undefined) ?? username,
+        firstName: (payloadUser?.firstName as string | undefined) ?? undefined,
+        lastName: (payloadUser?.lastName as string | undefined) ?? undefined,
         role: normalizeRoleForSession(
           payloadUser?.role as string | undefined,
           payloadUser?.accountType as string | undefined
@@ -146,6 +148,8 @@ export const api = {
           (payloadUser?.email as string | undefined) ??
           (payloadUser?.username as string | undefined) ??
           '',
+        firstName: (payloadUser?.firstName as string | undefined) ?? undefined,
+        lastName: (payloadUser?.lastName as string | undefined) ?? undefined,
         role: normalizeRoleForSession(
           payloadUser?.role as string | undefined,
           payloadUser?.accountType as string | undefined
@@ -194,6 +198,8 @@ export const api = {
         (payloadRecord.username as string | undefined) ??
         (payloadRecord.email as string | undefined) ??
         '',
+      firstName: (payloadRecord.firstName as string | undefined) ?? undefined,
+      lastName: (payloadRecord.lastName as string | undefined) ?? undefined,
       role: normalizeRoleForSession(
         payloadRecord.role as string | undefined,
         payloadRecord.accountType as string | undefined
@@ -229,6 +235,43 @@ export const api = {
     )
     const payload = await handleResponse(response as Response)
     return (payload as any).settings
+  },
+  updateProfile: async (payload: { name?: string; firstName?: string; lastName?: string }) => {
+    const response = await request(
+      `${API_BASE}/users/me/profile`,
+      withAuth({
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+    )
+    const result = await handleResponse(response as Response)
+    const userPayload = (result as Record<string, unknown>)?.user as Record<string, unknown> | undefined
+    return {
+      username:
+        (userPayload?.username as string | undefined) ??
+        (userPayload?.email as string | undefined) ??
+        '',
+      firstName: (userPayload?.firstName as string | undefined) ?? '',
+      lastName: (userPayload?.lastName as string | undefined) ?? '',
+      role: normalizeRoleForSession(
+        userPayload?.role as string | undefined,
+        userPayload?.accountType as string | undefined
+      ),
+      accountType: (userPayload?.accountType as string | undefined) ?? undefined,
+    }
+  },
+  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    await handleResponse(
+      await request(
+        `${API_BASE}/users/me/password`,
+        withAuth({
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        })
+      )
+    )
   },
   getAppointments: async (): Promise<Reservation[]> => {
     const payload = await handleResponse(await request(`${API_BASE}/appointments`, withAuth()))

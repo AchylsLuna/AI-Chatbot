@@ -131,6 +131,7 @@ const AppointmentsPage = ({
     if (typeof window === 'undefined') return 'dashboard'
     return resolveAppointmentsTabFromPath(window.location.pathname) ?? 'dashboard'
   })
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
   const [currentPassword, setCurrentPassword] = useState('')
@@ -480,8 +481,10 @@ const AppointmentsPage = ({
 
   return (
     <WorkspaceCanvas>
-      <div className="w-full px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+      <div className="w-full">
         <WorkspaceSidebarShell
+          className={`workspace-shell--full-side${isSidebarCollapsed ? ' workspace-shell--rail-collapsed' : ''}`}
+          contentClassName="px-4 pb-10 pt-5 sm:px-6 lg:px-8"
           mobileTitle="Patient workspace"
           stickyOffsetMode="auto"
           sidebar={
@@ -489,6 +492,8 @@ const AppointmentsPage = ({
               variant="reference"
               mobileMode="drawer"
               fullRail
+              isCollapsed={isSidebarCollapsed}
+              onToggleCollapse={() => setIsSidebarCollapsed((previous) => !previous)}
               brandTitle="AI Health Care"
               brandSubtitle="Patient workspace"
               sectionLabel="Main"
@@ -506,6 +511,11 @@ const AppointmentsPage = ({
                   setSection(key)
                 }
               }}
+              footerProfile={{
+                name: profileName,
+                subtitle: 'Patient workspace',
+                onClick: () => setSection('settings'),
+              }}
             />
           }
           content={
@@ -521,7 +531,10 @@ const AppointmentsPage = ({
                   messageCount={Math.min(metrics.total, 99)}
                   notificationCount={Math.min(metrics.failed + 1, 99)}
                   showMessages={false}
-                  showProfile={false}
+                  showNotifications
+                  showProfile
+                  showAccountMenu
+                  onSignOut={() => setShowLogoutConfirm(true)}
                   borderlessActions
                 />
               ) : null}

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import WorkspaceAccountMenu from './WorkspaceAccountMenu'
 
 type DashboardTopBarProps = {
   title?: string
@@ -13,7 +14,9 @@ type DashboardTopBarProps = {
   showMessages?: boolean
   showNotifications?: boolean
   showProfile?: boolean
+  showAccountMenu?: boolean
   borderlessActions?: boolean
+  onSignOut?: () => void
 }
 
 const SearchIcon = () => (
@@ -49,7 +52,9 @@ const DashboardTopBar = ({
   showMessages = false,
   showNotifications = false,
   showProfile = false,
+  showAccountMenu,
   borderlessActions = false,
+  onSignOut,
 }: DashboardTopBarProps) => {
   const initials = useMemo(() => {
     const trimmed = profileName.trim()
@@ -59,7 +64,12 @@ const DashboardTopBar = ({
     return `${tokens[0][0] ?? ''}${tokens[1][0] ?? ''}`.toUpperCase()
   }, [profileName])
 
-  const hasActions = showMessages || showNotifications || showProfile
+  const shouldShowAccountMenu = showAccountMenu ?? showProfile
+  const canShowAccountMenu = shouldShowAccountMenu && Boolean(onSignOut)
+  const showProfileChip = showProfile && !canShowAccountMenu
+  const showStandaloneNotifications = showNotifications && !canShowAccountMenu
+  const hasActions =
+    showMessages || showStandaloneNotifications || showProfileChip || canShowAccountMenu
 
   return (
     <section className={`reference-topbar ${title ? '' : 'reference-topbar--search-only'}`}>
@@ -83,37 +93,48 @@ const DashboardTopBar = ({
 
       {hasActions ? (
         <div className="reference-top-actions">
-        {showMessages ? (
-          <button
-            type="button"
-            className={`reference-icon-chip${borderlessActions ? ' is-borderless' : ''}`}
-            aria-label={`Messages (${messageCount})`}
-          >
-            <MessageIcon />
-            {messageCount > 0 ? <span className="reference-chip-badge">{messageCount}</span> : null}
-          </button>
-        ) : null}
-        {showNotifications ? (
-          <button
-            type="button"
-            className={`reference-icon-chip${borderlessActions ? ' is-borderless' : ''}`}
-            aria-label={`Notifications (${notificationCount})`}
-          >
-            <BellIcon />
-            {notificationCount > 0 ? <span className="reference-chip-badge">{notificationCount}</span> : null}
-          </button>
-        ) : null}
+          {showMessages ? (
+            <button
+              type="button"
+              className={`reference-icon-chip${borderlessActions ? ' is-borderless' : ''}`}
+              aria-label={`Messages (${messageCount})`}
+            >
+              <MessageIcon />
+              {messageCount > 0 ? <span className="reference-chip-badge">{messageCount}</span> : null}
+            </button>
+          ) : null}
+          {showStandaloneNotifications ? (
+            <button
+              type="button"
+              className={`reference-icon-chip${borderlessActions ? ' is-borderless' : ''}`}
+              aria-label={`Notifications (${notificationCount})`}
+            >
+              <BellIcon />
+              {notificationCount > 0 ? <span className="reference-chip-badge">{notificationCount}</span> : null}
+            </button>
+          ) : null}
 
-        {showProfile ? (
-          <div className="reference-profile-chip" aria-label="Current profile">
-            <span className="reference-profile-avatar">{initials}</span>
-            <span className="min-w-0">
-              <span className="reference-profile-name">{profileName}</span>
-              <span className="reference-profile-caption">{profileCaption}</span>
-            </span>
-          </div>
-        ) : null}
-      </div>
+          {canShowAccountMenu ? (
+            <WorkspaceAccountMenu
+              profileName={profileName}
+              profileCaption={profileCaption}
+              showNotifications={showNotifications}
+              notificationCount={notificationCount}
+              onSignOut={onSignOut!}
+              variant="reference"
+            />
+          ) : null}
+
+          {showProfileChip ? (
+            <div className="reference-profile-chip" aria-label="Current profile">
+              <span className="reference-profile-avatar">{initials}</span>
+              <span className="min-w-0">
+                <span className="reference-profile-name">{profileName}</span>
+                <span className="reference-profile-caption">{profileCaption}</span>
+              </span>
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </section>
   )

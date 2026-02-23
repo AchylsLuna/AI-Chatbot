@@ -5,6 +5,7 @@ import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
 import WorkspaceSidebarShell from '../components/layout/WorkspaceSidebarShell'
 import WorkspaceTopShell from '../components/layout/WorkspaceTopShell'
 import {
+  workspaceFieldClass,
   workspaceGhostButtonClass,
   workspaceHeadingTextClass,
   workspaceMutedTextClass,
@@ -14,7 +15,7 @@ import {
 } from '../styles/workspaceUi'
 import { buildRouteFromCanonicalPath, normalizePath } from '../config/routing'
 import { getDoctorTabPath, resolveDoctorTabFromPath } from '../config/workspaceTabRoutes'
-import type { AppPage } from '../types/navigation'
+import { api } from '../services/api'
 import type { AuthSession, Reservation } from '../types'
 import { maskIdentifier, maskPersonName } from '../utils/privacy'
 import { getWorkspaceRoleLabel } from '../utils/roles'
@@ -22,8 +23,8 @@ import { getWorkspaceRoleLabel } from '../utils/roles'
 type DoctorDashboardPageProps = {
   authUser: AuthSession['user'] | null
   reservations: Reservation[]
-  onNavigate?: (page: AppPage) => void
   onLogout: () => void
+  onPatchAuthUser?: (updates: Partial<AuthSession['user']>) => void
   sessionStatus: string
   theme: 'light' | 'dark'
   onToggleTheme: () => void
@@ -62,15 +63,6 @@ const primaryItems: SidebarItem[] = [
     label: 'Analytics',
     caption: 'Department and queue insights',
     icon: 'report',
-  },
-]
-
-const utilityItems: SidebarItem[] = [
-  {
-    key: 'settings',
-    label: 'Account Settings',
-    caption: 'Profile, theme, and privacy',
-    icon: 'settings',
   },
 ]
 
@@ -148,11 +140,45 @@ const statusChipClass = (status: Reservation['status']) => {
   return 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]'
 }
 
+const meetsPasswordPolicy = (value: string) => {
+  if (value.length < 8) return false
+  if (!/[A-Z]/.test(value)) return false
+  if (!/[a-z]/.test(value)) return false
+  if (!/\d/.test(value)) return false
+  if (!/[^A-Za-z0-9]/.test(value)) return false
+  return true
+}
+
+const normalizeWhitespace = (value: string) => value.trim().replace(/\s+/g, ' ')
+
+const splitDisplayName = (value: string) => {
+  const normalized = normalizeWhitespace(value)
+  if (!normalized) return { firstName: '', lastName: '' }
+
+  const [firstName, ...rest] = normalized.split(' ')
+  return {
+    firstName,
+    lastName: rest.join(' ') || 'Doctor',
+  }
+}
+
+const buildDoctorDisplayName = (user: AuthSession['user'] | null) => {
+  const fullName = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim()
+  if (fullName) return fullName
+
+  const username = user?.username?.trim()
+  if (!username) return 'Doctor'
+
+  const raw = username.includes('@') ? username.split('@')[0] : username
+  const normalized = raw.replace(/[._-]+/g, ' ').trim()
+  return normalized || 'Doctor'
+}
+
 const DoctorDashboardPage = ({
   authUser,
   reservations,
-  onNavigate,
   onLogout,
+  onPatchAuthUser,
   sessionStatus,
   theme,
   onToggleTheme,
@@ -163,10 +189,28 @@ const DoctorDashboardPage = ({
     if (typeof window === 'undefined') return 'appointments'
     return resolveDoctorTabFromPath(window.location.pathname) ?? 'appointments'
   })
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentListItem | null>(null)
   const [showAppointmentDetail, setShowAppointmentDetail] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [profileName, setProfileName] = useState(() => buildDoctorDisplayName(authUser))
+  const [profileNameDraft, setProfileNameDraft] = useState(() => buildDoctorDisplayName(authUser))
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [profileMessage, setProfileMessage] = useState<string | null>(null)
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
+  const [isSavingPassword, setIsSavingPassword] = useState(false)
+
+  useEffect(() => {
+    const nextName = buildDoctorDisplayName(authUser)
+    setProfileName(nextName)
+    setProfileNameDraft(nextName)
+  }, [authUser?.firstName, authUser?.lastName, authUser?.username])
 
   // Auto-logout after 15 minutes of inactivity (900000 ms)
   const INACTIVITY_MS = 15 * 60 * 1000
@@ -194,6 +238,90 @@ const DoctorDashboardPage = ({
 
   const confirmAndLogout = () => {
     setShowLogoutConfirm(true)
+  }
+
+  const handleSaveProfileName = async () => {
+    const normalizedName = normalizeWhitespace(profileNameDraft)
+    setProfileError(null)
+    setProfileMessage(null)
+
+    if (!normalizedName || normalizedName.length < 2) {
+      setProfileError('Enter a valid name with at least 2 characters.')
+      return
+    }
+
+    if (normalizedName.length > 60) {
+      setProfileError('Name is too long. Keep it under 60 characters.')
+      return
+    }
+
+    const { firstName, lastName } = splitDisplayName(normalizedName)
+    if (!firstName || !lastName) {
+      setProfileError('Use both first and last name.')
+      return
+    }
+
+    setIsSavingProfile(true)
+    try {
+      const updatedUser = await api.updateProfile({ firstName, lastName })
+      const updatedName = `${updatedUser.firstName} ${updatedUser.lastName}`.trim()
+      setProfileName(updatedName || normalizedName)
+      setProfileNameDraft(updatedName || normalizedName)
+      setProfileMessage('Name updated successfully.')
+      onPatchAuthUser?.({
+        username: updatedUser.username,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+      })
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Unable to update name right now.')
+    } finally {
+      setIsSavingProfile(false)
+    }
+  }
+
+  const handleSavePassword = async () => {
+    const oldValue = currentPassword.trim()
+    const nextValue = newPassword.trim()
+    const confirmValue = confirmPassword.trim()
+
+    setPasswordError(null)
+    setPasswordMessage(null)
+
+    if (!oldValue || !nextValue || !confirmValue) {
+      setPasswordError('Fill in current password, new password, and confirm password.')
+      return
+    }
+
+    if (!meetsPasswordPolicy(nextValue)) {
+      setPasswordError(
+        'New password must be at least 8 characters with uppercase, lowercase, number, and symbol.'
+      )
+      return
+    }
+
+    if (oldValue === nextValue) {
+      setPasswordError('New password must be different from current password.')
+      return
+    }
+
+    if (nextValue !== confirmValue) {
+      setPasswordError('New password and confirm password do not match.')
+      return
+    }
+
+    setIsSavingPassword(true)
+    try {
+      await api.changePassword(oldValue, nextValue)
+      setPasswordMessage('Password changed successfully.')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : 'Unable to change password right now.')
+    } finally {
+      setIsSavingPassword(false)
+    }
   }
 
   const setSection = (next: DoctorSection) => {
@@ -327,12 +455,12 @@ const DoctorDashboardPage = ({
 
   const settingsMetrics = useMemo(
     () => [
+      { key: 'settings-name', label: 'Name', value: profileName, caption: 'Profile display name' },
       { key: 'settings-account', label: 'Account', value: authUser?.username ?? 'Unknown', caption: 'Signed in user' },
       { key: 'settings-role', label: 'Role', value: getWorkspaceRoleLabel(authUser?.role), caption: 'Workspace role' },
       { key: 'settings-theme', label: 'Theme', value: theme === 'dark' ? 'Dark' : 'Light', caption: 'Current theme' },
-      { key: 'settings-masking', label: 'Masking', value: dataMaskingEnabled ? 'On' : 'Off', caption: 'Data protection' },
     ],
-    [authUser?.role, authUser?.username, dataMaskingEnabled, theme]
+    [authUser?.role, authUser?.username, profileName, theme]
   )
 
   const sectionMeta = {
@@ -356,7 +484,7 @@ const DoctorDashboardPage = ({
     },
     settings: {
       title: 'Account Settings',
-      description: 'Manage your doctor workspace preferences and session details.',
+      description: 'Manage profile name, password security, and doctor workspace preferences.',
       searchPlaceholder: 'Search settings',
       metrics: settingsMetrics,
     },
@@ -366,8 +494,10 @@ const DoctorDashboardPage = ({
 
   return (
     <WorkspaceCanvas>
-      <div className="w-full px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+      <div className="w-full">
         <WorkspaceSidebarShell
+          className={`workspace-shell--full-side${isSidebarCollapsed ? ' workspace-shell--rail-collapsed' : ''}`}
+          contentClassName="px-4 pb-10 pt-5 sm:px-6 lg:px-8"
           mobileTitle="Doctor workspace"
           stickyOffsetMode="auto"
           sidebar={
@@ -375,29 +505,22 @@ const DoctorDashboardPage = ({
               variant="dashboard"
               mobileMode="drawer"
               fullRail
+              isCollapsed={isSidebarCollapsed}
+              onToggleCollapse={() => setIsSidebarCollapsed((previous) => !previous)}
               brandTitle="AI Health Care"
               brandSubtitle="Doctor workspace"
-              onBrandClick={() => onNavigate?.('landing')}
               sectionLabel="Primary"
               items={primaryItems}
               activeKey={activeSection}
               onSelect={(key) => {
-                if (key === 'appointments' || key === 'queue' || key === 'analytics' || key === 'settings') {
+                if (key === 'appointments' || key === 'queue' || key === 'analytics') {
                   setSection(key)
                 }
               }}
-              auxiliaryLabel="Utilities"
-              secondaryItems={utilityItems}
-              supportItem={{ key: 'logout', label: 'Logout', icon: 'shield' }}
-              onSelectAuxiliary={(key) => {
-                if (key === 'settings') {
-                  setSection('settings')
-                  return
-                }
-                if (key === 'logout') {
-                  confirmAndLogout()
-                  return
-                }
+              footerProfile={{
+                name: profileName,
+                subtitle: authUser?.username ?? 'Doctor workspace',
+                onClick: () => setSection('settings'),
               }}
             />
           }
@@ -410,6 +533,13 @@ const DoctorDashboardPage = ({
                 searchValue={searchQuery}
                 searchPlaceholder={activeMeta.searchPlaceholder}
                 onSearchChange={setSearchQuery}
+                showSearch={activeSection !== 'settings'}
+                showAccountMenu={activeSection !== 'settings'}
+                profileName={profileName}
+                profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
+                showNotifications
+                notificationCount={Math.min(queueItems.length, 99)}
+                onSignOut={confirmAndLogout}
                 metrics={activeMeta.metrics}
               />
 
@@ -643,41 +773,190 @@ const DoctorDashboardPage = ({
               ) : null}
 
               {activeSection === 'settings' ? (
-                <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Account settings</h2>
-                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Manage profile visibility and workspace preferences from a single tab.
-                  </p>
+                <section className="space-y-4">
+                  <section className={`${workspacePanelClass} p-5`}>
+                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Profile details</h2>
+                    <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                      Update your display name for this workspace.
+                    </p>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="reference-card-soft p-3">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Account</p>
-                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{authUser?.username ?? 'Unknown'}</p>
-                    </div>
-                    <div className="reference-card-soft p-3">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Role</p>
-                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{getWorkspaceRoleLabel(authUser?.role)}</p>
-                    </div>
-                    <div className="reference-card-soft p-3">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Theme</p>
-                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{theme === 'dark' ? 'Dark' : 'Light'}</p>
-                    </div>
-                    <div className="reference-card-soft p-3">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Data masking</p>
-                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{dataMaskingEnabled ? 'On' : 'Off'}</p>
-                    </div>
-                  </div>
+                    <form
+                      className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        void handleSaveProfileName()
+                      }}
+                    >
+                      <div className="reference-card-soft p-4">
+                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Account</p>
+                        <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>
+                          {authUser?.username ?? 'Unknown'}
+                        </p>
+                        <p className={`mt-3 text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Role</p>
+                        <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>
+                          {getWorkspaceRoleLabel(authUser?.role)}
+                        </p>
+                      </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
-                      Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
-                    </button>
-                    <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
-                      Turn data masking {dataMaskingEnabled ? 'Off' : 'On'}
-                    </button>
-                  </div>
+                      <div className="reference-card-soft p-4">
+                        <label
+                          htmlFor="doctor-profile-name"
+                          className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}
+                        >
+                          Display name
+                        </label>
+                        <input
+                          id="doctor-profile-name"
+                          value={profileNameDraft}
+                          onChange={(event) => {
+                            setProfileNameDraft(event.target.value)
+                            if (profileError) setProfileError(null)
+                            if (profileMessage) setProfileMessage(null)
+                          }}
+                          placeholder="Enter your full name"
+                          className={`mt-2 ${workspaceFieldClass}`}
+                        />
+                        {profileError ? (
+                          <p className="mt-3 text-xs font-semibold text-rose-500">{profileError}</p>
+                        ) : null}
+                        {profileMessage ? (
+                          <p className="mt-3 text-xs font-semibold text-emerald-600">{profileMessage}</p>
+                        ) : null}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="submit"
+                            className={workspacePrimaryButtonClass}
+                            disabled={isSavingProfile}
+                          >
+                            {isSavingProfile ? 'Saving...' : 'Save name'}
+                          </button>
+                          <button
+                            type="button"
+                            className={workspaceGhostButtonClass}
+                            onClick={() => {
+                              setProfileNameDraft(profileName)
+                              setProfileError(null)
+                              setProfileMessage(null)
+                            }}
+                            disabled={isSavingProfile}
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </section>
 
-                  <p className={`mt-4 text-xs ${workspaceSubtleTextClass}`}>Session: {sessionStatus}</p>
+                  <section className={`${workspacePanelClass} p-5`}>
+                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Change password</h2>
+                    <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                      Use a strong password to keep your workspace secure.
+                    </p>
+
+                    <form
+                      className="mt-4 grid gap-3 md:grid-cols-3"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        void handleSavePassword()
+                      }}
+                    >
+                      <input
+                        type="password"
+                        value={currentPassword}
+                        onChange={(event) => {
+                          setCurrentPassword(event.target.value)
+                          if (passwordError) setPasswordError(null)
+                          if (passwordMessage) setPasswordMessage(null)
+                        }}
+                        placeholder="Current password"
+                        className={workspaceFieldClass}
+                      />
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(event) => {
+                          setNewPassword(event.target.value)
+                          if (passwordError) setPasswordError(null)
+                          if (passwordMessage) setPasswordMessage(null)
+                        }}
+                        placeholder="New password"
+                        className={workspaceFieldClass}
+                      />
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(event) => {
+                          setConfirmPassword(event.target.value)
+                          if (passwordError) setPasswordError(null)
+                          if (passwordMessage) setPasswordMessage(null)
+                        }}
+                        placeholder="Confirm password"
+                        className={workspaceFieldClass}
+                      />
+                    </form>
+
+                    {passwordError ? (
+                      <p className="mt-3 text-xs font-semibold text-rose-500">{passwordError}</p>
+                    ) : null}
+                    {passwordMessage ? (
+                      <p className="mt-3 text-xs font-semibold text-emerald-600">{passwordMessage}</p>
+                    ) : null}
+
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        className={workspacePrimaryButtonClass}
+                        onClick={() => {
+                          void handleSavePassword()
+                        }}
+                        disabled={isSavingPassword}
+                      >
+                        {isSavingPassword ? 'Updating...' : 'Update password'}
+                      </button>
+                      <p className={`text-xs ${workspaceSubtleTextClass}`}>
+                        Minimum 8 characters with uppercase, lowercase, number, and symbol.
+                      </p>
+                    </div>
+                  </section>
+
+                  <section className={`${workspacePanelClass} p-5`}>
+                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>
+                      Workspace preferences
+                    </h2>
+                    <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                      Configure your session view and privacy controls.
+                    </p>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="reference-card-soft p-3">
+                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Theme</p>
+                        <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>
+                          {theme === 'dark' ? 'Dark' : 'Light'}
+                        </p>
+                      </div>
+                      <div className="reference-card-soft p-3">
+                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                          Data masking
+                        </p>
+                        <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>
+                          {dataMaskingEnabled ? 'On' : 'Off'}
+                        </p>
+                      </div>
+                      <div className="reference-card-soft p-3">
+                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Session</p>
+                        <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{sessionStatus}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
+                        Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
+                      </button>
+                      <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
+                        Turn data masking {dataMaskingEnabled ? 'Off' : 'On'}
+                      </button>
+                    </div>
+                  </section>
                 </section>
               ) : null}
             </section>

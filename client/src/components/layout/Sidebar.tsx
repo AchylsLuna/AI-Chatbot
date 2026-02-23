@@ -219,8 +219,8 @@ const Sidebar = ({
     heightMode === 'viewport'
       ? `workspace-sidebar--viewport workspace-sidebar--offset-${resolvedStickyOffset}`
       : ''
-  const allowLegacyCollapse = !fullRail && Boolean(onToggleCollapse)
-  const showCollapsedState = allowLegacyCollapse && isCollapsed
+  const showCollapsedState = Boolean(isCollapsed)
+  const allowCollapse = Boolean(onToggleCollapse)
 
   const handleAuxSelect = (key: string) => {
     if (onSelectAuxiliary) {
@@ -262,7 +262,7 @@ const Sidebar = ({
       data-sidebar-variant={variant}
       data-sidebar-mobile-mode={mobileMode}
     >
-      {allowLegacyCollapse ? (
+      {!fullRail && allowCollapse ? (
         <button
           type="button"
           onClick={onToggleCollapse}
@@ -273,23 +273,51 @@ const Sidebar = ({
       ) : null}
 
       {showBrand ? (
-        <button
-          type="button"
-          onClick={() => onBrandClick?.()}
-          className="workspace-sidebar-brand"
-          data-sidebar-nav-item={onBrandClick ? 'true' : undefined}
-        >
-          <AppLogoBadge className="h-10 w-10" />
-          <span className="min-w-0 text-left">
-            <span className="workspace-sidebar-brand-title">{brandTitle}</span>
-            <span className="workspace-sidebar-brand-subtitle">{brandSubtitle}</span>
-          </span>
-        </button>
+        <div className="workspace-sidebar-brand">
+          {onBrandClick ? (
+            <button
+              type="button"
+              onClick={() => onBrandClick()}
+              className="workspace-sidebar-brand-main"
+              data-sidebar-nav-item="true"
+            >
+              <AppLogoBadge className="h-10 w-10" />
+              <span className="min-w-0 text-left">
+                <span className="workspace-sidebar-brand-title">{brandTitle}</span>
+                <span className="workspace-sidebar-brand-subtitle">{brandSubtitle}</span>
+              </span>
+            </button>
+          ) : (
+            <span className="workspace-sidebar-brand-main is-static">
+              <AppLogoBadge className="h-10 w-10" />
+              <span className="min-w-0 text-left">
+                <span className="workspace-sidebar-brand-title">{brandTitle}</span>
+                <span className="workspace-sidebar-brand-subtitle">{brandSubtitle}</span>
+              </span>
+            </span>
+          )}
+          {allowCollapse ? (
+            <button
+              type="button"
+              className="workspace-sidebar-brand-chevron-button"
+              aria-label={showCollapsedState ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={() => onToggleCollapse?.()}
+            >
+              <span className="workspace-sidebar-brand-chevron" aria-hidden="true">
+                {showCollapsedState ? '›' : '‹'}
+              </span>
+            </button>
+          ) : (
+            <span className="workspace-sidebar-brand-chevron" aria-hidden="true">
+              ‹
+            </span>
+          )}
+        </div>
       ) : null}
 
       <div className="workspace-sidebar-scroll">
         {mainItems.length > 0 ? (
-          <section>
+          <section className="workspace-sidebar-main-section">
             <p className="workspace-sidebar-heading">{sectionLabel}</p>
             <nav className="workspace-sidebar-nav" aria-label={`${sectionLabel} navigation`}>
               {mainItems.map((item) => renderItem(item, () => onSelect(item.key), activeKey === item.key))}
@@ -298,7 +326,7 @@ const Sidebar = ({
         ) : null}
 
         {utilityItems.length > 0 ? (
-          <section className="workspace-sidebar-divider">
+          <section className="workspace-sidebar-divider workspace-sidebar-aux-section">
             <p className="workspace-sidebar-heading">{auxiliaryLabel}</p>
             <nav className="workspace-sidebar-nav" aria-label={`${auxiliaryLabel} navigation`}>
               {utilityItems.map((item) =>

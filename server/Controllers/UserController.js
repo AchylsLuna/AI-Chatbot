@@ -351,6 +351,8 @@ export async function getSession(req, res) {
 
         return res.json({
             username: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
             role: normalizeRole(user.role),
             authMethod: "otp",
             mfa: true,
@@ -405,6 +407,96 @@ export async function updateSettings(req, res) {
     } catch (error) {
         console.error("Update settings failed", error);
         return res.status(500).json({ message: "Failed to update settings" });
+    }
+}
+
+export async function updateProfile(req, res) {
+    try {
+        const userId = req.user?.id || req.user?._id;
+        if (!userId) return res.status(401).json({ message: "Invalid session" });
+
+        const rawFirstName = String(req.body?.firstName || "").trim();
+        const rawLastName = String(req.body?.lastName || "").trim();
+        const rawName = String(req.body?.name || "").trim();
+
+        let firstName = rawFirstName;
+        let lastName = rawLastName;
+
+        if (!firstName && !lastName && rawName) {
+            const [parsedFirstName, ...rest] = rawName.split(/\s+/).filter(Boolean);
+            firstName = parsedFirstName || "";
+            lastName = rest.join(" ") || "";
+        }
+
+        if (!firstName || !lastName) {
+            return res.status(400).json({ message: "First name and last name are required." });
+        }
+
+        if (firstName.length > 30 || lastName.length > 30) {
+            return res.status(400).json({ message: "First name and last name must be 30 characters or less." });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { $set: { firstName, lastName } },
+            { new: true }
+        );
+
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        return res.json({
+            message: "Profile updated.",
+            user: {
+                username: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: normalizeRole(user.role),
+            },
+        });
+    } catch (error) {
+        console.error("Update profile failed", error);
+        return res.status(500).json({ message: "Failed to update profile" });
+    }
+}
+
+export async function updatePassword(req, res) {
+    try {
+        const userId = req.user?.id || req.user?._id;
+        if (!userId) return res.status(401).json({ message: "Invalid session" });
+
+        const currentPassword = String(req.body?.currentPassword || "");
+        const newPassword = String(req.body?.newPassword || "");
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: "Current password and new password are required." });
+        }
+
+        if (!PASSWORD_REGEX.test(newPassword)) {
+            return res.status(400).json({
+                message:
+                    "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character.",
+            });
+        }
+
+        if (currentPassword === newPassword) {
+            return res.status(400).json({ message: "New password must be different from current password." });
+        }
+
+        const user = await User.findById(userId).select("+passwordHashed");
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        const passwordMatches = await user.validatePassword(currentPassword);
+        if (!passwordMatches) {
+            return res.status(401).json({ message: "Current password is incorrect." });
+        }
+
+        await user.setPassword(newPassword);
+        await user.save();
+
+        return res.json({ message: "Password updated." });
+    } catch (error) {
+        console.error("Update password failed", error);
+        return res.status(500).json({ message: "Failed to update password" });
     }
 }
 

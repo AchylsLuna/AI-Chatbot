@@ -18,6 +18,8 @@ import {
     getSession,
     getSettings,
     updateSettings,
+    updateProfile,
+    updatePassword,
     debugUser,
     googleCallback,
 } from '../Controllers/UserController.js';
@@ -142,6 +144,27 @@ router.put(
     ],
     validate,
     updateSettings
+);
+router.put(
+    '/users/me/profile',
+    authMiddleware,
+    [
+        body('name').optional().isString().trim().isLength({ min: 2, max: 60 }),
+        body('firstName').optional().isString().trim().isLength({ min: 1, max: 30 }),
+        body('lastName').optional().isString().trim().isLength({ min: 1, max: 30 }),
+    ],
+    validate,
+    updateProfile
+);
+router.put(
+    '/users/me/password',
+    authMiddleware,
+    [
+        body('currentPassword').isString().notEmpty(),
+        body('newPassword').isString().isLength({ min: 8 }),
+    ],
+    validate,
+    updatePassword
 );
 
 if (appConfig.enableDebugRoutes) {
