@@ -337,7 +337,8 @@
     background: radial-gradient(circle at top, var(--auth-vignette), transparent 55%);
   }
 
-  .reference-shell {
+  .reference-shell,
+  .reference-theme {
     --reference-surface: #ffffff;
     --reference-surface-soft: #f3f5f9;
     --reference-border: rgba(15, 23, 42, 0.12);
@@ -348,12 +349,16 @@
     --reference-blue-100: #4d8fcb;
     --reference-blue-500: #223f7b;
     --reference-grid: rgba(15, 23, 42, 0.08);
+  }
+
+  .reference-shell {
     display: grid;
     gap: 1rem;
     align-items: start;
   }
 
-  .theme-dark .reference-shell {
+  .theme-dark .reference-shell,
+  .theme-dark .reference-theme {
     --reference-surface: #111b2f;
     --reference-surface-soft: #18253d;
     --reference-border: rgba(148, 163, 184, 0.28);
@@ -1834,6 +1839,10 @@
 
   .reference-topbar--search-only {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reference-topbar--no-search {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .reference-dashboard-grid {

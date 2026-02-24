@@ -3,8 +3,8 @@ import { matchesNamespace, normalizePath } from './pathUtils'
 import { ROUTES } from '../utils/routes'
 
 export const APPOINTMENTS_TAB_PATHS = {
-  dashboard: ROUTES.appointments,
-  appointments: `${ROUTES.appointments}/appointments`,
+  booking_appointments: ROUTES.appointments,
+  history: `${ROUTES.appointments}/history`,
   notifications: `${ROUTES.appointments}/notifications`,
   settings: `${ROUTES.appointments}/settings`,
 } as const
@@ -20,6 +20,7 @@ export const ADMIN_TAB_PATHS = {
   user_management: ROUTES.admin.dashboard,
   staff_management: `${ROUTES.admin.root}/staff-management`,
   history: `${ROUTES.admin.root}/history`,
+  notifications: `${ROUTES.admin.root}/notifications`,
   settings: `${ROUTES.admin.root}/settings`,
 } as const
 
@@ -28,11 +29,12 @@ export type DoctorTab = keyof typeof DOCTOR_TAB_PATHS
 export type AdminTab = keyof typeof ADMIN_TAB_PATHS
 export type WorkspacePage = Extract<AppPage, 'appointments' | 'doctor_dashboard' | 'admin'>
 
-const APPOINTMENTS_COMPAT_PATHS: ReadonlySet<string> = new Set([
-  '/worker',
-  '/worker/dashboard',
-  '/triage',
-])
+const APPOINTMENTS_COMPAT_TAB_MAP: Readonly<Record<string, AppointmentsTab>> = {
+  '/worker': 'booking_appointments',
+  '/worker/dashboard': 'booking_appointments',
+  '/triage': 'booking_appointments',
+  [`${ROUTES.appointments}/appointments`]: 'history',
+}
 
 const DOCTOR_DEFAULT_COMPAT_PATHS: ReadonlySet<string> = new Set([
   ROUTES.doctor.root,
@@ -75,7 +77,7 @@ export const resolveAppointmentsTabFromPath = (path: string): AppointmentsTab | 
   const normalized = normalizePath(path)
   const direct = findTabForPath(APPOINTMENTS_TAB_PATHS, normalized)
   if (direct) return direct
-  if (APPOINTMENTS_COMPAT_PATHS.has(normalized)) return 'dashboard'
+  if (normalized in APPOINTMENTS_COMPAT_TAB_MAP) return APPOINTMENTS_COMPAT_TAB_MAP[normalized]
   return null
 }
 
@@ -125,7 +127,7 @@ export const resolveWorkspaceCanonicalPath = (path: string): string | null => {
   if (adminTab) return getAdminTabPath(adminTab)
 
   const page = resolveWorkspacePageFromPath(normalized)
-  if (page === 'appointments') return getAppointmentsTabPath('dashboard')
+  if (page === 'appointments') return getAppointmentsTabPath('booking_appointments')
   if (page === 'doctor_dashboard') return getDoctorTabPath('appointments')
   if (page === 'admin') return getAdminTabPath('user_management')
 

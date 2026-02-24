@@ -5,6 +5,7 @@ type DashboardTopBarProps = {
   title?: string
   searchValue: string
   onSearchChange: (value: string) => void
+  showSearch?: boolean
   searchPlaceholder?: string
   searchLabel?: string
   profileName?: string
@@ -43,6 +44,7 @@ const DashboardTopBar = ({
   title,
   searchValue,
   onSearchChange,
+  showSearch = true,
   searchPlaceholder = 'Search records',
   searchLabel,
   profileName = '',
@@ -72,24 +74,28 @@ const DashboardTopBar = ({
     showMessages || showStandaloneNotifications || showProfileChip || canShowAccountMenu
 
   return (
-    <section className={`reference-topbar ${title ? '' : 'reference-topbar--search-only'}`}>
+    <section
+      className={`reference-topbar ${title ? '' : 'reference-topbar--search-only'} ${showSearch ? '' : 'reference-topbar--no-search'}`}
+    >
       {title ? <h1 className="reference-page-title">{title}</h1> : null}
 
-      <div className="reference-search-field">
-        {searchLabel ? <p className="reference-search-label">{searchLabel}</p> : null}
-        <label className="reference-search" htmlFor="reference-dashboard-search">
-          <span className="text-[color:var(--agent-muted-soft)]" aria-hidden="true">
-            <SearchIcon />
-          </span>
-          <input
-            id="reference-dashboard-search"
-            value={searchValue}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder={searchPlaceholder}
-            className="reference-search-input"
-          />
-        </label>
-      </div>
+      {showSearch ? (
+        <div className="reference-search-field">
+          {searchLabel ? <p className="reference-search-label">{searchLabel}</p> : null}
+          <label className="reference-search" htmlFor="reference-dashboard-search">
+            <span className="text-[color:var(--agent-muted-soft)]" aria-hidden="true">
+              <SearchIcon />
+            </span>
+            <input
+              id="reference-dashboard-search"
+              value={searchValue}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder={searchPlaceholder}
+              className="reference-search-input"
+            />
+          </label>
+        </div>
+      ) : null}
 
       {hasActions ? (
         <div className="reference-top-actions">

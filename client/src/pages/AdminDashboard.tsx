@@ -30,7 +30,12 @@ type AdminDashboardProps = {
   onToggleDataMasking: () => void
 }
 
-type AdminSection = 'user_management' | 'staff_management' | 'history' | 'settings'
+type AdminSection =
+  | 'user_management'
+  | 'staff_management'
+  | 'history'
+  | 'notifications'
+  | 'settings'
 
 type AdminUserSummaryItem = {
   id: string
@@ -60,6 +65,16 @@ type AdminHistoryItem = {
   severity: 'Info' | 'Warning' | 'Critical'
 }
 
+type AdminNotificationItem = {
+  id: string
+  title: string
+  detail: string
+  createdAt: string
+  severity: AdminHistoryItem['severity']
+  category: 'Security' | 'Reservation' | 'System'
+  read: boolean
+}
+
 const primaryItems: SidebarItem[] = [
   {
     key: 'user_management',
@@ -83,16 +98,16 @@ const primaryItems: SidebarItem[] = [
 
 const utilityItems: SidebarItem[] = [
   {
+    key: 'notifications',
+    label: 'Notifications',
+    caption: 'Alerts and operational updates',
+    icon: 'alert',
+  },
+  {
     key: 'settings',
     label: 'Account Settings',
     caption: 'Profile, theme, and privacy',
     icon: 'settings',
-  },
-  {
-    key: 'landing',
-    label: 'Landing',
-    caption: 'Public overview page',
-    icon: 'home',
   },
 ]
 
@@ -177,6 +192,36 @@ const FALLBACK_HISTORY: AdminHistoryItem[] = [
     detail: 'Session policy checks passed with no elevated-risk findings.',
     createdAt: '2026-02-15T13:40:00.000Z',
     severity: 'Info',
+  },
+]
+
+const FALLBACK_NOTIFICATIONS: AdminNotificationItem[] = [
+  {
+    id: 'NTF-901',
+    title: 'Security policy check completed',
+    detail: 'Daily privileged access policy checks completed with no critical findings.',
+    createdAt: '2026-02-17T15:12:00.000Z',
+    severity: 'Info',
+    category: 'Security',
+    read: false,
+  },
+  {
+    id: 'NTF-902',
+    title: 'Booking queue needs review',
+    detail: 'Two reservations were flagged for manual doctor follow-up.',
+    createdAt: '2026-02-16T10:35:00.000Z',
+    severity: 'Warning',
+    category: 'Reservation',
+    read: false,
+  },
+  {
+    id: 'NTF-903',
+    title: 'System snapshot generated',
+    detail: 'The daily operations snapshot is available for admin review.',
+    createdAt: '2026-02-15T09:10:00.000Z',
+    severity: 'Info',
+    category: 'System',
+    read: true,
   },
 ]
 
@@ -438,6 +483,37 @@ const AdminDashboard = ({
     })
   }, [historyItems, normalizedQuery])
 
+  const notificationItems = useMemo<AdminNotificationItem[]>(() => {
+    if (!historyItems.length) return FALLBACK_NOTIFICATIONS
+
+    return historyItems.slice(0, 12).map((item, index) => ({
+      id: `NTF-${item.id}`,
+      title: `${item.type} update`,
+      detail: `${item.subject}: ${item.detail}`,
+      createdAt: item.createdAt,
+      severity: item.severity,
+      category:
+        item.type === 'Auth'
+          ? 'Security'
+          : item.type === 'Reservation'
+            ? 'Reservation'
+            : 'System',
+      read: index > 3,
+    }))
+  }, [historyItems])
+
+  const filteredNotifications = useMemo(() => {
+    if (!normalizedQuery) return notificationItems
+    return notificationItems.filter((item) => {
+      return (
+        item.title.toLowerCase().includes(normalizedQuery) ||
+        item.detail.toLowerCase().includes(normalizedQuery) ||
+        item.category.toLowerCase().includes(normalizedQuery) ||
+        item.severity.toLowerCase().includes(normalizedQuery)
+      )
+    })
+  }, [normalizedQuery, notificationItems])
+
   const userMetrics = useMemo(() => {
     const activeUsers = userItems.filter(
       (item) => item.latestStatus === 'Booked' || item.latestStatus === 'Recorded'
@@ -488,6 +564,39 @@ const AdminDashboard = ({
     ]
   }, [filteredHistory.length, historyItems])
 
+  const notificationsMetrics = useMemo(() => {
+    const unread = notificationItems.filter((item) => !item.read).length
+    const critical = notificationItems.filter((item) => item.severity === 'Critical').length
+    const reservationUpdates = notificationItems.filter((item) => item.category === 'Reservation').length
+
+    return [
+      {
+        key: 'notifications-total',
+        label: 'Total alerts',
+        value: notificationItems.length,
+        caption: `${filteredNotifications.length} matching`,
+      },
+      {
+        key: 'notifications-unread',
+        label: 'Unread',
+        value: unread,
+        caption: 'Needs review',
+      },
+      {
+        key: 'notifications-critical',
+        label: 'Critical',
+        value: critical,
+        caption: 'High priority alerts',
+      },
+      {
+        key: 'notifications-reservation',
+        label: 'Reservation updates',
+        value: reservationUpdates,
+        caption: 'Queue activity signals',
+      },
+    ]
+  }, [filteredNotifications.length, notificationItems])
+
   const settingsMetrics = useMemo(
     () => [
       { key: 'settings-account', label: 'Account', value: authUser?.username ?? 'Unknown', caption: 'Signed in user' },
@@ -519,6 +628,12 @@ const AdminDashboard = ({
         'Review recent privileged activity across sessions, reservation operations, and system checks.',
       searchPlaceholder: 'Search history by actor, type, subject, or severity',
       metrics: historyMetrics,
+    },
+    notifications: {
+      title: 'Notifications',
+      description: 'Track operational alerts and security updates across admin and doctor workflows.',
+      searchPlaceholder: 'Search notifications by title, category, or severity',
+      metrics: notificationsMetrics,
     },
     settings: {
       title: 'Account Settings',
@@ -558,6 +673,10 @@ const AdminDashboard = ({
               auxiliaryLabel="Utilities"
               secondaryItems={utilityItems}
               onSelectAuxiliary={(key) => {
+                if (key === 'notifications') {
+                  setSection('notifications')
+                  return
+                }
                 if (key === 'settings') {
                   setSection('settings')
                   return
@@ -585,7 +704,7 @@ const AdminDashboard = ({
                 profileName={authUser?.username ?? 'Admin'}
                 profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
                 showNotifications
-                notificationCount={Math.min(filteredHistory.length, 99)}
+                notificationCount={Math.min(notificationItems.filter((item) => !item.read).length, 99)}
                 onSignOut={confirmAndLogout}
                 metrics={activeMeta.metrics}
               />
@@ -730,6 +849,54 @@ const AdminDashboard = ({
 
                         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-[color:var(--agent-muted-soft)]">
                           <span>Actor: {item.actor}</span>
+                          <span>{formatDateTime(item.createdAt)}</span>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </section>
+              ) : null}
+
+              {activeSection === 'notifications' ? (
+                <section className="space-y-3">
+                  {filteredNotifications.length === 0 ? (
+                    <article className={`${workspacePanelClass} p-5`}>
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>
+                        No notifications match your search query.
+                      </p>
+                    </article>
+                  ) : (
+                    filteredNotifications.map((item) => (
+                      <article
+                        key={item.id}
+                        className={`${workspacePanelClass} p-5 ${item.read ? '' : 'ring-1 ring-blue-200/70'}`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              {!item.read ? (
+                                <span
+                                  className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500"
+                                  title="Unread"
+                                />
+                              ) : null}
+                              <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                                {item.category}
+                              </p>
+                            </div>
+                            <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>
+                              {item.title}
+                            </h2>
+                            <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{item.detail}</p>
+                          </div>
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${historySeverityChipClass(item.severity)}`}
+                          >
+                            {item.severity}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 text-xs text-[color:var(--agent-muted-soft)]">
                           <span>{formatDateTime(item.createdAt)}</span>
                         </div>
                       </article>

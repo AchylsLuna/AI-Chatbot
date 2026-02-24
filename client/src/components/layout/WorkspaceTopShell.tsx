@@ -96,7 +96,7 @@ const WorkspaceTopShell = ({
                     profileCaption={profileCaption}
                     showNotifications={showNotifications}
                     notificationCount={notificationCount}
-                    onSignOut={onSignOut}
+                    onSignOut={onSignOut!}
                     variant="workspace"
                   />
                 ) : null}

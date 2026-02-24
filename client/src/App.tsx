@@ -40,6 +40,7 @@ function App() {
     reservations,
     latestReservation,
     pendingOtpChallenge,
+    handleCreateReservation,
     handleProviderLogin,
     handleLogin,
     handleVerifyOtp,
@@ -56,7 +57,7 @@ function App() {
   const isProtectedRoute =
     currentPage === 'appointments' || currentPage === 'doctor_dashboard' || currentPage === 'admin'
   const isReferenceDashboardPage =
-    currentPage === 'appointments' || currentPage === 'doctor_dashboard'
+    currentPage === 'appointments' || currentPage === 'doctor_dashboard' || currentPage === 'admin'
   const showPublicHeader = !isLanding && !isAuthPage && !authUser && !isProtectedRoute
   const showWorkspaceHeader =
     Boolean(authUser) && !isAuthPage && currentPage !== 'landing' && !isReferenceDashboardPage
@@ -244,6 +245,7 @@ function App() {
                 authUser={authUser}
                 onNavigate={navigateToPage}
                 onLogout={handleLogout}
+                onCreateReservation={handleCreateReservation}
                 sessionStatus={sessionStatus}
                 theme={theme}
                 onToggleTheme={toggleTheme}

@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import DashboardStatStrip from '../components/layout/DashboardStatStrip'
 import DashboardTopBar from '../components/layout/DashboardTopBar'
-import DashboardWidgetBlocks from '../components/layout/DashboardWidgetBlocks'
 import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
 import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
 import WorkspaceSidebarShell from '../components/layout/WorkspaceSidebarShell'
@@ -17,15 +15,16 @@ import {
 } from '../config/workspaceTabRoutes'
 import type { AppPage } from '../types/navigation'
 import ConfirmModal from '../components/ui/ConfirmModal'
-import type { AuthSession, Reservation } from '../types'
+import type { AuthSession, Reservation, ReservationDraft } from '../types'
 import { maskIdentifier, maskPersonName } from '../utils/privacy'
-import { formatRoleLabel, getWorkspaceRoleLabel } from '../utils/roles'
+import { getWorkspaceRoleLabel } from '../utils/roles'
 
 type AppointmentsPageProps = {
   reservations: Reservation[]
   authUser: AuthSession['user'] | null
   onNavigate?: (page: AppPage) => void
   onLogout?: () => void
+  onCreateReservation?: (draft: ReservationDraft) => Promise<void>
   sessionStatus: string
   theme: 'light' | 'dark'
   onToggleTheme: () => void
@@ -34,8 +33,8 @@ type AppointmentsPageProps = {
 }
 
 const USER_SIDEBAR_SECTIONS = [
-  'dashboard',
-  'appointments',
+  'booking_appointments',
+  'history',
   'notifications',
   'settings',
 ] as const
@@ -50,13 +49,13 @@ type NotificationPreferences = {
 }
 
 const sidebarItems: SidebarItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: 'home' },
-  { key: 'appointments', label: 'Appointments', icon: 'calendar' },
+  { key: 'booking_appointments', label: 'Booking Appointments', icon: 'calendar' },
+  { key: 'history', label: 'History', icon: 'report' },
 ]
 
 const utilityItems: SidebarItem[] = [
   { key: 'notifications', label: 'Notifications', icon: 'alert' },
-  { key: 'settings', label: 'Settings', icon: 'settings' },
+  { key: 'settings', label: 'Account Settings', icon: 'settings' },
 ]
 
 const notificationPrefKey = 'pulse-ledger-notification-preferences'
@@ -75,37 +74,33 @@ const meetsPasswordPolicy = (value: string) => {
   return true
 }
 
-const buildWeeklySeries = (items: Reservation[]) => {
-  const buckets = 8
-  const weekMs = 7 * 24 * 60 * 60 * 1000
-  const now = Date.now()
-  const booked = Array.from({ length: buckets }, () => 0)
-  const recorded = Array.from({ length: buckets }, () => 0)
-  const failed = Array.from({ length: buckets }, () => 0)
+const departmentOptions = [
+  'General Medicine',
+  'Cardiology',
+  'Orthopedics',
+  'Neurology',
+  'Dermatology',
+  'Pediatrics',
+] as const
 
-  for (const item of items) {
-    const timestamp = new Date(item.createdAt).getTime()
-    if (Number.isNaN(timestamp)) continue
-    const diff = now - timestamp
-    const weeksAgo = Math.floor(diff / weekMs)
-    const index = buckets - weeksAgo - 1
-    if (index < 0 || index >= buckets) continue
+const formatDateInput = (value: Date) => {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
 
-    if (item.status === 'Booked') booked[index] += 1
-    if (item.status === 'Recorded') recorded[index] += 1
-    if (item.status === 'Failed') failed[index] += 1
-  }
+const buildDefaultRequestedTime = () => {
+  const nextHour = new Date(Date.now() + 60 * 60 * 1000)
+  nextHour.setMinutes(Math.ceil(nextHour.getMinutes() / 15) * 15, 0, 0)
+  return formatDateInput(nextHour)
+}
 
-  const hasData = [...booked, ...recorded, ...failed].some((value) => value > 0)
-  if (!hasData) {
-    return {
-      booked: [4, 6, 5, 7, 8, 7, 5, 4],
-      recorded: [2, 3, 4, 4, 5, 4, 3, 2],
-      failed: [1, 1, 1, 2, 1, 2, 1, 1],
-    }
-  }
-
-  return { booked, recorded, failed }
+const resolvePatientDisplayName = (user: AuthSession['user'] | null) => {
+  const fullName = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim()
+  if (fullName) return fullName
+  const username = user?.username?.trim()
+  if (!username) return 'Patient'
+  const normalized = username.includes('@') ? username.split('@')[0] : username
+  return normalized || 'Patient'
 }
 
 const statusBadgeClass = (status: Reservation['status']) => {
@@ -125,20 +120,15 @@ const AppointmentsPage = ({
   onToggleTheme,
   dataMaskingEnabled,
   onToggleDataMasking,
+  onCreateReservation,
   onLogout,
 }: AppointmentsPageProps) => {
   const [activeSection, setActiveSection] = useState<UserSidebarSection>(() => {
-    if (typeof window === 'undefined') return 'dashboard'
-    return resolveAppointmentsTabFromPath(window.location.pathname) ?? 'dashboard'
+    if (typeof window === 'undefined') return 'booking_appointments'
+    return resolveAppointmentsTabFromPath(window.location.pathname) ?? 'booking_appointments'
   })
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
 
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => {
     if (typeof window === 'undefined') return defaultNotificationPrefs
@@ -157,6 +147,21 @@ const AppointmentsPage = ({
   }, [notificationPrefs])
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [bookingDepartment, setBookingDepartment] = useState<(typeof departmentOptions)[number]>(
+    'General Medicine'
+  )
+  const [bookingPriority, setBookingPriority] = useState<Reservation['priority']>('Routine')
+  const [bookingRequestedTime, setBookingRequestedTime] = useState(buildDefaultRequestedTime)
+  const [bookingSymptoms, setBookingSymptoms] = useState('')
+  const [bookingNote, setBookingNote] = useState('')
+  const [bookingError, setBookingError] = useState<string | null>(null)
+  const [bookingMessage, setBookingMessage] = useState<string | null>(null)
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
 
   const setSection = (next: UserSidebarSection) => {
     setActiveSection(next)
@@ -176,7 +181,7 @@ const AppointmentsPage = ({
     if (typeof window === 'undefined') return
 
     const handlePopState = () => {
-      setActiveSection(resolveAppointmentsTabFromPath(window.location.pathname) ?? 'dashboard')
+      setActiveSection(resolveAppointmentsTabFromPath(window.location.pathname) ?? 'booking_appointments')
     }
 
     window.addEventListener('popstate', handlePopState)
@@ -208,81 +213,223 @@ const AppointmentsPage = ({
   }, [searchQuery, sortedReservations])
 
   const metrics = useMemo(() => {
-    const booked = visibleReservations.filter((item) => item.status === 'Booked').length
-    const recorded = visibleReservations.filter((item) => item.status === 'Recorded').length
-    const failed = visibleReservations.filter((item) => item.status === 'Failed').length
-    return { total: visibleReservations.length, booked, recorded, failed }
-  }, [visibleReservations])
+    const source = sortedReservations
+    const booked = source.filter((item) => item.status === 'Booked').length
+    const recorded = source.filter((item) => item.status === 'Recorded').length
+    const failed = source.filter((item) => item.status === 'Failed').length
+    return { total: source.length, booked, recorded, failed }
+  }, [sortedReservations])
 
-  const weeklySeries = useMemo(() => buildWeeklySeries(visibleReservations), [visibleReservations])
-
-  const completionRate = useMemo(() => {
-    if (metrics.total === 0) return 0
-    return Math.round((metrics.recorded / metrics.total) * 100)
-  }, [metrics.recorded, metrics.total])
-
-  const activityItems = useMemo(() => {
-    const items = visibleReservations.slice(0, 5).map((item) => ({
-      id: item.id,
-      title: `${dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName}`,
-      detail: `${item.department} · ${item.status}`,
-      meta: new Date(item.createdAt).toLocaleString(),
-    }))
-
-    if (items.length > 0) return items
-
-    return [
-      {
-        id: 'empty-activity',
-        title: 'No recent activity yet',
-        detail: 'Create your first appointment and track it here.',
-        meta: 'Just now',
-      },
-    ]
-  }, [dataMaskingEnabled, visibleReservations])
-
-  const recommendationItems = useMemo(() => {
-    const items = visibleReservations.slice(0, 6).map((item) => ({
-      id: item.id,
-      title: `${item.department} follow-up`,
-      subtitle: `${dataMaskingEnabled ? maskIdentifier(item.id) : item.id} · ${item.requestedTime}`,
-      detail: item.summary,
-      badge: item.status,
-    }))
-
-    if (items.length > 0) return items
-
-    return [
-      {
-        id: 'rec-a',
-        title: 'General check-in',
-        subtitle: 'Queue availability',
-        detail: 'No active bookings yet. Open appointments and create your first booking.',
-      },
-      {
-        id: 'rec-b',
-        title: 'Specialist routing',
-        subtitle: 'Booking workflow',
-        detail: 'Use the appointment workspace to monitor and manage your booking flow.',
-      },
-    ]
-  }, [dataMaskingEnabled, visibleReservations])
-
-  const featuredItems = useMemo(
-    () => [
-      { id: 'featured-1', title: 'General Medicine', subtitle: 'Core patient care team' },
-      { id: 'featured-2', title: 'Cardiology', subtitle: 'Heart health services' },
-      { id: 'featured-3', title: 'Orthopedics', subtitle: 'Mobility and recovery unit' },
-      { id: 'featured-4', title: 'Neurology', subtitle: 'Nervous system specialists' },
-    ],
-    []
+  const activeBookedAppointment = useMemo(
+    () => sortedReservations.find((item) => item.status === 'Booked') ?? null,
+    [sortedReservations]
   )
 
-  const renderAppointmentsList = () => {
+  const submitBooking = async () => {
+    setBookingError(null)
+    setBookingMessage(null)
+
+    const trimmedSymptoms = bookingSymptoms.trim()
+    const trimmedNote = bookingNote.trim()
+    if (trimmedSymptoms.length < 5) {
+      setBookingError('Add more details in symptoms so the care team can triage your booking.')
+      return
+    }
+
+    const parsedTime = new Date(bookingRequestedTime)
+    if (Number.isNaN(parsedTime.getTime())) {
+      setBookingError('Select a valid preferred date and time.')
+      return
+    }
+
+    if (parsedTime.getTime() <= Date.now()) {
+      setBookingError('Preferred date and time must be in the future.')
+      return
+    }
+
+    if (!onCreateReservation) {
+      setBookingError('Booking service is not available in this session.')
+      return
+    }
+
+    const draft: ReservationDraft = {
+      patientName: resolvePatientDisplayName(authUser),
+      symptoms: trimmedSymptoms,
+      requestedTime: parsedTime.toISOString(),
+      summary: {
+        department: bookingDepartment,
+        priority: bookingPriority,
+        confidence: 0.8,
+        summary: trimmedNote || trimmedSymptoms,
+        symptoms: trimmedSymptoms,
+        disclaimer: 'Submitted via patient booking workspace.',
+        source: 'rules',
+      },
+    }
+
+    setIsSubmittingBooking(true)
+    try {
+      await onCreateReservation(draft)
+      setBookingMessage('Booking appointment submitted successfully.')
+      setBookingSymptoms('')
+      setBookingNote('')
+      setBookingRequestedTime(buildDefaultRequestedTime())
+      setSection('history')
+    } catch (error) {
+      setBookingError(error instanceof Error ? error.message : 'Unable to submit booking right now.')
+    } finally {
+      setIsSubmittingBooking(false)
+    }
+  }
+
+  const renderBookingAppointments = () => (
+    <section className="grid gap-4 xl:grid-cols-[1.06fr_0.94fr]">
+      <form
+        className="reference-card p-5"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void submitBooking()
+        }}
+      >
+        <h2 className="reference-section-title">New booking request</h2>
+        <p className="reference-widget-subtle mt-2">
+          Enter your preferred schedule and symptoms to submit an appointment request.
+        </p>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+              Department
+            </span>
+            <select
+              value={bookingDepartment}
+              onChange={(event) =>
+                setBookingDepartment(event.target.value as (typeof departmentOptions)[number])
+              }
+              className={workspaceFieldClass}
+            >
+              {departmentOptions.map((department) => (
+                <option key={department} value={department}>
+                  {department}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+              Priority
+            </span>
+            <select
+              value={bookingPriority}
+              onChange={(event) => setBookingPriority(event.target.value as Reservation['priority'])}
+              className={workspaceFieldClass}
+            >
+              <option value="Low">Low</option>
+              <option value="Routine">Routine</option>
+              <option value="High">High</option>
+            </select>
+          </label>
+        </div>
+
+        <label className="mt-3 block space-y-1.5">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+            Preferred Date and Time
+          </span>
+          <input
+            type="datetime-local"
+            value={bookingRequestedTime}
+            min={formatDateInput(new Date())}
+            onChange={(event) => setBookingRequestedTime(event.target.value)}
+            className={workspaceFieldClass}
+          />
+        </label>
+
+        <label className="mt-3 block space-y-1.5">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+            Symptoms
+          </span>
+          <textarea
+            value={bookingSymptoms}
+            onChange={(event) => setBookingSymptoms(event.target.value)}
+            placeholder="Describe symptoms and how long you've experienced them."
+            rows={4}
+            className={workspaceFieldClass}
+          />
+        </label>
+
+        <label className="mt-3 block space-y-1.5">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+            Additional Notes (optional)
+          </span>
+          <textarea
+            value={bookingNote}
+            onChange={(event) => setBookingNote(event.target.value)}
+            placeholder="Add anything important for scheduling or care context."
+            rows={3}
+            className={workspaceFieldClass}
+          />
+        </label>
+
+        {bookingError ? <p className="mt-3 text-sm font-semibold text-rose-600">{bookingError}</p> : null}
+        {bookingMessage ? (
+          <p className="mt-3 text-sm font-semibold text-emerald-600">{bookingMessage}</p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="submit" className={workspacePrimaryButtonClass} disabled={isSubmittingBooking}>
+            {isSubmittingBooking ? 'Submitting...' : 'Submit booking appointment'}
+          </button>
+          <button
+            type="button"
+            className={workspaceGhostButtonClass}
+            onClick={() => setSection('history')}
+          >
+            View booking history
+          </button>
+        </div>
+      </form>
+
+      <div className="space-y-4">
+        <article className="reference-card p-5">
+          <h3 className="reference-section-title">Booking checklist</h3>
+          <ul className="mt-3 space-y-2 text-sm text-[color:var(--agent-muted)]">
+            <li>Choose the department closest to your symptoms.</li>
+            <li>Pick a future date and time for the consultation.</li>
+            <li>Describe symptoms clearly for faster triage.</li>
+          </ul>
+        </article>
+
+        <article className="reference-card p-5">
+          <h3 className="reference-section-title">Current active booking</h3>
+          {activeBookedAppointment ? (
+            <div className="mt-3 space-y-2 text-sm text-[color:var(--agent-muted)]">
+              <p className="font-semibold text-[color:var(--agent-ink)]">
+                {activeBookedAppointment.department}
+              </p>
+              <p>{new Date(activeBookedAppointment.requestedTime).toLocaleString()}</p>
+              <p>{activeBookedAppointment.summary}</p>
+              <span
+                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(activeBookedAppointment.status)}`}
+              >
+                {activeBookedAppointment.status}
+              </span>
+            </div>
+          ) : (
+            <p className="reference-widget-subtle mt-2">
+              No active booking yet. Submit your first appointment request from this tab.
+            </p>
+          )}
+        </article>
+      </div>
+    </section>
+  )
+
+  const renderHistoryList = () => {
     if (visibleReservations.length === 0) {
       return (
         <article className="reference-card p-5">
-          <h2 className="reference-section-title">No appointments found</h2>
+          <h2 className="reference-section-title">No history records found</h2>
           <p className="reference-widget-subtle mt-2">
             {searchQuery
               ? 'No records match this search. Clear or adjust your query.'
@@ -292,9 +439,9 @@ const AppointmentsPage = ({
             <button
               type="button"
               className={workspacePrimaryButtonClass}
-              onClick={() => setSection('dashboard')}
+              onClick={() => setSection('booking_appointments')}
             >
-              Back to dashboard
+              Open booking appointments
             </button>
             {searchQuery ? (
               <button
@@ -337,42 +484,48 @@ const AppointmentsPage = ({
     )
   }
 
-  const renderSettings = () => (
+  const renderNotificationsSection = () => (
     <section className="reference-card p-5">
-      <h2 className="reference-section-title">Account settings</h2>
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <h2 className="reference-section-title">Notifications</h2>
+      <p className="reference-widget-subtle mt-2">
+        Manage how booking alerts and workspace updates are delivered.
+      </p>
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <div className="reference-card-soft p-4">
-          <p className="text-sm text-[color:var(--agent-muted)]">
-            Signed in as <span className="font-semibold text-[color:var(--agent-ink)]">{authUser?.username ?? 'Unknown'}</span>
+          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+            Delivery channels
           </p>
-          <p className="mt-1 text-sm text-[color:var(--agent-muted)]">
-            Role:{' '}
-            <span className="font-semibold text-[color:var(--agent-ink)]">
-              {getWorkspaceRoleLabel(authUser?.role)} workspace
-            </span>
-          </p>
-          <p className="mt-1 text-xs text-[color:var(--agent-muted-soft)]">{formatRoleLabel(authUser?.role)}</p>
-          <p className="mt-2 text-xs text-[color:var(--agent-muted-soft)]">Session: {sessionStatus}</p>
-        </div>
-
-        <div className="reference-card-soft p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">Quick controls</p>
           <div className="mt-3 grid gap-2">
-            <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
-              Theme: {theme === 'dark' ? 'Dark' : 'Light'}
-            </button>
-            <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
-              Data masking: {dataMaskingEnabled ? 'On' : 'Off'}
-            </button>
-          </div>
-        </div>
-
-        <div className="reference-card-soft p-4 xl:col-span-2">
-          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">Notifications</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {[
               { key: 'emailAlerts', label: 'Email alerts' },
               { key: 'browserAlerts', label: 'Browser alerts' },
+            ].map((item) => {
+              const prefKey = item.key as keyof NotificationPreferences
+              const active = notificationPrefs[prefKey]
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setNotificationPrefs((prev) => ({ ...prev, [prefKey]: !prev[prefKey] }))}
+                  className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
+                    active
+                      ? 'border-[color:var(--agent-accent)] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-ink)]'
+                      : 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)] hover:border-[color:var(--agent-line)] hover:text-[color:var(--agent-ink)]'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="reference-card-soft p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+            Booking updates
+          </p>
+          <div className="mt-3 grid gap-2">
+            {[
               { key: 'appointmentReminders', label: 'Appointment reminders' },
               { key: 'securityAlerts', label: 'Security alerts' },
             ].map((item) => {
@@ -396,6 +549,65 @@ const AppointmentsPage = ({
           </div>
         </div>
 
+        <div className="reference-card-soft p-4 xl:col-span-2">
+          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+            Notification status
+          </p>
+          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+            Current sync status: <span className="font-semibold text-[color:var(--agent-ink)]">{sessionStatus}</span>
+          </p>
+          <div className="mt-3">
+            <button
+              type="button"
+              className={workspaceGhostButtonClass}
+              onClick={() => setSection('history')}
+            >
+              View booking history
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+
+  const renderAccountSettingsSection = () => (
+    <section className="reference-card p-5">
+      <h2 className="reference-section-title">Account settings</h2>
+      <p className="reference-widget-subtle mt-2">
+        Manage your session controls, privacy preferences, and password.
+      </p>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="reference-card-soft p-4">
+          <p className="text-sm text-[color:var(--agent-muted)]">
+            Signed in as{' '}
+            <span className="font-semibold text-[color:var(--agent-ink)]">
+              {authUser?.username ?? 'Unknown'}
+            </span>
+          </p>
+          <p className="mt-1 text-sm text-[color:var(--agent-muted)]">
+            Role:{' '}
+            <span className="font-semibold text-[color:var(--agent-ink)]">
+              {getWorkspaceRoleLabel(authUser?.role)} workspace
+            </span>
+          </p>
+          <p className="mt-2 text-xs text-[color:var(--agent-muted-soft)]">Session: {sessionStatus}</p>
+        </div>
+
+        <div className="reference-card-soft p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+            Quick controls
+          </p>
+          <div className="mt-3 grid gap-2">
+            <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
+              Theme: {theme === 'dark' ? 'Dark' : 'Light'}
+            </button>
+            <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
+              Data masking: {dataMaskingEnabled ? 'On' : 'Off'}
+            </button>
+          </div>
+        </div>
+
         <form
           className="reference-card-soft p-4 xl:col-span-2"
           onSubmit={(event) => {
@@ -407,12 +619,14 @@ const AppointmentsPage = ({
               setPasswordError('Fill in current, new, and confirm password.')
               return
             }
+
             if (!meetsPasswordPolicy(newPassword.trim())) {
               setPasswordError(
                 'New password must be at least 8 characters and include uppercase, lowercase, and number.'
               )
               return
             }
+
             if (newPassword.trim() !== confirmPassword.trim()) {
               setPasswordError('New password and confirm password do not match.')
               return
@@ -424,7 +638,9 @@ const AppointmentsPage = ({
             setConfirmPassword('')
           }}
         >
-          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">Change password</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+            Change password
+          </p>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
             <input
               type="password"
@@ -449,7 +665,9 @@ const AppointmentsPage = ({
             />
           </div>
           {passwordError ? <p className="mt-3 text-xs font-semibold text-rose-500">{passwordError}</p> : null}
-          {passwordMessage ? <p className="mt-3 text-xs font-semibold text-emerald-600">{passwordMessage}</p> : null}
+          {passwordMessage ? (
+            <p className="mt-3 text-xs font-semibold text-emerald-600">{passwordMessage}</p>
+          ) : null}
           <button type="submit" className={`mt-4 ${workspacePrimaryButtonClass}`}>
             Update password
           </button>
@@ -458,25 +676,18 @@ const AppointmentsPage = ({
     </section>
   )
 
-  const renderPlaceholderSection = (title: string, detail: string) => (
-    <article className="reference-card p-5">
-      <h2 className="reference-section-title">{title}</h2>
-      <p className="reference-widget-subtle mt-2">{detail}</p>
-    </article>
-  )
-
   const profileName = authUser?.username ?? 'User'
   const sectionTitleMap: Record<UserSidebarSection, string> = {
-    dashboard: 'Dashboard',
-    appointments: 'Appointments',
-    settings: 'Account settings',
+    booking_appointments: 'Booking Appointments',
+    history: 'History',
     notifications: 'Notifications',
+    settings: 'Account Settings',
   }
   const sectionSearchPlaceholderMap: Record<UserSidebarSection, string> = {
-    dashboard: 'Search by appointment id, patient, or department',
-    appointments: 'Search appointments',
-    settings: 'Search settings',
-    notifications: 'Search notifications',
+    booking_appointments: 'Search booking history by id or department',
+    history: 'Search booking history',
+    notifications: 'Search notification preferences',
+    settings: 'Search account settings',
   }
 
   return (
@@ -519,11 +730,12 @@ const AppointmentsPage = ({
             />
           }
           content={
-            <section className="reference-main">
+            <section className="reference-main reference-theme">
               {activeSection !== 'settings' ? (
                 <DashboardTopBar
                   title={sectionTitleMap[activeSection]}
                   searchValue={searchQuery}
+                  showSearch={activeSection !== 'booking_appointments'}
                   searchPlaceholder={sectionSearchPlaceholderMap[activeSection]}
                   onSearchChange={setSearchQuery}
                   profileName={profileName}
@@ -539,70 +751,13 @@ const AppointmentsPage = ({
                 />
               ) : null}
 
-              {activeSection === 'dashboard' ? (
-                <>
-                  <DashboardStatStrip
-                    metrics={[
-                      { key: 'total', label: 'Total', value: metrics.total },
-                      { key: 'booked', label: 'Booked', value: metrics.booked },
-                      { key: 'recorded', label: 'Recorded', value: metrics.recorded },
-                      { key: 'failed', label: 'Failed', value: metrics.failed },
-                    ]}
-                  />
-
-                  <div className="reference-action-row">
-                    <button
-                      type="button"
-                      className={workspacePrimaryButtonClass}
-                      onClick={() => setSection('appointments')}
-                    >
-                      Open appointments
-                    </button>
-                    <button
-                      type="button"
-                      className={workspaceGhostButtonClass}
-                      onClick={() => setSection('settings')}
-                    >
-                      Account settings
-                    </button>
-                    <button
-                      type="button"
-                      className={workspaceGhostButtonClass}
-                      onClick={() => setShowLogoutConfirm(true)}
-                    >
-                      Logout
-                    </button>
-                  </div>
-
-                  <DashboardWidgetBlocks
-                    summaryTitle="Care completion"
-                    summaryValue={`${completionRate}%`}
-                    summaryLabel="Verified"
-                    secondaryLabel="Patient flow"
-                    activityTitle="Recent activities"
-                    activityItems={activityItems}
-                    chartTitle="Appointment status trend"
-                    chartSeries={[
-                      { key: 'booked', label: 'Booked', color: '#3b82f6', values: weeklySeries.booked },
-                      { key: 'recorded', label: 'Recorded', color: '#10b981', values: weeklySeries.recorded },
-                      { key: 'failed', label: 'Failed', color: '#ef4444', values: weeklySeries.failed },
-                    ]}
-                    recommendationTitle="Recommended care tracks"
-                    recommendationItems={recommendationItems}
-                    featuredTitle="Featured care departments"
-                    featuredItems={featuredItems}
-                  />
-                </>
+              {activeSection === 'booking_appointments' ? (
+                renderBookingAppointments()
               ) : null}
 
-              {activeSection === 'appointments' ? renderAppointmentsList() : null}
-              {activeSection === 'settings' ? renderSettings() : null}
-              {activeSection === 'notifications'
-                ? renderPlaceholderSection(
-                    'Notifications',
-                    'Alerts and updates will surface here. This panel is frontend-only for now.'
-                  )
-                : null}
+              {activeSection === 'history' ? renderHistoryList() : null}
+              {activeSection === 'notifications' ? renderNotificationsSection() : null}
+              {activeSection === 'settings' ? renderAccountSettingsSection() : null}
               <ConfirmModal
                 open={showLogoutConfirm}
                 title="Confirm logout"
