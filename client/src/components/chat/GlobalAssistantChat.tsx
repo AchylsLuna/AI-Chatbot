@@ -6,7 +6,7 @@ type ChatMessage = {
   sender: 'assistant' | 'user'
   text: string
   options?: { value: string; label: string }[]
-  meta?: { mode?: 'triage' | 'gemini'; nodeId?: string }
+  meta?: { mode?: 'triage' | 'gemini'; nodeId?: string; kind?: 'typing' }
 }
 
 type GlobalAssistantChatProps = {
@@ -76,6 +76,8 @@ const GlobalAssistantChat = ({
   const [mode, setMode] = useState<'gemini' | 'triage'>('gemini')
   const [triageNodeId, setTriageNodeId] = useState<string | null>(null)
 
+  const [isTyping, setIsTyping] = useState(false)
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'seed', sender: 'assistant', text: buildIntroReply({ isIdentified, userRole }) },
   ])
@@ -84,6 +86,31 @@ const GlobalAssistantChat = ({
     const id = `${prefix}-${nextMessageIdRef.current}`
     nextMessageIdRef.current += 1
     return id
+  }
+
+  // ---- typing bubble helpers ----
+  const TYPING_ID = 'assistant-typing'
+
+  const showTyping = (forMode: 'gemini' | 'triage') => {
+    setIsTyping(true)
+    setMessages((prev) => {
+      // prevent duplicates
+      if (prev.some((m) => m.id === TYPING_ID)) return prev
+      return [
+        ...prev,
+        {
+          id: TYPING_ID,
+          sender: 'assistant',
+          text: 'Typing…',
+          meta: { mode: forMode, kind: 'typing' },
+        },
+      ]
+    })
+  }
+
+  const hideTyping = () => {
+    setIsTyping(false)
+    setMessages((prev) => prev.filter((m) => m.id !== TYPING_ID))
   }
 
   const callGemini = async (prompt: string) => {
@@ -119,13 +146,14 @@ const GlobalAssistantChat = ({
   useEffect(() => {
     ;(async () => {
       try {
+        showTyping('gemini')
         const intro = await callGemini(
           'Introduce the AI Health Care assistant. Explain that you can help navigate the system and assist with appointment booking. Avoid giving medical diagnoses.'
         )
-        if (intro) {
-          setMessages([{ id: 'seed', sender: 'assistant', text: intro }])
-        }
+        hideTyping()
+        if (intro) setMessages([{ id: 'seed', sender: 'assistant', text: intro }])
       } catch {
+        hideTyping()
         // keep fallback intro
       }
     })()
@@ -196,18 +224,24 @@ const GlobalAssistantChat = ({
 
   const startDecisionTree = async () => {
     setMode('triage')
-    setMessages((prev) => [
-      ...prev,
-      { id: createMessageId('a'), sender: 'assistant', text: 'Starting Symptom Check (Decision Tree)…' },
-    ])
-
-    const data = await triageStart()
-    pushAssistantNode(data.nodeId, data.node)
+    showTyping('triage')
+    try {
+      const data = await triageStart()
+      hideTyping()
+      pushAssistantNode(data.nodeId, data.node)
+    } catch (err) {
+      hideTyping()
+      setMessages((prev) => [
+        ...prev,
+        { id: createMessageId('a'), sender: 'assistant', text: `Triage start error: ${(err as any)?.message || 'unknown error'}` },
+      ])
+    }
   }
 
   const exitDecisionTree = () => {
     setMode('gemini')
     setTriageNodeId(null)
+    hideTyping()
     setMessages((prev) => [
       ...prev,
       { id: createMessageId('a'), sender: 'assistant', text: 'Exited Symptom Check. You can ask anything now.' },
@@ -226,31 +260,41 @@ const GlobalAssistantChat = ({
       { id: createMessageId('u'), sender: 'user', text: answer },
     ])
 
-    const data = await triageNext(triageNodeId, answer)
+    showTyping('triage')
 
-    if (data.done) {
-      const title = data?.outcome?.title ? String(data.outcome.title) : 'Result'
-      const text = data?.outcome?.text ? String(data.outcome.text) : ''
+    try {
+      const data = await triageNext(triageNodeId, answer)
+      hideTyping()
+
+      if (data.done) {
+        const title = data?.outcome?.title ? String(data.outcome.title) : 'Result'
+        const text = data?.outcome?.text ? String(data.outcome.text) : ''
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: createMessageId('a'),
+            sender: 'assistant',
+            text: `Decision Tree Result: ${title}\n\n${text}\n\nTip: You can type "exit" to leave symptom check, or continue chatting for booking help.`,
+            meta: { mode: 'triage' },
+          },
+        ])
+        setTriageNodeId(null)
+        return
+      }
+
+      pushAssistantNode(data.nodeId, data.node)
+    } catch (err: any) {
+      hideTyping()
       setMessages((prev) => [
         ...prev,
-        {
-          id: createMessageId('a'),
-          sender: 'assistant',
-          text: `Decision Tree Result: ${title}\n\n${text}\n\nTip: You can type "exit" to leave symptom check, or continue chatting for booking help.`,
-          meta: { mode: 'triage' },
-        },
+        { id: createMessageId('a'), sender: 'assistant', text: `Triage error: ${err?.message || 'unknown error'}` },
       ])
-      // keep triage mode but no active node
-      setTriageNodeId(null)
-      return
     }
-
-    pushAssistantNode(data.nodeId, data.node)
   }
 
   const sendMessage = () => {
     const text = input.trim()
-    if (!text) return
+    if (!text || isTyping) return
     setInput('')
 
     if (text.toLowerCase() === 'exit') {
@@ -258,14 +302,9 @@ const GlobalAssistantChat = ({
       return
     }
 
-    // TRIAGE MODE: answer using the decision tree
+    // TRIAGE MODE
     if (mode === 'triage') {
-      handleTriageAnswer(text).catch((err: any) => {
-        setMessages((prev) => [
-          ...prev,
-          { id: createMessageId('a'), sender: 'assistant', text: `Triage error: ${err?.message || 'unknown error'}` },
-        ])
-      })
+      handleTriageAnswer(text)
       return
     }
 
@@ -273,14 +312,18 @@ const GlobalAssistantChat = ({
     const userMessage: ChatMessage = { id: createMessageId('u'), sender: 'user', text }
     setMessages((prev) => [...prev, userMessage])
 
+    showTyping('gemini')
+
     ;(async () => {
       try {
         const reply = await callGemini(text)
+        hideTyping()
         setMessages((prev) => [
           ...prev,
           { id: createMessageId('a'), sender: 'assistant', text: reply || '…' },
         ])
       } catch (err: any) {
+        hideTyping()
         setMessages((prev) => [
           ...prev,
           { id: createMessageId('a'), sender: 'assistant', text: `Gemini error: ${err?.message || 'unknown error'}` },
@@ -290,23 +333,27 @@ const GlobalAssistantChat = ({
   }
 
   const sendPresetPrompt = (text: string) => {
+    if (isTyping) return
+
     if (text === 'Symptom Check (Decision Tree)') {
-      startDecisionTree().catch((err: any) => {
-        setMessages((prev) => [
-          ...prev,
-          { id: createMessageId('a'), sender: 'assistant', text: `Triage start error: ${err?.message || 'unknown error'}` },
-        ])
-      })
+      startDecisionTree()
       return
     }
 
     setMessages((prev) => [...prev, { id: createMessageId('u'), sender: 'user', text }])
 
+    showTyping('gemini')
+
     ;(async () => {
       try {
         const reply = await callGemini(text)
-        setMessages((prev) => [...prev, { id: createMessageId('a'), sender: 'assistant', text: reply || '…' }])
+        hideTyping()
+        setMessages((prev) => [
+          ...prev,
+          { id: createMessageId('a'), sender: 'assistant', text: reply || '…' },
+        ])
       } catch (err: any) {
+        hideTyping()
         setMessages((prev) => [
           ...prev,
           { id: createMessageId('a'), sender: 'assistant', text: `Gemini error: ${err?.message || 'unknown error'}` },
@@ -338,7 +385,7 @@ const GlobalAssistantChat = ({
               <p className="text-sm font-semibold text-[color:var(--agent-ink)]">AI Assistant</p>
               <p className="mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--agent-muted)]">
                 <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.9)]" />
-                {mode === 'triage' ? 'Symptom Check' : 'Online'}
+                {isTyping ? 'Typing…' : mode === 'triage' ? 'Symptom Check' : 'Online'}
               </p>
             </div>
           </div>
@@ -360,25 +407,30 @@ const GlobalAssistantChat = ({
                   message.sender === 'user'
                     ? 'ml-auto rounded-br-md bg-[linear-gradient(140deg,var(--agent-accent),var(--agent-accent-strong))] text-[color:var(--agent-on-accent)]'
                     : 'mr-auto rounded-bl-md border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] text-[color:var(--agent-ink)]'
-                }`}
+                } ${message.meta?.kind === 'typing' ? 'opacity-80 italic' : ''}`}
               >
                 {message.text}
               </article>
 
-              {message.sender === 'assistant' && message.options && message.options.length > 0 && mode === 'triage' && (
-                <div className="mr-auto flex max-w-[90%] flex-wrap gap-2">
-                  {message.options.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => handleTriageAnswer(opt.value)}
-                      className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)]"
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {message.sender === 'assistant' &&
+                message.options &&
+                message.options.length > 0 &&
+                mode === 'triage' &&
+                message.meta?.kind !== 'typing' && (
+                  <div className="mr-auto flex max-w-[90%] flex-wrap gap-2">
+                    {message.options.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        disabled={isTyping}
+                        onClick={() => handleTriageAnswer(opt.value)}
+                        className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
             </div>
           ))}
         </div>
@@ -389,8 +441,9 @@ const GlobalAssistantChat = ({
               <button
                 key={prompt}
                 type="button"
+                disabled={isTyping}
                 onClick={() => sendPresetPrompt(prompt)}
-                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)]"
+                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {prompt}
               </button>
@@ -399,8 +452,9 @@ const GlobalAssistantChat = ({
             {mode === 'triage' && (
               <button
                 type="button"
+                disabled={isTyping}
                 onClick={exitDecisionTree}
-                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)]"
+                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Exit Symptom Check
               </button>
@@ -411,6 +465,7 @@ const GlobalAssistantChat = ({
             <input
               ref={inputRef}
               value={input}
+              disabled={isTyping}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
@@ -418,15 +473,20 @@ const GlobalAssistantChat = ({
                   sendMessage()
                 }
               }}
-              placeholder={mode === 'triage' ? 'Type option value or press buttons… (type "exit" to leave)' : 'Type your message...'}
-              className="min-w-0 flex-1 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3.5 py-2.5 text-sm text-[color:var(--agent-ink)] placeholder:text-[color:var(--agent-muted-soft)] outline-none transition focus:border-[color:var(--agent-accent)] focus:ring-2 focus:ring-[color:var(--agent-accent-soft)]"
+              placeholder={
+                mode === 'triage'
+                  ? 'Type option value or press buttons… (type "exit" to leave)'
+                  : 'Type your message...'
+              }
+              className="min-w-0 flex-1 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3.5 py-2.5 text-sm text-[color:var(--agent-ink)] placeholder:text-[color:var(--agent-muted-soft)] outline-none transition focus:border-[color:var(--agent-accent)] focus:ring-2 focus:ring-[color:var(--agent-accent-soft)] disabled:cursor-not-allowed disabled:opacity-60"
             />
             <button
               type="button"
+              disabled={isTyping}
               onClick={sendMessage}
-              className="shrink-0 rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
+              className="shrink-0 rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Send
+              {isTyping ? 'Sending…' : 'Send'}
             </button>
           </div>
         </div>
