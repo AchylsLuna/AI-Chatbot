@@ -1,11 +1,12 @@
 {
-  "id": "ai-health-care-triage-v1",
+  "id": "ai-health-care-triage-v2",
   "start": "q0",
   "nodes": {
     "q0": {
       "type": "single",
-      "question": "Symptom Check (Decision Tree): What is your main concern right now?",
+      "question": "Symptom Check (Decision Tree): Choose one, or use dataset search.",
       "options": [
+        { "value": "dataset_search", "label": "Search symptoms (Dataset)", "next": "q_dataset_search" },
         { "value": "chest", "label": "Chest pain / pressure", "next": "q1_chest_redflags" },
         { "value": "breathing", "label": "Shortness of breath / difficulty breathing", "next": "q1_breathing_redflags" },
         { "value": "fever", "label": "Fever / chills", "next": "q1_fever" },
@@ -14,6 +15,11 @@
         { "value": "injury", "label": "Injury / bleeding / accident", "next": "q1_injury_redflags" },
         { "value": "other", "label": "Other / not sure", "next": "q_other" }
       ]
+    },
+
+    "q_dataset_search": {
+      "type": "text",
+      "question": "Type your symptoms (example: 'fever and cough for 2 days', 'chest tightness', 'vomiting and diarrhea'). I will search the dataset and suggest the best path."
     },
 
     "q1_chest_redflags": {

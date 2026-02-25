@@ -54,20 +54,114 @@ router.use((req, _res, next) => {
 });
 
 /* =============================
-   DATASET LOADING (OPTIONAL)
+   CSV PARSER (LIGHTWEIGHT)
+   - handles quoted commas
+============================= */
+function parseCsvLine(line) {
+  const out = [];
+  let cur = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    if (ch === '"' && line[i + 1] === '"') {
+      cur += '"';
+      i++;
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (ch === ',' && !inQuotes) {
+      out.push(cur);
+      cur = '';
+      continue;
+    }
+
+    cur += ch;
+  }
+
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
+
+function safeLower(s) {
+  return String(s || '').toLowerCase();
+}
+
+/* =============================
+   LOAD symptoms_cleaned.csv (FULL)
+   - builds a searchable index
 ============================= */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const datasetPath = path.resolve(__dirname, '..', '..', 'dataset', 'symptoms_cleaned.csv');
-let datasetPreview = null;
+const symptomsCsvPath = path.resolve(__dirname, '..', '..', 'dataset', 'symptoms_cleaned.csv');
+
+let symptomsHeaders = [];
+let symptomsRows = []; // array of objects
+let symptomsIndex = []; // array of { text, row }
 
 (async () => {
   try {
-    const raw = await readFile(datasetPath, { encoding: 'utf8' });
-    datasetPreview = raw.slice(0, 16000);
-    console.info('[gemini] Dataset loaded from', datasetPath);
+    const raw = await readFile(symptomsCsvPath, { encoding: 'utf8' });
+    const lines = raw.split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) throw new Error('CSV has no data rows');
+
+    symptomsHeaders = parseCsvLine(lines[0]).map((h) => h.trim());
+    const rows = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCsvLine(lines[i]);
+      if (!cols.length) continue;
+
+      const obj = {};
+      for (let j = 0; j < symptomsHeaders.length; j++) {
+        obj[symptomsHeaders[j]] = cols[j] ?? '';
+      }
+      rows.push(obj);
+    }
+
+    symptomsRows = rows;
+
+    // index: concatenate all fields to searchable string
+    symptomsIndex = rows.map((row) => {
+      const joined = symptomsHeaders.map((h) => String(row[h] ?? '')).join(' | ');
+      return { text: safeLower(joined), row };
+    });
+
+    console.info('[dataset] Loaded symptoms_cleaned.csv rows=', symptomsRows.length);
+  } catch (e) {
+    console.warn('[dataset] Failed to load symptoms_cleaned.csv:', e?.message || e);
+    symptomsHeaders = [];
+    symptomsRows = [];
+    symptomsIndex = [];
+  }
+})();
+
+/* =============================
+   TRIAGE TREE LOAD
+============================= */
+const triageTreePath = path.resolve(__dirname, '..', 'dataset', 'triage_tree.json');
+let triageTree = null;
+
+(async () => {
+  const fallbackPath = path.resolve(__dirname, '..', '..', 'dataset', 'triage_tree.json');
+  try {
+    const raw = await readFile(triageTreePath, { encoding: 'utf8' });
+    triageTree = JSON.parse(raw);
+    console.info('[triage] Loaded triage tree from', triageTreePath);
   } catch {
-    console.warn('[gemini] Dataset not found (continuing without it):', datasetPath);
-    datasetPreview = null;
+    try {
+      const raw2 = await readFile(fallbackPath, { encoding: 'utf8' });
+      triageTree = JSON.parse(raw2);
+      console.info('[triage] Loaded triage tree from', fallbackPath);
+    } catch (e) {
+      console.warn('[triage] Could not load triage tree JSON. Triage endpoints will fail.');
+      triageTree = null;
+    }
   }
 })();
 
@@ -81,9 +175,147 @@ const validate = (req, res, next) => {
 };
 
 /* =============================
-   HEALTH CHECK
+   HEALTH
 ============================= */
 router.get('/health', (_req, res) => res.json({ ok: true }));
+
+/* =============================
+   TRIAGE: DATASET SEARCH (HELPER)
+============================= */
+function classifyToCategory(text) {
+  const t = safeLower(text);
+
+  const hasChest = /(chest|pressure|tight|heart|palpitations)/.test(t);
+  const hasBreath = /(shortness of breath|sob|breath|wheez|asthma|dyspnea)/.test(t);
+  const hasFever = /(fever|chills|temp|temperature)/.test(t);
+  const hasHead = /(headache|migraine|dizz|vertigo|faint|syncope|blurred vision)/.test(t);
+  const hasStomach = /(abdominal|stomach|vomit|nausea|diarrhea|poop|stool)/.test(t);
+  const hasInjury = /(bleeding|wound|injury|fracture|sprain|accident|cut)/.test(t);
+
+  if (hasChest) return 'chest';
+  if (hasBreath) return 'breathing';
+  if (hasFever) return 'fever';
+  if (hasHead) return 'headache';
+  if (hasStomach) return 'stomach';
+  if (hasInjury) return 'injury';
+  return 'other';
+}
+
+function searchSymptomsDataset(query, limit = 6) {
+  const q = safeLower(query).trim();
+  if (!q) return [];
+
+  // simple contains search (fast + good enough)
+  const hits = [];
+  for (let i = 0; i < symptomsIndex.length; i++) {
+    const item = symptomsIndex[i];
+    if (item.text.includes(q)) {
+      hits.push(item.row);
+      if (hits.length >= limit) break;
+    }
+  }
+  return hits;
+}
+
+/* =============================
+   TRIAGE API
+============================= */
+router.get('/triage/start', (_req, res) => {
+  if (!triageTree) return res.status(500).json({ ok: false, error: 'Triage tree not loaded' });
+
+  const startId = triageTree.start;
+  const node = triageTree.nodes?.[startId];
+  if (!node) return res.status(500).json({ ok: false, error: 'Invalid triage tree start node' });
+
+  return res.json({ ok: true, nodeId: startId, node });
+});
+
+router.post('/triage/next', async (req, res) => {
+  if (!triageTree) return res.status(500).json({ ok: false, error: 'Triage tree not loaded' });
+
+  const { nodeId, answer } = req.body || {};
+  if (!nodeId || typeof nodeId !== 'string') return res.status(400).json({ ok: false, error: 'Missing nodeId' });
+  if (!answer || typeof answer !== 'string') return res.status(400).json({ ok: false, error: 'Missing answer' });
+
+  // IMPORTANT: synthetic node isn't in triageTree.nodes, so handle it BEFORE lookup
+  if (nodeId === 'q_dataset_pick') {
+    const map = {
+      chest: 'q1_chest_redflags',
+      breathing: 'q1_breathing_redflags',
+      fever: 'q1_fever',
+      headache: 'q1_headache_redflags',
+      stomach: 'q1_abdomen_redflags',
+      injury: 'q1_injury_redflags',
+      other: 'q_other',
+    };
+    const nextId = map[answer] || 'q_other';
+    const nextNode = triageTree.nodes?.[nextId];
+    if (!nextNode) return res.status(500).json({ ok: false, error: 'Missing next node in tree' });
+    return res.json({ ok: true, done: false, nodeId: nextId, node: nextNode });
+  }
+
+  const node = triageTree.nodes?.[nodeId];
+  if (!node) return res.status(400).json({ ok: false, error: 'Invalid nodeId' });
+
+  // TEXT NODE: use CSV dataset search and suggest category -> show synthetic chooser
+  if (node.type === 'text') {
+    const matches = searchSymptomsDataset(answer, 6);
+    const category = classifyToCategory(
+      matches.length
+        ? matches.map((r) => symptomsHeaders.map((h) => r[h]).join(' ')).join(' ')
+        : answer
+    );
+
+    const previewLines = matches.slice(0, 3).map((row, idx) => {
+      const line = symptomsHeaders
+        .slice(0, 4)
+        .map((h) => `${h}: ${String(row[h] ?? '').slice(0, 60)}`)
+        .join(' | ');
+      return `${idx + 1}) ${line}`;
+    });
+
+    const syntheticNode = {
+      question:
+        `Dataset suggestion:\n` +
+        `I found ${matches.length} matching rows in your dataset.\n\n` +
+        (previewLines.length ? `Top matches:\n${previewLines.join('\n')}\n\n` : '') +
+        `Suggested path: ${category.toUpperCase()}.\nChoose one to continue:`,
+      options: [
+        { value: 'chest', label: 'Chest', next: 'q1_chest_redflags' },
+        { value: 'breathing', label: 'Breathing', next: 'q1_breathing_redflags' },
+        { value: 'fever', label: 'Fever', next: 'q1_fever' },
+        { value: 'headache', label: 'Headache', next: 'q1_headache_redflags' },
+        { value: 'stomach', label: 'Stomach', next: 'q1_abdomen_redflags' },
+        { value: 'injury', label: 'Injury', next: 'q1_injury_redflags' },
+        { value: 'other', label: 'Other', next: 'q_other' }
+      ]
+    };
+
+    return res.json({ ok: true, done: false, nodeId: 'q_dataset_pick', node: syntheticNode });
+  }
+
+  // NORMAL single-choice node
+  const opt = Array.isArray(node.options) ? node.options.find((o) => o.value === answer) : null;
+  if (!opt?.next) return res.status(400).json({ ok: false, error: 'Invalid answer for this node' });
+
+  const nextId = opt.next;
+
+  // Outcome?
+  if (triageTree.outcomes?.[nextId]) {
+    return res.json({
+      ok: true,
+      done: true,
+      outcomeId: nextId,
+      outcome: triageTree.outcomes[nextId],
+    });
+  }
+
+  // Next node
+  const nextNode = triageTree.nodes?.[nextId];
+  if (!nextNode) return res.status(500).json({ ok: false, error: 'Tree points to missing node/outcome' });
+
+  return res.json({ ok: true, done: false, nodeId: nextId, node: nextNode });
+});
 
 /* =============================
    GEMINI: LIST MODELS
@@ -113,24 +345,22 @@ router.get('/debug/gemini-models', async (_req, res) => {
 });
 
 /* =============================
-   GEMINI: MODEL PICKER
-   - Picks a model that supports generateContent
+   GEMINI: FALLBACK + MULTI-MODEL SUPPORT
+   Env recommended:
+   GEMINI_MODEL=
+   GEMINI_MODEL_FAST=gemini-2.5-flash-lite
+   GEMINI_MODEL_PRO=gemini-2.5-flash
+   GEMINI_MODEL_LIST=gemini-2.5-flash-lite,gemini-2.5-flash,gemini-1.5-flash
 ============================= */
-let cachedModelName = null;
-let cachedModelFetchedAt = 0;
+let cachedAvailableModels = null;
+let cachedAvailableModelsAt = 0;
 
-async function pickSupportedModel({ apiKey, preferredModel } = {}) {
+async function listAvailableModels(apiKey) {
+  const ttlMs = 5 * 60 * 1000;
   const now = Date.now();
-  const cacheTtlMs = 5 * 60 * 1000; // 5 minutes
 
-  // Use cache when possible
-  if (!preferredModel && cachedModelName && now - cachedModelFetchedAt < cacheTtlMs) {
-    return cachedModelName;
-  }
-
-  // If user asked a preferred model, try it first (no cache overwrite yet)
-  if (preferredModel) {
-    return preferredModel;
+  if (cachedAvailableModels && now - cachedAvailableModelsAt < ttlMs) {
+    return cachedAvailableModels;
   }
 
   const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
@@ -138,31 +368,137 @@ async function pickSupportedModel({ apiKey, preferredModel } = {}) {
   const json = await r.json();
 
   if (!r.ok) {
-    const msg = json?.error?.message || `ListModels error (HTTP ${r.status})`;
-    throw new Error(msg);
+    throw new Error(json?.error?.message || `ListModels error (HTTP ${r.status})`);
   }
 
   const models = Array.isArray(json?.models) ? json.models : [];
+  const supported = models
+    .filter(
+      (m) =>
+        typeof m?.name === 'string' &&
+        Array.isArray(m?.supportedGenerationMethods) &&
+        m.supportedGenerationMethods.includes('generateContent')
+    )
+    .map((m) => m.name.replace(/^models\//, ''));
 
-  // Find first model that supports generateContent
-  const supported = models.find((m) => Array.isArray(m?.supportedGenerationMethods) &&
-    m.supportedGenerationMethods.includes('generateContent')
-  );
+  cachedAvailableModels = supported;
+  cachedAvailableModelsAt = now;
+  return supported;
+}
 
-  if (!supported?.name) {
-    throw new Error('No model available that supports generateContent for this API key.');
+function parseEnvModelList() {
+  const base = (process.env.GEMINI_MODEL || '').trim();
+  const fast = (process.env.GEMINI_MODEL_FAST || '').trim();
+  const pro = (process.env.GEMINI_MODEL_PRO || '').trim();
+
+  const list = String(process.env.GEMINI_MODEL_LIST || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const combined = [
+    ...(base ? [base] : []),
+    ...(fast ? [fast] : []),
+    ...(pro ? [pro] : []),
+    ...list,
+  ];
+
+  // de-dup, keep order
+  return [...new Set(combined)];
+}
+
+function isRateLimitError(json, status) {
+  const msg = json?.error?.message ? String(json.error.message).toLowerCase() : '';
+  return status === 429 || msg.includes('quota') || msg.includes('rate') || msg.includes('resource exhausted');
+}
+
+function isModelNotFound(json, status) {
+  const msg = json?.error?.message ? String(json.error.message).toLowerCase() : '';
+  return status === 404 || msg.includes('not found') || msg.includes('is not supported') || msg.includes('not supported');
+}
+
+function isTransient(json, status) {
+  const msg = json?.error?.message ? String(json.error.message).toLowerCase() : '';
+  return status === 500 || status === 502 || status === 503 || msg.includes('unavailable') || msg.includes('timeout');
+}
+
+async function callGeminiWithFallback({
+  apiKey,
+  promptText,
+  requestedModel,
+  temperature = 0.2,
+  maxOutputTokens = 512,
+}) {
+  const available = await listAvailableModels(apiKey);
+
+  // preferred order:
+  // 1) explicit requestedModel (client)
+  // 2) env model list
+  // 3) any available models
+  const envList = parseEnvModelList();
+
+  const ordered = [];
+
+  if (requestedModel && available.includes(requestedModel)) ordered.push(requestedModel);
+
+  for (const m of envList) {
+    if (available.includes(m) && !ordered.includes(m)) ordered.push(m);
   }
 
-  // supported.name is like "models/gemini-1.5-flash"
-  // endpoint expects the same "models/xxx" part after /models/
-  cachedModelName = supported.name.replace(/^models\//, '');
-  cachedModelFetchedAt = now;
+  for (const m of available) {
+    if (!ordered.includes(m)) ordered.push(m);
+  }
 
-  return cachedModelName;
+  let last = null;
+
+  for (const modelName of ordered) {
+    const apiUrl =
+      `https://generativelanguage.googleapis.com/v1beta/models/` +
+      `${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    const payload = {
+      contents: [{ role: 'user', parts: [{ text: promptText }] }],
+      generationConfig: { temperature, maxOutputTokens },
+    };
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const json = await response.json();
+
+    if (response.ok) {
+      const parts = json?.candidates?.[0]?.content?.parts;
+      const assistantText = Array.isArray(parts)
+        ? parts.map((p) => p?.text).filter(Boolean).join('')
+        : '';
+      return { modelName, assistantText, raw: json };
+    }
+
+    last = { modelName, status: response.status, json };
+
+    if (isModelNotFound(json, response.status) || isRateLimitError(json, response.status) || isTransient(json, response.status)) {
+      console.warn('[gemini] model failed, trying next:', modelName, response.status, json?.error?.message);
+      continue;
+    }
+
+    // non-retryable error
+    break;
+  }
+
+  const errMsg =
+    last?.json?.error?.message ||
+    `Gemini failed. Last model tried: ${last?.modelName || 'unknown'} (HTTP ${last?.status || 'n/a'})`;
+
+  const err = new Error(errMsg);
+  err.details = last;
+  throw err;
 }
 
 /* =============================
-   GEMINI CHAT ROUTE (AUTO FIX)
+   GEMINI CHAT (WITH FALLBACK)
 ============================= */
 router.post('/debug/gemini-chat', async (req, res) => {
   try {
@@ -177,87 +513,39 @@ router.post('/debug/gemini-chat', async (req, res) => {
       return res.status(500).json({ ok: false, error: 'GEMINI_API_KEY not set in .env' });
     }
 
-    // Preferred model order:
-    // 1) request body model
-    // 2) env GEMINI_MODEL
-    // 3) auto-pick via ListModels
-    const preferred = model || process.env.GEMINI_MODEL || null;
-    let modelName = null;
-
-    try {
-      modelName = await pickSupportedModel({ apiKey, preferredModel: preferred });
-    } catch (e) {
-      console.error('[gemini] model pick failed:', e?.message || e);
-      return res.status(500).json({
-        ok: false,
-        error: `Model selection failed: ${e?.message || 'unknown error'}`,
-      });
-    }
-
-    console.info('[gemini] using model=', modelName);
-
     const systemContext = [
       'You are an assistant for the AI Health Care system.',
-      'Provide concise, practical guidance. If symptoms suggest emergency, advise emergency services.',
+      'Provide concise helpful answers and guidance.',
+      'Do not provide a medical diagnosis. If emergency signs appear, advise emergency services.',
     ];
 
-    if (useDataset && datasetPreview) {
-      systemContext.push('Reference dataset (partial):');
-      systemContext.push(datasetPreview);
+    if (useDataset && symptomsRows.length) {
+      systemContext.push(`Dataset note: symptoms_cleaned.csv loaded with ${symptomsRows.length} rows.`);
     }
 
     const fullPrompt = `${systemContext.join('\n\n')}\n\nUser: ${prompt}`;
 
-    const apiUrl =
-      `https://generativelanguage.googleapis.com/v1beta/models/` +
-      `${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-    const payload = {
-      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 512,
-      },
-    };
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    const result = await callGeminiWithFallback({
+      apiKey,
+      promptText: fullPrompt,
+      requestedModel: (model || '').trim() || null,
+      temperature: 0.2,
+      maxOutputTokens: 512,
     });
-
-    const json = await response.json();
-    console.info('[gemini] raw response keys=', Object.keys(json || {}));
-
-    if (!response.ok) {
-      console.error('[gemini ERROR]', json?.error?.message || json);
-
-      // If env model is wrong, clear cache so next request re-picks
-      cachedModelName = null;
-      cachedModelFetchedAt = 0;
-
-      return res.status(response.status).json({
-        ok: false,
-        error: json?.error?.message || `Gemini API error (HTTP ${response.status})`,
-        raw: json,
-        model: modelName,
-      });
-    }
-
-    const parts = json?.candidates?.[0]?.content?.parts;
-    const assistantText = Array.isArray(parts)
-      ? parts.map((p) => p?.text).filter(Boolean).join('')
-      : '';
 
     return res.json({
       ok: true,
-      text: assistantText,
-      raw: json,
-      model: modelName,
+      text: result.assistantText,
+      raw: result.raw,
+      model: result.modelName,
     });
   } catch (err) {
-    console.error('[gemini FATAL]', err);
-    return res.status(500).json({ ok: false, error: 'Internal server error' });
+    console.error('[gemini FATAL]', err?.message || err);
+    return res.status(500).json({
+      ok: false,
+      error: err?.message || 'Internal server error',
+      details: err?.details || null,
+    });
   }
 });
 
@@ -266,7 +554,6 @@ router.post('/debug/gemini-chat', async (req, res) => {
 ============================= */
 if (isGoogleAuthEnabled) {
   router.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-
   router.get(
     '/auth/google/callback',
     passport.authenticate('google', { session: false, failureRedirect: '/login-failed' }),
@@ -281,7 +568,7 @@ if (isGoogleAuthEnabled) {
 }
 
 /* =============================
-   USER ROUTES
+   USER ROUTES (UNCHANGED)
 ============================= */
 router.post(
   '/register',
@@ -341,9 +628,6 @@ router.post('/resend-otp', [body('userId').isMongoId()], validate, resendOTP);
 router.post('/logout', authMiddleware, logout);
 router.get('/session', authMiddleware, getSession);
 
-/* =============================
-   USER SETTINGS
-============================= */
 router.get('/users/me/settings', authMiddleware, getSettings);
 router.put(
   '/users/me/settings',
@@ -386,7 +670,7 @@ if (appConfig.enableDebugRoutes) {
 }
 
 /* =============================
-   APPOINTMENT ROUTES
+   APPOINTMENTS
 ============================= */
 router.get('/appointments', authMiddleware, getAppointments);
 router.get('/reservations', authMiddleware, getReservations);
@@ -422,7 +706,7 @@ router.patch(
 );
 
 /* =============================
-   ADMIN/SUPPORT ROUTES
+   ADMIN
 ============================= */
 router.get('/users', authMiddleware, authorizeRoles('admin', 'system_admin'), getAllUsers);
 router.get('/ledger', authMiddleware, authorizeRoles('admin', 'system_admin'), getLedger);
