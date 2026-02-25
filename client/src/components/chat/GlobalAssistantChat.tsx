@@ -5,6 +5,8 @@ type ChatMessage = {
   id: string
   sender: 'assistant' | 'user'
   text: string
+  options?: { value: string; label: string }[]
+  meta?: { mode?: 'triage' | 'gemini'; nodeId?: string }
 }
 
 type GlobalAssistantChatProps = {
@@ -35,6 +37,7 @@ const quickSupportPrompts = [
   'Introduce the system',
   'How do I book an appointment?',
   'How do I use the system?',
+  'Symptom Check (Decision Tree)',
 ]
 
 const roleLabel = (role?: UserRole | null) => {
@@ -45,9 +48,6 @@ const roleLabel = (role?: UserRole | null) => {
   return 'Guest'
 }
 
-const includesAny = (value: string, patterns: string[]) =>
-  patterns.some((pattern) => value.includes(pattern))
-
 const buildIntroReply = (context: { isIdentified: boolean; userRole?: UserRole | null }) => {
   const identityLine = context.isIdentified
     ? `You are signed in as ${roleLabel(context.userRole)}.`
@@ -57,159 +57,86 @@ const buildIntroReply = (context: { isIdentified: boolean; userRole?: UserRole |
     'Welcome to AI Health Care.',
     identityLine,
     'This system helps with appointment booking, appointment tracking, and role-based dashboards.',
-    'Ask me: "How do I book an appointment?" or "How do I use the system?"',
+    'You can also run a Symptom Check (Decision Tree) for quick triage guidance.',
   ].join(' ')
-}
-
-const buildBookingReply = (context: { isIdentified: boolean }) => {
-  const accessLine = context.isIdentified
-    ? 'You already have access to booking.'
-    : 'To complete booking, sign in first.'
-
-  return [
-    accessLine,
-    'Requirements: patient full name, clear symptoms, and preferred schedule.',
-    'Steps: 1) Open Appointments. 2) Enter booking details and requested schedule.',
-    '3) Submit booking and review current status updates in the appointments view.',
-    'For emergencies, contact local emergency services immediately.',
-  ].join(' ')
-}
-
-const buildSystemGuideReply = (context: { isIdentified: boolean; userRole?: UserRole | null }) => {
-  const roleHint = context.isIdentified
-    ? `Current role: ${roleLabel(context.userRole)}.`
-    : 'Guest mode supports guidance and navigation help.'
-
-  return [
-    roleHint,
-    'System flow: Landing -> Login -> Appointments.',
-    'Staff roles can also access Doctor/Admin dashboards based on permissions.',
-    'Use top navigation for quick page access and use AI Chat anytime for help.',
-  ].join(' ')
-}
-
-const buildReply = (
-  prompt: string,
-  context: { isIdentified: boolean; userRole?: UserRole | null }
-) => {
-  const normalized = prompt.toLowerCase()
-  const guestHint = context.isIdentified
-    ? ''
-    : 'You can use this assistant even without signing in. '
-  const roleHint = context.isIdentified ? `Current role: ${roleLabel(context.userRole)}. ` : ''
-
-  if (
-    includesAny(normalized, [
-      'introduce',
-      'introduction',
-      'about this',
-      'what is this',
-      'what can you do',
-      'start here',
-      'hello',
-      'hi',
-      'hey',
-    ])
-  ) {
-    return buildIntroReply(context)
-  }
-
-  if (
-    includesAny(normalized, [
-      'how to book',
-      'book appointment',
-      'booking',
-      'book now',
-      'requirements',
-      'booking steps',
-    ])
-  ) {
-    return buildBookingReply(context)
-  }
-
-  if (
-    includesAny(normalized, [
-      'how to use',
-      'use the system',
-      'system guide',
-      'how it works',
-      'navigation',
-      'where to start',
-      'workflow',
-    ])
-  ) {
-    return buildSystemGuideReply(context)
-  }
-
-  if (normalized.includes('home') || normalized.includes('alert') || normalized.includes('risk')) {
-    return `${guestHint}${roleHint}Home shows aggregated risk scores and critical alerts.`
-  }
-
-  if (normalized.includes('diagnostic') || normalized.includes('radiology') || normalized.includes('lab')) {
-    return `${guestHint}${roleHint}Diagnostics focuses on AI-assisted radiology and lab analysis trends.`
-  }
-
-  if (normalized.includes('predictive') || normalized.includes('ward') || normalized.includes('admission') || normalized.includes('discharge')) {
-    return `${guestHint}${roleHint}Predictive Ward displays expected admissions/discharges and capacity pressure.`
-  }
-
-  if (normalized.includes('registry') || normalized.includes('ehr') || normalized.includes('patient history')) {
-    return `${guestHint}${roleHint}Patient Registry is the secure EHR area. You can review structure in guest mode, but patient records need signed-in permissions.`
-  }
-
-  if (normalized.includes('care ai') || normalized.includes('literature') || normalized.includes('chat')) {
-    return `${guestHint}${roleHint}Care AI Chat can assist with workflow questions, medical literature lookup guidance, and navigation help across all modules.`
-  }
-
-  if (normalized.includes('compliance') || normalized.includes('hipaa') || normalized.includes('gdpr') || normalized.includes('security')) {
-    return `${guestHint}${roleHint}Compliance Shield indicates HIPAA/GDPR status. Signed-in users get full operational security context.`
-  }
-
-  if (normalized.includes('appointment') || normalized.includes('book')) {
-    return `${guestHint}Open Appointments to create and track bookings. Booking actions require login.`
-  }
-  if (normalized.includes('otp') || normalized.includes('code')) {
-    return `${guestHint}OTP is currently optional in this build. Standard sign-in uses email and password.`
-  }
-  if (normalized.includes('admin')) {
-    return `${guestHint}Admin Login supports Admin and Doctor accounts.`
-  }
-  if (normalized.includes('doctor') || normalized.includes('dashboard')) {
-    return `${guestHint}Doctor's Dashboard is available for Doctor and Admin accounts after sign-in.`
-  }
-  if (normalized.includes('login') || normalized.includes('register') || normalized.includes('sign up')) {
-    return `${guestHint}Register first, then sign in to access protected pages.`
-  }
-
-  return `${guestHint}${roleHint}I can introduce the system, explain booking requirements/steps, and guide navigation across appointments, login, and dashboard modules.`
 }
 
 const GlobalAssistantChat = ({
   isIdentified = false,
   userRole = null,
 }: GlobalAssistantChatProps) => {
+  const API_BASE = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api').replace(/\/$/, '')
   const [isOpen, setIsOpen] = useState(false)
   const [liftedFromFooter, setLiftedFromFooter] = useState(false)
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
   const messagesViewportRef = useRef<HTMLDivElement | null>(null)
   const nextMessageIdRef = useRef(1)
+
+  const [mode, setMode] = useState<'gemini' | 'triage'>('gemini')
+  const [triageNodeId, setTriageNodeId] = useState<string | null>(null)
+
   const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'seed',
-      sender: 'assistant',
-      text: buildIntroReply({ isIdentified, userRole }),
-    },
+    { id: 'seed', sender: 'assistant', text: buildIntroReply({ isIdentified, userRole }) },
   ])
+
+  const createMessageId = (prefix: 'u' | 'a') => {
+    const id = `${prefix}-${nextMessageIdRef.current}`
+    nextMessageIdRef.current += 1
+    return id
+  }
+
+  const callGemini = async (prompt: string) => {
+    const resp = await fetch(`${API_BASE}/debug/gemini-chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, useDataset: true }),
+    })
+    const data = await resp.json()
+    if (!resp.ok) throw new Error(data?.error || `HTTP ${resp.status}`)
+    return data?.text ? String(data.text) : ''
+  }
+
+  const triageStart = async () => {
+    const resp = await fetch(`${API_BASE}/triage/start`)
+    const data = await resp.json()
+    if (!resp.ok) throw new Error(data?.error || `HTTP ${resp.status}`)
+    return data
+  }
+
+  const triageNext = async (nodeId: string, answer: string) => {
+    const resp = await fetch(`${API_BASE}/triage/next`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nodeId, answer }),
+    })
+    const data = await resp.json()
+    if (!resp.ok) throw new Error(data?.error || `HTTP ${resp.status}`)
+    return data
+  }
+
+  // Optional: Replace intro with Gemini-generated intro (if it works)
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const intro = await callGemini(
+          'Introduce the AI Health Care assistant. Explain that you can help navigate the system and assist with appointment booking. Avoid giving medical diagnoses.'
+        )
+        if (intro) {
+          setMessages([{ id: 'seed', sender: 'assistant', text: intro }])
+        }
+      } catch {
+        // keep fallback intro
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isIdentified, userRole])
 
   useEffect(() => {
     const handleOpenChat = () => {
       setIsOpen(true)
-      requestAnimationFrame(() => {
-        inputRef.current?.focus()
-      })
+      requestAnimationFrame(() => inputRef.current?.focus())
     }
-
     window.addEventListener('healix:open-care-chat', handleOpenChat)
     window.addEventListener('ai-health-care:open-assistant', handleOpenChat)
     return () => {
@@ -220,24 +147,16 @@ const GlobalAssistantChat = ({
 
   useEffect(() => {
     if (!isOpen) return
-    requestAnimationFrame(() => {
-      inputRef.current?.focus()
-    })
+    requestAnimationFrame(() => inputRef.current?.focus())
   }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
-
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false)
-      }
+      if (event.key === 'Escape') setIsOpen(false)
     }
-
     window.addEventListener('keydown', handleEscape)
-    return () => {
-      window.removeEventListener('keydown', handleEscape)
-    }
+    return () => window.removeEventListener('keydown', handleEscape)
   }, [isOpen])
 
   useEffect(() => {
@@ -250,62 +169,150 @@ const GlobalAssistantChat = ({
 
   useEffect(() => {
     const footer = document.getElementById('site-footer')
-    if (!footer || typeof IntersectionObserver === 'undefined') {
+    if (!footer || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => setLiftedFromFooter(entries.some((e) => e.isIntersecting)),
+      { threshold: 0.05 }
+    )
+    observer.observe(footer)
+    return () => observer.disconnect()
+  }, [])
+
+  const pushAssistantNode = (nodeId: string, node: any) => {
+    setTriageNodeId(nodeId)
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: createMessageId('a'),
+        sender: 'assistant',
+        text: node?.question || 'Choose an option:',
+        options: Array.isArray(node?.options)
+          ? node.options.map((o: any) => ({ value: o.value, label: o.label }))
+          : [],
+        meta: { mode: 'triage', nodeId },
+      },
+    ])
+  }
+
+  const startDecisionTree = async () => {
+    setMode('triage')
+    setMessages((prev) => [
+      ...prev,
+      { id: createMessageId('a'), sender: 'assistant', text: 'Starting Symptom Check (Decision Tree)…' },
+    ])
+
+    const data = await triageStart()
+    pushAssistantNode(data.nodeId, data.node)
+  }
+
+  const exitDecisionTree = () => {
+    setMode('gemini')
+    setTriageNodeId(null)
+    setMessages((prev) => [
+      ...prev,
+      { id: createMessageId('a'), sender: 'assistant', text: 'Exited Symptom Check. You can ask anything now.' },
+    ])
+  }
+
+  const handleTriageAnswer = async (answer: string) => {
+    if (!triageNodeId) {
+      await startDecisionTree()
       return
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const isVisible = entries.some((entry) => entry.isIntersecting)
-        setLiftedFromFooter(isVisible)
-      },
-      {
-        threshold: 0.05,
-      }
-    )
+    // record user's selection
+    setMessages((prev) => [
+      ...prev,
+      { id: createMessageId('u'), sender: 'user', text: answer },
+    ])
 
-    observer.observe(footer)
-    return () => {
-      observer.disconnect()
+    const data = await triageNext(triageNodeId, answer)
+
+    if (data.done) {
+      const title = data?.outcome?.title ? String(data.outcome.title) : 'Result'
+      const text = data?.outcome?.text ? String(data.outcome.text) : ''
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: createMessageId('a'),
+          sender: 'assistant',
+          text: `Decision Tree Result: ${title}\n\n${text}\n\nTip: You can type "exit" to leave symptom check, or continue chatting for booking help.`,
+          meta: { mode: 'triage' },
+        },
+      ])
+      // keep triage mode but no active node
+      setTriageNodeId(null)
+      return
     }
-  }, [])
 
-  const createMessageId = (prefix: 'u' | 'a') => {
-    const id = `${prefix}-${nextMessageIdRef.current}`
-    nextMessageIdRef.current += 1
-    return id
+    pushAssistantNode(data.nodeId, data.node)
   }
 
   const sendMessage = () => {
     const text = input.trim()
     if (!text) return
-
-    const userMessage: ChatMessage = {
-      id: createMessageId('u'),
-      sender: 'user',
-      text,
-    }
-    const assistantMessage: ChatMessage = {
-      id: createMessageId('a'),
-      sender: 'assistant',
-      text: buildReply(text, { isIdentified, userRole }),
-    }
-    setMessages((prev) => [...prev, userMessage, assistantMessage])
     setInput('')
+
+    if (text.toLowerCase() === 'exit') {
+      exitDecisionTree()
+      return
+    }
+
+    // TRIAGE MODE: answer using the decision tree
+    if (mode === 'triage') {
+      handleTriageAnswer(text).catch((err: any) => {
+        setMessages((prev) => [
+          ...prev,
+          { id: createMessageId('a'), sender: 'assistant', text: `Triage error: ${err?.message || 'unknown error'}` },
+        ])
+      })
+      return
+    }
+
+    // GEMINI MODE
+    const userMessage: ChatMessage = { id: createMessageId('u'), sender: 'user', text }
+    setMessages((prev) => [...prev, userMessage])
+
+    ;(async () => {
+      try {
+        const reply = await callGemini(text)
+        setMessages((prev) => [
+          ...prev,
+          { id: createMessageId('a'), sender: 'assistant', text: reply || '…' },
+        ])
+      } catch (err: any) {
+        setMessages((prev) => [
+          ...prev,
+          { id: createMessageId('a'), sender: 'assistant', text: `Gemini error: ${err?.message || 'unknown error'}` },
+        ])
+      }
+    })()
   }
 
   const sendPresetPrompt = (text: string) => {
-    const userMessage: ChatMessage = {
-      id: createMessageId('u'),
-      sender: 'user',
-      text,
+    if (text === 'Symptom Check (Decision Tree)') {
+      startDecisionTree().catch((err: any) => {
+        setMessages((prev) => [
+          ...prev,
+          { id: createMessageId('a'), sender: 'assistant', text: `Triage start error: ${err?.message || 'unknown error'}` },
+        ])
+      })
+      return
     }
-    const assistantMessage: ChatMessage = {
-      id: createMessageId('a'),
-      sender: 'assistant',
-      text: buildReply(text, { isIdentified, userRole }),
-    }
-    setMessages((prev) => [...prev, userMessage, assistantMessage])
+
+    setMessages((prev) => [...prev, { id: createMessageId('u'), sender: 'user', text }])
+
+    ;(async () => {
+      try {
+        const reply = await callGemini(text)
+        setMessages((prev) => [...prev, { id: createMessageId('a'), sender: 'assistant', text: reply || '…' }])
+      } catch (err: any) {
+        setMessages((prev) => [
+          ...prev,
+          { id: createMessageId('a'), sender: 'assistant', text: `Gemini error: ${err?.message || 'unknown error'}` },
+        ])
+      }
+    })()
   }
 
   return (
@@ -331,7 +338,7 @@ const GlobalAssistantChat = ({
               <p className="text-sm font-semibold text-[color:var(--agent-ink)]">AI Assistant</p>
               <p className="mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--agent-muted)]">
                 <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.9)]" />
-                Online
+                {mode === 'triage' ? 'Symptom Check' : 'Online'}
               </p>
             </div>
           </div>
@@ -345,21 +352,34 @@ const GlobalAssistantChat = ({
           </button>
         </div>
 
-        <div
-          ref={messagesViewportRef}
-          className="flex-1 space-y-3 overflow-y-auto px-3.5 py-3.5 sm:px-4"
-        >
+        <div ref={messagesViewportRef} className="flex-1 space-y-3 overflow-y-auto px-3.5 py-3.5 sm:px-4">
           {messages.map((message) => (
-            <article
-              key={message.id}
-              className={`max-w-[90%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed sm:max-w-[86%] ${
-                message.sender === 'user'
-                  ? 'ml-auto rounded-br-md bg-[linear-gradient(140deg,var(--agent-accent),var(--agent-accent-strong))] text-[color:var(--agent-on-accent)]'
-                  : 'mr-auto rounded-bl-md border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] text-[color:var(--agent-ink)]'
-              }`}
-            >
-              {message.text}
-            </article>
+            <div key={message.id} className="space-y-2">
+              <article
+                className={`max-w-[90%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed sm:max-w-[86%] ${
+                  message.sender === 'user'
+                    ? 'ml-auto rounded-br-md bg-[linear-gradient(140deg,var(--agent-accent),var(--agent-accent-strong))] text-[color:var(--agent-on-accent)]'
+                    : 'mr-auto rounded-bl-md border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] text-[color:var(--agent-ink)]'
+                }`}
+              >
+                {message.text}
+              </article>
+
+              {message.sender === 'assistant' && message.options && message.options.length > 0 && mode === 'triage' && (
+                <div className="mr-auto flex max-w-[90%] flex-wrap gap-2">
+                  {message.options.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleTriageAnswer(opt.value)}
+                      className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)]"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
 
@@ -375,6 +395,16 @@ const GlobalAssistantChat = ({
                 {prompt}
               </button>
             ))}
+
+            {mode === 'triage' && (
+              <button
+                type="button"
+                onClick={exitDecisionTree}
+                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)]"
+              >
+                Exit Symptom Check
+              </button>
+            )}
           </div>
 
           <div className="flex items-end gap-2">
@@ -388,7 +418,7 @@ const GlobalAssistantChat = ({
                   sendMessage()
                 }
               }}
-              placeholder="Type your message..."
+              placeholder={mode === 'triage' ? 'Type option value or press buttons… (type "exit" to leave)' : 'Type your message...'}
               className="min-w-0 flex-1 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3.5 py-2.5 text-sm text-[color:var(--agent-ink)] placeholder:text-[color:var(--agent-muted-soft)] outline-none transition focus:border-[color:var(--agent-accent)] focus:ring-2 focus:ring-[color:var(--agent-accent-soft)]"
             />
             <button
