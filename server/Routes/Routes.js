@@ -7,16 +7,26 @@ import {
     resendOTP,
     getSettings,
     updateSettings,
-    debugUser,
     googleCallback,
+    getMyProfile,
+    updateMyProfile,
+    upsertPersonalHealthInfo,
+    getPatientMedicalProfile,
 } from '../Controllers/UserController.js';
 import {
     getAllUsers,
     downloadAuditBackup,
+    updateUserByAdmin,
+    downloadSystemBackup,
 } from '../Controllers/adminController.js';
 import {
     createAppointment,
+    updateAppointmentStatus,
 } from '../Controllers/AppointmentsController.js';
+import {
+    checkSymptoms,
+} from '../Controllers/BotController.js';
+
 import authMiddleware from '../Middleware/authMiddleware.js';
 import { authorizeRoles } from '../Middleware/rbacMiddleware.js';
 import User from '../Models/UserModel.js';
@@ -36,7 +46,7 @@ const validate = (req, res, next) => {
     next();
 }
 
-// Google Login Trigger
+// Google Login
 router.get('/auth/google', 
     passport.authenticate('google', { scope: ['profile', 'email'] })
 );
@@ -105,7 +115,7 @@ router.post('/resend-otp',
 
 router.post('/logout', authMiddleware, logout);
 
-// Session introspection - return minimal user info for client
+//
 router.get('/session', authMiddleware, async (req, res) => {
     try {
         const userId = req.user?.id || req.user?._id
@@ -134,19 +144,37 @@ router.put('/users/me/settings',
     updateSettings
 )
 
-// DEBUG route - local only
-router.get('/debug/user', async (req, res, next) => {
-    try {
-        const controller = await import('../Controllers/UserController.js')
-        return controller.debugUser(req, res, next)
-    } catch (err) {
-        next(err)
-    }
-})
+// User profile and personal health information
+router.get('/users/me/profile', authMiddleware, getMyProfile)
+router.put('/users/me/profile',
+    authMiddleware,
+    [
+        body('firstName').optional().trim().isLength({ min: 1, max: 30 }).escape(),
+        body('lastName').optional().trim().isLength({ min: 1, max: 30 }).escape(),
+        body('dateOfBirth').optional().isISO8601().toDate(),
+        body('phoneNumber').optional().trim().isLength({ max: 30 }).escape(),
+        body('address').optional().trim().isLength({ max: 200 }).escape(),
+        body('gender').optional().trim().isLength({ max: 30 }).escape(),
+    ],
+    validate,
+    updateMyProfile
+)
+router.put('/users/me/personal-health-info',
+    authMiddleware,
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin', 'nurse'),
+    [
+        body('personalHealthInfo').optional().isObject(),
+        body('bloodType').optional().trim().isLength({ max: 10 }).escape(),
+        body('notes').optional().trim().isLength({ max: 1000 }).escape(),
+        body('emergencyContact').optional().isObject(),
+    ],
+    validate,
+    upsertPersonalHealthInfo
+)
+
 
 // Appointment Routes
 router.get('/appointments', authMiddleware, async (req, res, next) => {
-    // delegate to controller
     try {
         const controllerModule = await import('../Controllers/AppointmentsController.js')
         return controllerModule.getAppointments(req, res, next)
@@ -166,9 +194,39 @@ router.post('/appointments',
     validate,
     createAppointment
 );
+router.patch('/appointments/:appointmentId/status',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    [
+        body('status').isIn(['Pending', 'Confirmed', 'Completed', 'Cancelled']).withMessage('Invalid status'),
+    ],
+    validate,
+    updateAppointmentStatus
+);
 
-// Admin-triggered archive (manual)
-router.post('/admin/archive/appointments', authMiddleware, authorizeRoles('admin'), async (req, res, next) => {
+// User Appointment History
+router.get('/users/me/appointments/history',
+    authMiddleware,
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin', 'nurse'),
+    async (req, res, next) => {
+        try {
+            const controllerModule = await import('../Controllers/AppointmentsController.js')
+            return controllerModule.getAppointments(req, res, next)
+        } catch (err) {
+            next(err)
+        }
+    }
+)
+
+// Doctor route for patients profile
+router.get('/doctor/patients/:patientId/profile',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    getPatientMedicalProfile
+)
+
+// Admin-triggered archive
+router.post('/admin/archive/appointments', authMiddleware, authorizeRoles('admin', 'system_admin'), async (req, res, next) => {
     try {
         const { default: archiveService } = await import('../Utils/archiveService.js')
         const days = req.body?.days ? Number(req.body.days) : undefined
@@ -183,15 +241,32 @@ router.post('/admin/archive/appointments', authMiddleware, authorizeRoles('admin
 //ADMIN Routes
 router.get('/users',
     authMiddleware,
-    authorizeRoles('admin', 'doctor'),
+    authorizeRoles('admin', 'system_admin'),
     getAllUsers
+)
+router.put('/admin/users/:userId',
+    authMiddleware,
+    authorizeRoles('admin', 'system_admin'),
+    [
+        body('role').optional().isIn(['user', 'doctor', 'nurse', 'admin', 'system_admin']),
+        body('status').optional().isIn(['active', 'disabled']),
+        body('department').optional().trim().isLength({ max: 120 }).escape(),
+    ],
+    validate,
+    updateUserByAdmin
 )
 
 router.get('/admin/audit-logs/download', 
     authMiddleware, 
-    authorizeRoles('admin'), 
+    authorizeRoles('admin', 'system_admin'), 
     downloadAuditBackup
 );
+router.get('/admin/backups/system',
+    authMiddleware,
+    authorizeRoles('admin', 'system_admin'),
+    downloadSystemBackup
+);
 
+router.post('/symptoms', checkSymptoms);
 
 export default router;

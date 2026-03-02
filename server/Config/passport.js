@@ -27,8 +27,6 @@ passport.use(new GoogleStrategy({
         }
 
         // 3. Create New User
-        // Note: We set a dummy password because your Schema might require it.
-        // Or ensure your Schema has required: false for passwordHashed.
         user = new User({
             googleId: profile.id,
             firstName: profile.name.givenName,

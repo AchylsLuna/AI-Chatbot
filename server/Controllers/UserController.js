@@ -3,6 +3,7 @@ import AuditLog from "../Models/AuditLogModel.js";
 import jwt from "jsonwebtoken";
 import Sessions from "../Models/SessionModel.js";
 import {sendOTP} from "../Utils/emailService.js";
+import Appointments from "../Models/AppointmentsModel.js";
 
 export async function register(req, res) {
     try {
@@ -420,5 +421,206 @@ export async function registerDoctor(req, res) {
     } catch (error) {
         console.error("Doctor Registration Failed:", error);
         return res.status(500).json({ message: "Registration Failed." });
+    }
+}
+
+export async function getMyProfile(req, res) {
+    try {
+        const userId = req.user?.id || req.user?._id
+        if (!userId) return res.status(401).json({ message: 'Invalid session' })
+
+        const user = await User.findById(userId).select(
+            'email firstName lastName role status department profile personalHealthInfo'
+        )
+        if (!user) return res.status(404).json({ message: 'User not found' })
+
+        return res.json({
+            profile: {
+                id: user._id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+                status: user.status,
+                department: user.department,
+                ...(user.profile || {}),
+            },
+            personalHealthInfo: user.personalHealthInfo || {}
+        })
+    } catch (error) {
+        console.error('Get profile failed', error)
+        return res.status(500).json({ message: 'Failed to load profile' })
+    }
+}
+
+export async function updateMyProfile(req, res) {
+    try {
+        const userId = req.user?.id || req.user?._id
+        if (!userId) return res.status(401).json({ message: 'Invalid session' })
+
+        const allowedRoot = ['firstName', 'lastName']
+        const allowedProfile = ['dateOfBirth', 'phoneNumber', 'address', 'gender']
+        const update = {}
+
+        for (const key of allowedRoot) {
+            if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+                update[key] = req.body[key]
+            }
+        }
+        for (const key of allowedProfile) {
+            if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+                update[`profile.${key}`] = req.body[key]
+            }
+        }
+
+        if (Object.keys(update).length === 0) {
+            return res.status(400).json({ message: 'No updatable fields provided.' })
+        }
+
+        const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true })
+            .select('email firstName lastName role status department profile')
+        if (!user) return res.status(404).json({ message: 'User not found' })
+
+        await AuditLog.create({
+            userId,
+            action: 'UPDATED_PROFILE',
+            details: `User ${user.email} updated profile fields.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        })
+
+        return res.json({
+            message: 'Profile updated.',
+            profile: {
+                id: user._id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+                status: user.status,
+                department: user.department,
+                ...(user.profile || {})
+            }
+        })
+    } catch (error) {
+        console.error('Update profile failed', error)
+        return res.status(500).json({ message: 'Failed to update profile' })
+    }
+}
+
+function sanitizeStringList(list) {
+    if (!Array.isArray(list)) return undefined
+    return list
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .slice(0, 50)
+}
+
+export async function upsertPersonalHealthInfo(req, res) {
+    try {
+        const userId = req.user?.id || req.user?._id
+        if (!userId) return res.status(401).json({ message: 'Invalid session' })
+
+        const incoming = req.body?.personalHealthInfo || req.body
+        if (!incoming || typeof incoming !== 'object') {
+            return res.status(400).json({ message: 'Invalid personal health info payload.' })
+        }
+
+        const payload = {
+            bloodType: incoming.bloodType ? String(incoming.bloodType).trim() : undefined,
+            allergies: sanitizeStringList(incoming.allergies),
+            medications: sanitizeStringList(incoming.medications),
+            chronicConditions: sanitizeStringList(incoming.chronicConditions),
+            surgeries: sanitizeStringList(incoming.surgeries),
+            notes: incoming.notes ? String(incoming.notes).trim() : undefined,
+            updatedAt: new Date(),
+        }
+
+        if (incoming.emergencyContact && typeof incoming.emergencyContact === 'object') {
+            payload.emergencyContact = {
+                name: incoming.emergencyContact.name ? String(incoming.emergencyContact.name).trim() : undefined,
+                phone: incoming.emergencyContact.phone ? String(incoming.emergencyContact.phone).trim() : undefined,
+                relationship: incoming.emergencyContact.relationship ? String(incoming.emergencyContact.relationship).trim() : undefined,
+            }
+        }
+
+        const setPayload = {}
+        for (const [key, value] of Object.entries(payload)) {
+            if (value !== undefined) {
+                setPayload[`personalHealthInfo.${key}`] = value
+            }
+        }
+        if (Object.keys(setPayload).length === 0) {
+            return res.status(400).json({ message: 'No valid personal health info fields provided.' })
+        }
+
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { $set: setPayload },
+            { new: true }
+        ).select('email personalHealthInfo')
+
+        if (!user) return res.status(404).json({ message: 'User not found' })
+
+        await AuditLog.create({
+            userId,
+            action: 'UPSERT_PERSONAL_HEALTH_INFO',
+            details: `User ${user.email} updated personal health information.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        })
+
+        return res.status(200).json({
+            message: 'Personal health information saved.',
+            personalHealthInfo: user.personalHealthInfo || {}
+        })
+    } catch (error) {
+        console.error('Upsert personal health info failed', error)
+        return res.status(500).json({ message: 'Failed to save personal health information' })
+    }
+}
+
+export async function getPatientMedicalProfile(req, res) {
+    try {
+        const doctorId = req.user?.id || req.user?._id
+        const { patientId } = req.params
+        if (!doctorId) return res.status(401).json({ message: 'Invalid session' })
+
+        const appointment = await Appointments.findOne({
+            doctor: doctorId,
+            patient: patientId
+        }).select('_id')
+
+        if (!appointment) {
+            return res.status(403).json({ message: 'You do not have access to this patient record.' })
+        }
+
+        const patient = await User.findById(patientId).select(
+            'email firstName lastName profile personalHealthInfo status'
+        )
+        if (!patient) return res.status(404).json({ message: 'Patient not found' })
+
+        await AuditLog.create({
+            userId: doctorId,
+            action: 'VIEWED_PATIENT_MEDICAL_PROFILE',
+            details: `Doctor viewed patient profile for patientId=${patientId}`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        })
+
+        return res.status(200).json({
+            patient: {
+                id: patient._id,
+                email: patient.email,
+                firstName: patient.firstName,
+                lastName: patient.lastName,
+                status: patient.status,
+                ...(patient.profile || {}),
+            },
+            personalHealthInfo: patient.personalHealthInfo || {}
+        })
+    } catch (error) {
+        console.error('Get patient medical profile failed', error)
+        return res.status(500).json({ message: 'Failed to load patient profile' })
     }
 }

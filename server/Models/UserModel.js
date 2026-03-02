@@ -29,7 +29,7 @@ const UserSchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ["user", "nurse", "admin", "system_admin"],
+            enum: ["user", "doctor", "nurse", "admin", "system_admin"],
             default: "user",
         },
         status: {
@@ -65,6 +65,26 @@ const UserSchema = new mongoose.Schema(
                 sms: { type: Boolean, default: false },
                 push: { type: Boolean, default: true },
             },
+        },
+        profile: {
+            dateOfBirth: { type: Date },
+            phoneNumber: { type: String, trim: true, maxlength: 30 },
+            address: { type: String, trim: true, maxlength: 200 },
+            gender: { type: String, trim: true, maxlength: 30 },
+        },
+        personalHealthInfo: {
+            bloodType: { type: String, trim: true, maxlength: 10 },
+            allergies: [{ type: String, trim: true, maxlength: 120 }],
+            medications: [{ type: String, trim: true, maxlength: 120 }],
+            chronicConditions: [{ type: String, trim: true, maxlength: 120 }],
+            surgeries: [{ type: String, trim: true, maxlength: 120 }],
+            emergencyContact: {
+                name: { type: String, trim: true, maxlength: 80 },
+                phone: { type: String, trim: true, maxlength: 30 },
+                relationship: { type: String, trim: true, maxlength: 50 },
+            },
+            notes: { type: String, trim: true, maxlength: 1000 },
+            updatedAt: { type: Date },
         }
     },
 );

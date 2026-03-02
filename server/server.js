@@ -5,8 +5,9 @@ import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet'; //security headers
 import mongoSanitize from 'express-mongo-sanitize'; //Anti-NoSQL injection
-import passport from 'passport'; // [NEW]
-import './Config/passport.js'; // [NEW] Import the config we just made
+import passport from 'passport'; 
+import './Config/passport.js';
+import ErrorLog from './Models/ErrorLogModel.js';
 
 import router from './Routes/Routes.js';
 
@@ -31,7 +32,7 @@ app.use(
     cors({
         origin: config.ORIGIN,
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     })
 );
 
@@ -48,6 +49,20 @@ app.use('/api', router);
 
 app.use((err, req, res, next) => {
     console.error(`Error: ${err.message}`);
+
+    // Best-effort centralized error logging for admin backup/audit workflows.
+    ErrorLog.create({
+        message: err.message || 'Unknown server error',
+        stack: err.stack,
+        route: req.originalUrl,
+        method: req.method,
+        userId: req.user?.id || req.user?._id,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent']
+    }).catch((logErr) => {
+        console.error('Failed to persist error log:', logErr.message);
+    });
+
     const statusCode = err.statusCode || 500;
     res.status(statusCode).json({
         success: false,

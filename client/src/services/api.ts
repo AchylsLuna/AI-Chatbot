@@ -262,6 +262,15 @@ export const api = {
     const data = parseApiSchema(aiAlertAuditResponseSchema, payload, 'AI alert audit')
     return data.ok
   },
+  checkSymptoms: async (message: string): Promise<string> => {
+    const response = await request(`${API_BASE}/symptoms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    })
+    const payload = await handleResponse(response)
+    return String((payload as any)?.reply ?? '')
+  },
   logout: async (): Promise<boolean> => {
     const response = await request(`${API_BASE}/logout`, withAuth({ method: 'POST' }))
     try {

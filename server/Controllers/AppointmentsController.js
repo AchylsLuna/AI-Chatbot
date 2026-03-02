@@ -1,18 +1,17 @@
 import Appointments from "../Models/AppointmentsModel.js";
 import AuditLog from "../Models/AuditLogModel.js";
-import User from "../Models/UserModel.js"; // Needed to get user email
+import User from "../Models/UserModel.js";
 
 export async function createAppointment(req, res) {
     try {
         let { doctorId, scheduledDate, department, reason, note } = req.body;
-        const patientId = req.user.id; // Use .id (from JWT)
+        const patientId = req.user.id;
 
-        // 1. [NEW] Validate Date (Must be in the future)
         if (new Date(scheduledDate) < Date.now()) {
             return res.status(400).json({ message: "Appointment date must be in the future." });
         }
 
-        // 2. [NEW] Check for Existing Pending/Confirmed Appointments
+        //Check for Existing Pending/Confirmed Appointments
         const existingAppointment = await Appointments.findOne({
             patient: patientId,
             status: { $in: ["Pending", "Confirmed"] }
@@ -24,18 +23,26 @@ export async function createAppointment(req, res) {
             });
         }
 
-        // 3. [NEW] Prevent Self-Booking (If a doctor somehow tries to book themselves)
+        //Prevent Self-Booking
         if (doctorId && patientId === doctorId) {
             return res.status(400).json({ message: "You cannot book an appointment with yourself." });
         }
 
-        // If no doctor specified, pick a default doctor from DB (first user with role 'doctor')
+        // If no doctor specified, pick a default doctor from DB
         if (!doctorId) {
             const defaultDoctor = await User.findOne({ role: 'doctor' })
             doctorId = defaultDoctor?._id || null
         }
+        if (!doctorId) {
+            return res.status(400).json({ message: "No doctor is currently available for booking." });
+        }
 
-        // 4. Fetch User Details for Logging (since JWT only has ID/Role)
+        const doctor = await User.findOne({ _id: doctorId, role: 'doctor', status: 'active' }).select('_id email');
+        if (!doctor) {
+            return res.status(400).json({ message: "Selected doctor is invalid or unavailable." });
+        }
+
+
         const user = await User.findById(patientId);
 
         const appointment = new Appointments({
@@ -43,12 +50,12 @@ export async function createAppointment(req, res) {
             patient: patientId,
             scheduledDate,
             department,
-            reason: reason || note || '',
+            reason: reason || note || 'General consultation',
         });
 
         await appointment.save();
 
-        // 5. Audit Log
+        //Audit Log
         await AuditLog.create({
             action: "CREATED_APPOINTMENT",
             userId: patientId,
@@ -72,7 +79,10 @@ export async function getAppointments(req, res) {
 
         const role = req.user?.role || 'user'
 
-        const query = role === 'doctor' ? { doctor: userId } : { patient: userId }
+        const query =
+            role === 'doctor' ? { doctor: userId } :
+            role === 'admin' || role === 'system_admin' ? {} :
+            { patient: userId }
 
         const appointments = await Appointments.find(query)
             .populate('patient', 'email firstName lastName')
@@ -95,5 +105,70 @@ export async function getAppointments(req, res) {
     } catch (error) {
         console.error('Failed to fetch appointments', error)
         return res.status(500).json({ message: 'Failed to fetch appointments' })
+    }
+}
+
+const APPOINTMENT_STATUS = ['Pending', 'Confirmed', 'Completed', 'Cancelled']
+const DOCTOR_ALLOWED_TRANSITIONS = {
+    Pending: ['Confirmed', 'Cancelled'],
+    Confirmed: ['Completed', 'Cancelled'],
+    Completed: [],
+    Cancelled: []
+}
+
+export async function updateAppointmentStatus(req, res) {
+    try {
+        const userId = req.user?.id || req.user?._id
+        const role = req.user?.role
+        const { appointmentId } = req.params
+        const { status } = req.body
+
+        if (!APPOINTMENT_STATUS.includes(status)) {
+            return res.status(400).json({ message: 'Invalid appointment status.' })
+        }
+
+        const appointment = await Appointments.findById(appointmentId)
+            .populate('patient', 'email firstName lastName')
+            .populate('doctor', 'email firstName lastName')
+
+        if (!appointment) {
+            return res.status(404).json({ message: 'Appointment not found.' })
+        }
+
+        if (role === 'doctor' && String(appointment.doctor?._id || appointment.doctor) !== String(userId)) {
+            return res.status(403).json({ message: 'You can only update your own appointments.' })
+        }
+        if (!['doctor', 'admin', 'system_admin'].includes(role)) {
+            return res.status(403).json({ message: 'You are not allowed to update appointment status.' })
+        }
+        if (role === 'doctor' && !DOCTOR_ALLOWED_TRANSITIONS[appointment.status]?.includes(status)) {
+            return res.status(400).json({ message: `Invalid status transition: ${appointment.status} -> ${status}` })
+        }
+
+        const previousStatus = appointment.status
+        appointment.status = status
+        await appointment.save()
+
+        await AuditLog.create({
+            userId,
+            action: 'UPDATED_APPOINTMENT_STATUS',
+            details: `Appointment ${appointment._id}: ${previousStatus} -> ${status}`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        })
+
+        return res.status(200).json({
+            message: 'Appointment status updated.',
+            appointment: {
+                id: appointment._id,
+                status: appointment.status,
+                previousStatus,
+                patientName: appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : undefined,
+                doctorName: appointment.doctor ? `${appointment.doctor.firstName} ${appointment.doctor.lastName}` : undefined,
+            }
+        })
+    } catch (error) {
+        console.error('Failed to update appointment status', error)
+        return res.status(500).json({ message: 'Failed to update appointment status.' })
     }
 }

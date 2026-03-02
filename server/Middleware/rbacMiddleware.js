@@ -13,7 +13,7 @@ export const authorizeRoles = (...allowedRoles) => {
                 userAgent: req.headers['user-agent']
             });
             
-            console.warn(`[RBAC] Unauthorized access attempt by user ${req.user.id} to ${req.originalUrl}`);
+            console.warn(`[RBAC] Unauthorized access attempt by user ${req.user?.id || req.user?._id || 'unknown'} to ${req.originalUrl}`);
             return res.status(403).json({ 
                 message: "You do not have permission to perform this action." 
             });
