@@ -40,11 +40,19 @@ const UserSchema = new mongoose.Schema(
         department: {
             type: String,
             trim: true,
-            required: function() { return this.role === 'doctor'; }
+            required: function() { return this.role === 'doctor' || this.role === 'nurse'; }
         },
         licenseUrl: { // Or licensePath, depending on where you store it
             type: String,
-            required: function() { return this.role === 'doctor'; }
+            required: function() { return this.role === 'doctor' || this.role === 'nurse'; }
+        },
+        licenseUrls: {
+            type: [{ type: String, trim: true }],
+            default: [],
+        },
+        staffApplicationReviewed: {
+            type: Boolean,
+            default: function() { return this.role !== 'doctor' && this.role !== 'nurse'; }
         },
         passwordHashed: {
             type: String,
@@ -74,10 +82,10 @@ const UserSchema = new mongoose.Schema(
         },
         personalHealthInfo: {
             bloodType: { type: String, trim: true, maxlength: 10 },
-            allergies: [{ type: String, trim: true, maxlength: 120 }],
-            medications: [{ type: String, trim: true, maxlength: 120 }],
-            chronicConditions: [{ type: String, trim: true, maxlength: 120 }],
-            surgeries: [{ type: String, trim: true, maxlength: 120 }],
+            allergies: { type: [{ type: String, trim: true, maxlength: 120 }], default: [] },
+            medications: { type: [{ type: String, trim: true, maxlength: 120 }], default: [] },
+            chronicConditions: { type: [{ type: String, trim: true, maxlength: 120 }], default: [] },
+            surgeries: { type: [{ type: String, trim: true, maxlength: 120 }], default: [] },
             emergencyContact: {
                 name: { type: String, trim: true, maxlength: 80 },
                 phone: { type: String, trim: true, maxlength: 30 },

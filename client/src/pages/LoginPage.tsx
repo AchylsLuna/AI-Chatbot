@@ -5,18 +5,20 @@ import type { AuthProvider, AuthSession } from '../types'
 import { getDefaultPageForRole } from '../utils/roles'
 
 const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
+type LoginRoleTab = 'patient' | 'doctor'
 
 type LoginPageProps = {
   authUser: AuthSession['user'] | null
   authError: string | null
   isAuthLoading: boolean
-  onLogin: (username: string, password: string) => void
+  onLogin: (username: string, password: string, targetPage?: AppPage) => void
   onProviderLogin?: () => void
   authProvider?: AuthProvider
   isBiometricReady?: boolean
   onLogout: () => void
   onNavigate?: (page: AppPage) => void
   onGoBack?: () => void
+  defaultRoleTab?: LoginRoleTab
 }
 
 const LoginPage = ({
@@ -30,18 +32,22 @@ const LoginPage = ({
   onLogout,
   onNavigate,
   onGoBack,
+  defaultRoleTab = 'patient',
 }: LoginPageProps) => {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [roleTab, setRoleTab] = useState<LoginRoleTab>(defaultRoleTab)
   const homePage: AppPage = getDefaultPageForRole(authUser?.role)
   const homeLabel =
     homePage === 'appointments'
       ? 'Go to appointments'
       : homePage === 'doctor_dashboard'
         ? "Go to doctor's dashboard"
-        : 'Go to dashboard'
+        : homePage === 'admin'
+          ? 'Go to admin dashboard'
+          : 'Go to dashboard'
 
   return (
     <AuthSplitLayout>
@@ -93,9 +99,42 @@ const LoginPage = ({
               setFormError('Use a valid .com email address before signing in.')
               return
             }
-            onLogin(email, password)
+            onLogin(email, password, roleTab === 'doctor' ? 'doctor_dashboard' : 'appointments')
           }}
         >
+          <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-1">
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setRoleTab('patient')
+                  if (formError) setFormError(null)
+                }}
+                className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                  roleTab === 'patient'
+                    ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
+                    : 'border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-ink)] hover:bg-[color:var(--agent-overlay)]'
+                }`}
+              >
+                Patient Sign in
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRoleTab('doctor')
+                  if (formError) setFormError(null)
+                }}
+                className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                  roleTab === 'doctor'
+                    ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
+                    : 'border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-ink)] hover:bg-[color:var(--agent-overlay)]'
+                }`}
+              >
+                Doctor Sign in
+              </button>
+            </div>
+          </div>
+
           <div className="relative">
             <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
               <svg
@@ -205,7 +244,7 @@ const LoginPage = ({
             <button
               type="button"
               onClick={() => {
-                const apiBase = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api').replace(/\/$/, '')
+                const apiBase = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '')
                 window.location.href = `${apiBase}/auth/google`
               }}
               disabled={isAuthLoading}

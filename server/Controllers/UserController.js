@@ -5,6 +5,42 @@ import Sessions from "../Models/SessionModel.js";
 import {sendOTP} from "../Utils/emailService.js";
 import Appointments from "../Models/AppointmentsModel.js";
 
+const ALLOWED_DOCTOR_DEPARTMENTS = new Set([
+    "Internal Medicine",
+    "Pediatrics",
+    "Surgery",
+    "Obstetrics and Gynecology",
+    "Family and Community Medicine",
+    "Anesthesiology",
+    "Radiology",
+    "Pathology",
+    "Psychiatry",
+    "Ophthalmology",
+    "Otorhinolaryngology",
+    "Rehabilitation Medicine",
+    "Dermatology",
+    "Emergency Medicine",
+    "Cardiology",
+    "Pulmonology",
+    "Nephrology",
+    "Neurology",
+    "Gastroenterology",
+]);
+
+const extractUploadedLicenses = (req) => {
+    if (Array.isArray(req.files)) return req.files;
+    if (req.files && typeof req.files === 'object') {
+        const byField = req.files;
+        return [
+            ...(Array.isArray(byField.licenses) ? byField.licenses : []),
+            ...(Array.isArray(byField.license) ? byField.license : []),
+            ...(Array.isArray(byField.licenseFile) ? byField.licenseFile : []),
+        ];
+    }
+    if (req.file) return [req.file];
+    return [];
+};
+
 export async function register(req, res) {
     try {
         const { email, firstName, lastName, password} = req.body;
@@ -121,10 +157,11 @@ export async function logout(req, res) {
         } else if (req.user?.id) {
             // If no token but request was authenticated and has user info, log logout
             try {
+                const actor = await User.findById(req.user.id).select('email').lean();
                 await AuditLog.create({
                     userId: req.user.id,
                     action: 'LOGOUT',
-                    details: `User ${req.user.email} logged out`,
+                    details: `User ${req.user.email || actor?.email || req.user.id} logged out`,
                     ipAddress: req.ip,
                     userAgent: req.headers['user-agent']
                 });
@@ -173,7 +210,7 @@ export async function verifyOTP(req, res) {
         await user.save();
 
         const token = jwt.sign(
-            {id: user._id, role: user.role},
+            {id: user._id, role: user.role, email: user.email},
             process.env.JWT_SECRET,
             {expiresIn: "7d"}
         );
@@ -198,9 +235,6 @@ export async function verifyOTP(req, res) {
 
         console.log("[Successful Login]:", req.body.email);
 
-        // Map 'doctor' role to 'admin' for client compatibility
-        const clientRole = user.role === 'doctor' ? 'admin' : user.role;
-
         return res.status(200).json({
             message: "Login successful.",
             token,
@@ -209,7 +243,7 @@ export async function verifyOTP(req, res) {
                 firstName: user.firstName,
                 lastName: user.lastName,
                 email: user.email,
-                role: clientRole
+                role: user.role
             }
         });
     } catch (error) {
@@ -331,7 +365,7 @@ export async function googleCallback(req, res) {
 
         // 1. Generate Token
         const token = jwt.sign(
-            { id: user._id, role: user.role },
+            { id: user._id, role: user.role, email: user.email },
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
@@ -375,13 +409,18 @@ export async function googleCallback(req, res) {
 export async function registerDoctor(req, res) {
     try {
         const { email, firstName, lastName, password, department } = req.body;
-        const licenseFile = req.file; // Populated by multer
+        const licenseFiles = extractUploadedLicenses(req);
+        const licensePaths = licenseFiles.map((file) => String(file.path || '').trim()).filter(Boolean);
+        const normalizedDepartment = String(department || '').trim();
 
-        if (!firstName || !lastName || !password || !email || !department) {
+        if (!firstName || !lastName || !password || !email || !normalizedDepartment) {
             return res.status(400).json({ message: "Missing required field" });
         }
-        if (!licenseFile) {
-            return res.status(400).json({message: "Medical license file is required"})
+        if (!ALLOWED_DOCTOR_DEPARTMENTS.has(normalizedDepartment)) {
+            return res.status(400).json({ message: "Selected doctor department is not allowed." });
+        }
+        if (licensePaths.length === 0) {
+            return res.status(400).json({message: "At least one medical license file is required"})
         }
         const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com|yahoo\.com|outlook\.com)$/i;
         if (!emailRegex.test(email)) {
@@ -406,9 +445,11 @@ export async function registerDoctor(req, res) {
             firstName,
             lastName,
             role: "doctor",
-            department,
-            licenseUrl: licenseFile.path, 
-            status: "disabled" // Prevents login until Admin verifies the license
+            department: normalizedDepartment,
+            licenseUrl: licensePaths[0],
+            licenseUrls: licensePaths,
+            status: "disabled", // Prevents login until Admin verifies the license
+            staffApplicationReviewed: false
         });
 
         await doctor.setPassword(password);
@@ -420,6 +461,63 @@ export async function registerDoctor(req, res) {
 
     } catch (error) {
         console.error("Doctor Registration Failed:", error);
+        return res.status(500).json({ message: "Registration Failed." });
+    }
+}
+
+export async function registerNurse(req, res) {
+    try {
+        const { email, firstName, lastName, password, department } = req.body;
+        const licenseFiles = extractUploadedLicenses(req);
+        const licensePaths = licenseFiles.map((file) => String(file.path || '').trim()).filter(Boolean);
+        const normalizedDepartment = String(department || '').trim();
+
+        if (!firstName || !lastName || !password || !email || !normalizedDepartment) {
+            return res.status(400).json({ message: "Missing required field" });
+        }
+        if (licensePaths.length === 0) {
+            return res.status(400).json({ message: "At least one nursing license file is required" });
+        }
+
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com|yahoo\.com|outlook\.com)$/i;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
+                message: "Email is invalid"
+            });
+        }
+
+        const emailExists = await User.findOne({ email });
+        if (emailExists) {
+            return res.status(409).json({ message: "Email is already registered." });
+        }
+
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({
+                message: "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character."
+            });
+        }
+
+        const nurse = new User({
+            email,
+            firstName,
+            lastName,
+            role: "nurse",
+            department: normalizedDepartment,
+            licenseUrl: licensePaths[0],
+            licenseUrls: licensePaths,
+            status: "disabled",
+            staffApplicationReviewed: false
+        });
+
+        await nurse.setPassword(password);
+        await nurse.save();
+
+        return res.status(201).json({
+            message: "Nurse registration submitted successfully. Pending approval."
+        });
+    } catch (error) {
+        console.error("Nurse Registration Failed:", error);
         return res.status(500).json({ message: "Registration Failed." });
     }
 }
@@ -524,6 +622,16 @@ export async function upsertPersonalHealthInfo(req, res) {
         const incoming = req.body?.personalHealthInfo || req.body
         if (!incoming || typeof incoming !== 'object') {
             return res.status(400).json({ message: 'Invalid personal health info payload.' })
+        }
+
+        const listFields = ['allergies', 'medications', 'chronicConditions', 'surgeries']
+        for (const field of listFields) {
+            if (
+                Object.prototype.hasOwnProperty.call(incoming, field) &&
+                !Array.isArray(incoming[field])
+            ) {
+                return res.status(400).json({ message: `${field} must be an array.` })
+            }
         }
 
         const payload = {

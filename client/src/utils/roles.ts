@@ -1,11 +1,12 @@
 import type { AppPage } from '../types/navigation'
 import type { UserRole } from '../types'
+import { getDefaultDashboardPage } from './dashboardRoutes'
 
 const roleLabels: Record<UserRole, string> = {
-  user: 'User',
-  nurse: 'Nurse',
+  user: 'Patient',
+  nurse: 'Doctor',
   admin: 'Admin',
-  system_admin: 'Super Admin',
+  system_admin: 'Admin',
 }
 
 export const formatRoleLabel = (role?: string | null) => {
@@ -17,13 +18,11 @@ export const formatRoleLabel = (role?: string | null) => {
 
 export const getWorkspaceRoleLabel = (role?: UserRole | null) => {
   if (!role) return 'Unknown'
-  if (role === 'user') return 'User'
+  if (role === 'user') return 'Patient'
+  if (role === 'nurse') return 'Doctor'
   return 'Admin'
 }
 
 export const getDefaultPageForRole = (role?: UserRole | null): AppPage => {
-  if (role === 'doctor' || role === 'nurse' || role === 'admin' || role === 'system_admin') {
-    return 'doctor_dashboard'
-  }
-  return 'appointments'
+  return getDefaultDashboardPage(role)
 }

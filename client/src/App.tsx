@@ -9,11 +9,11 @@ import useAuthData from './hooks/useAuthData'
 import useAppRouting from './hooks/useAppRouting'
 import useScrollReveal from './hooks/useScrollReveal'
 import useAppTheme from './hooks/useAppTheme'
+import { getDefaultDashboardPage, isAdminRole, isDoctorRole } from './utils/dashboardRoutes'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminLoginPage from './pages/AdminLoginPage'
-import AppointmentsPage from './pages/AppointmentsPage'
 import DoctorDashboardPage from './pages/DoctorDashboardPage'
-import DoctorLoginPage from './pages/DoctorLoginPage'
+import AppointmentsPage from './pages/AppointmentsPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
@@ -40,12 +40,14 @@ function App() {
     reservations,
     latestReservation,
     pendingOtpChallenge,
+    handleCreateReservation,
     handleProviderLogin,
     handleLogin,
     handleVerifyOtp,
     handleCancelOtp,
     handleResendOtp,
     handleSignupSuccess,
+    patchAuthUser,
     handleLogout,
     idleWarningOpen,
     idleRemainingSeconds,
@@ -55,11 +57,13 @@ function App() {
   const isProtectedRoute =
     currentPage === 'appointments' || currentPage === 'doctor_dashboard' || currentPage === 'admin'
   const isReferenceDashboardPage =
-    currentPage === 'appointments' || currentPage === 'doctor_dashboard'
+    currentPage === 'appointments' || currentPage === 'doctor_dashboard' || currentPage === 'admin'
   const showPublicHeader = !isLanding && !isAuthPage && !authUser && !isProtectedRoute
   const showWorkspaceHeader =
     Boolean(authUser) && !isAuthPage && currentPage !== 'landing' && !isReferenceDashboardPage
   const showSupportAssistant = true
+  const isDoctorAuthenticated = isDoctorRole(authUser?.role, authUser?.accountType)
+  const isAdminAuthenticated = isAdminRole(authUser?.role, authUser?.accountType)
 
   useEffect(() => {
     if (!authUser) return
@@ -71,15 +75,41 @@ function App() {
 
   useEffect(() => {
     if (!authUser) return
-    if (authUser.role === 'user') return
     if (currentPage !== 'appointments') return
+    if (isDoctorAuthenticated) {
+      navigateToPage('doctor_dashboard', { replace: true })
+      return
+    }
+    if (isAdminAuthenticated) {
+      navigateToPage('admin', { replace: true })
+    }
+  }, [authUser, currentPage, isAdminAuthenticated, isDoctorAuthenticated, navigateToPage])
+
+  useEffect(() => {
+    if (!authUser) return
+    if (currentPage !== 'doctor_dashboard') return
+    if (!isAdminAuthenticated) return
+    navigateToPage('admin', { replace: true })
+  }, [authUser, currentPage, isAdminAuthenticated, navigateToPage])
+
+  useEffect(() => {
+    if (!authUser) return
+    if (currentPage !== 'admin') return
+    if (!isDoctorAuthenticated) return
     navigateToPage('doctor_dashboard', { replace: true })
+  }, [authUser, currentPage, isDoctorAuthenticated, navigateToPage])
+
+  useEffect(() => {
+    if (!authUser) return
+    if (currentPage !== 'landing') return
+    navigateToPage(getDefaultDashboardPage(authUser.role, authUser.accountType), { replace: true })
   }, [authUser, currentPage, navigateToPage])
 
   useScrollReveal(`${currentPage}-${isCheckingSession}-${authUser?.role ?? 'guest'}`)
 
   const loginPage = (
     <LoginPage
+      key="login-patient"
       authUser={authUser}
       authError={authError}
       isAuthLoading={isAuthLoading}
@@ -90,6 +120,24 @@ function App() {
       onLogout={handleLogout}
       onNavigate={navigateToPage}
       onGoBack={() => navigateBack('landing')}
+      defaultRoleTab="patient"
+    />
+  )
+
+  const doctorLoginPage = (
+    <LoginPage
+      key="login-doctor"
+      authUser={authUser}
+      authError={authError}
+      isAuthLoading={isAuthLoading}
+      onLogin={handleLogin}
+      onProviderLogin={auth0Enabled ? () => handleProviderLogin('doctor_dashboard') : undefined}
+      authProvider={authProvider}
+      isBiometricReady={isBiometricReady}
+      onLogout={handleLogout}
+      onNavigate={navigateToPage}
+      onGoBack={() => navigateBack('landing')}
+      defaultRoleTab="doctor"
     />
   )
 
@@ -99,7 +147,7 @@ function App() {
       authError={authError}
       isAuthLoading={isAuthLoading}
       onLogin={handleLogin}
-      onProviderLogin={auth0Enabled ? () => handleProviderLogin('doctor_dashboard') : undefined}
+      onProviderLogin={auth0Enabled ? () => handleProviderLogin('admin') : undefined}
       authProvider={authProvider}
       isBiometricReady={isBiometricReady}
       onLogout={handleLogout}
@@ -134,7 +182,7 @@ function App() {
     }
 
     if (!authUser) {
-      return page === 'doctor_dashboard' ? adminLoginPage : loginPage
+      return page === 'doctor_dashboard' ? doctorLoginPage : loginPage
     }
 
     if (!canAccessPage(page, authUser.role)) {
@@ -143,7 +191,7 @@ function App() {
           title={options.deniedTitle}
           detail={options.deniedDetail}
           onSwitchAccount={() =>
-            navigateToPage(page === 'doctor_dashboard' ? 'admin_login' : 'login')
+            navigateToPage(page === 'doctor_dashboard' ? 'doctor_login' : 'login')
           }
           onBackToOverview={() => navigateToPage('landing')}
         />
@@ -163,11 +211,15 @@ function App() {
 
   switch (currentPage) {
     case 'landing':
-      pageContent = (
+      pageContent = isCheckingSession ? (
+        <AuthLoadingCard label="Restoring your session..." />
+      ) : (
         <LandingPage
           onNavigate={navigateToPage}
           latestReservation={latestReservation}
           isAuthenticated={Boolean(authUser)}
+          authRole={authUser?.role ?? null}
+          authAccountType={authUser?.accountType ?? null}
           onLogout={handleLogout}
         />
       )
@@ -175,13 +227,17 @@ function App() {
 
     case 'appointments':
       if (authUser && authUser.role !== 'user') {
-        pageContent = <AuthLoadingCard label="Redirecting to doctor's dashboard..." />
+        pageContent = (
+          <AuthLoadingCard
+            label={isAdminAuthenticated ? 'Redirecting to admin dashboard...' : "Redirecting to doctor's dashboard..."}
+          />
+        )
       } else {
         pageContent = renderProtectedPage('appointments', {
           loadingLabel: 'Checking appointment access...',
           deniedTitle: 'Appointment access required',
           deniedDetail:
-            'This page is the User appointment portal. Sign in with a User account to view personal appointments.',
+            'This page is the Patient appointment portal. Sign in with a Patient account to view personal appointments.',
           allowedContent: (
             withWorkspaceBoundary(
               <AppointmentsPage
@@ -189,6 +245,7 @@ function App() {
                 authUser={authUser}
                 onNavigate={navigateToPage}
                 onLogout={handleLogout}
+                onCreateReservation={handleCreateReservation}
                 sessionStatus={sessionStatus}
                 theme={theme}
                 onToggleTheme={toggleTheme}
@@ -205,18 +262,20 @@ function App() {
     case 'doctor_dashboard':
       if (authUser?.role === 'user') {
         pageContent = <AuthLoadingCard label="Redirecting to appointments..." />
+      } else if (isAdminAuthenticated) {
+        pageContent = <AuthLoadingCard label="Redirecting to admin dashboard..." />
       } else {
         pageContent = renderProtectedPage('doctor_dashboard', {
           loadingLabel: "Checking doctor's dashboard access...",
           deniedTitle: "Doctor's dashboard access required",
-          deniedDetail: 'This page is available for Nurse, Admin, and Super Admin roles.',
+          deniedDetail: 'This page is available for doctor-role accounts only.',
           allowedContent: (
             withWorkspaceBoundary(
               <DoctorDashboardPage
                 authUser={authUser}
                 reservations={reservations}
-                onNavigate={navigateToPage}
                 onLogout={handleLogout}
+                onPatchAuthUser={patchAuthUser}
                 sessionStatus={sessionStatus}
                 theme={theme}
                 onToggleTheme={toggleTheme}
@@ -233,6 +292,8 @@ function App() {
     case 'admin':
       if (authUser?.role === 'user') {
         pageContent = <AuthLoadingCard label="Redirecting to appointments..." />
+      } else if (isDoctorAuthenticated) {
+        pageContent = <AuthLoadingCard label="Redirecting to doctor's dashboard..." />
       } else if (isCheckingSession) {
         pageContent = <AuthLoadingCard label="Checking admin access..." />
       } else if (!authUser) {
@@ -241,7 +302,7 @@ function App() {
         pageContent = (
           <AccessDeniedCard
             title="Admin access required"
-            detail="This section is limited to Nurse, Admin, and Super Admin roles. Sign in with the correct role or request elevated access."
+            detail="This section is limited to Admin accounts. Sign in with an authorized account."
             onSwitchAccount={() => navigateToPage('admin_login')}
             onBackToOverview={() => navigateToPage('landing')}
           />
@@ -269,7 +330,7 @@ function App() {
         pageContent = (
           <AccessDeniedCard
             title="Staff login only"
-            detail="This login is for nurse, admin, and super admin accounts only. Switch account to continue."
+            detail="This login is for Doctor and Admin accounts only. Switch account to continue."
             onSwitchAccount={() => {
               void handleLogout()
             }}
@@ -282,30 +343,7 @@ function App() {
       break
 
     case 'doctor_login':
-      if (authUser?.role === 'user') {
-        pageContent = (
-          <AccessDeniedCard
-            title="Doctor login only"
-            detail="This login is for doctor and admin accounts only. Switch account to continue."
-            onSwitchAccount={() => {
-              void handleLogout()
-            }}
-            onBackToOverview={() => navigateToPage('landing')}
-          />
-        )
-      } else {
-        pageContent = (
-          <DoctorLoginPage
-            authError={authError}
-            isAuthLoading={isAuthLoading}
-            onLogin={handleLogin}
-            onProviderLogin={auth0Enabled ? () => handleProviderLogin('doctor_dashboard') : undefined}
-            authProvider={authProvider}
-            isBiometricReady={isBiometricReady}
-            onNavigate={navigateToPage}
-          />
-        )
-      }
+      pageContent = doctorLoginPage
       break
 
     case 'login':
@@ -322,6 +360,24 @@ function App() {
           onNavigate={navigateToPage}
           onSignupSuccess={handleSignupSuccess}
           onGoBack={() => navigateBack('login')}
+        />
+      )
+      break
+    case 'doctor_signup':
+      pageContent = (
+        <SignupPage
+          variant="doctor"
+          onNavigate={navigateToPage}
+          onGoBack={() => navigateBack('signup')}
+        />
+      )
+      break
+    case 'nurse_signup':
+      pageContent = (
+        <SignupPage
+          variant="nurse"
+          onNavigate={navigateToPage}
+          onGoBack={() => navigateBack('signup')}
         />
       )
       break
@@ -376,7 +432,6 @@ function App() {
             authUser={authUser}
             currentPage={currentPage}
             onNavigate={navigateToPage}
-            onLogout={handleLogout}
           />
         )}
 

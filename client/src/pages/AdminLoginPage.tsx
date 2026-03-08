@@ -65,7 +65,7 @@ const AdminLoginPage = ({
           </p>
           <h2 className="mt-3 text-3xl font-semibold text-[color:var(--agent-ink)]">Admin Login</h2>
           <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-            Use Super Admin, Admin (Doctor), or Nurse account to continue.
+            Use an Admin or Doctor account to continue.
           </p>
         </div>
 
@@ -101,8 +101,8 @@ const AdminLoginPage = ({
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-rose-300">
-                  This account does not have admin portal access. Sign out and use Super Admin,
-                  Admin, or Nurse account.
+                  This account does not have admin portal access. Sign out and use an Admin or
+                  Doctor account.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <button onClick={onLogout} className="agent-button-ghost w-full">

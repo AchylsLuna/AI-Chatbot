@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import {
     register,
+    registerDoctor,
+    registerNurse,
     login,
     logout,
     verifyOTP,
@@ -15,12 +17,21 @@ import {
 } from '../Controllers/UserController.js';
 import {
     getAllUsers,
+    getAuditLogs,
+    getErrorLogs,
+    getLedger,
+    getPendingStaffApplications,
+    approveStaffApplication,
+    rejectStaffApplication,
+    viewStaffApplicationLicense,
     downloadAuditBackup,
+    downloadErrorBackup,
     updateUserByAdmin,
     downloadSystemBackup,
 } from '../Controllers/adminController.js';
 import {
     createAppointment,
+    getAvailableDoctorsByDepartment,
     updateAppointmentStatus,
 } from '../Controllers/AppointmentsController.js';
 import {
@@ -37,6 +48,27 @@ import passport from 'passport';
 
 
 const router = Router();
+const ALLOWED_DOCTOR_DEPARTMENTS = [
+    "Internal Medicine",
+    "Pediatrics",
+    "Surgery",
+    "Obstetrics and Gynecology",
+    "Family and Community Medicine",
+    "Anesthesiology",
+    "Radiology",
+    "Pathology",
+    "Psychiatry",
+    "Ophthalmology",
+    "Otorhinolaryngology",
+    "Rehabilitation Medicine",
+    "Dermatology",
+    "Emergency Medicine",
+    "Cardiology",
+    "Pulmonology",
+    "Nephrology",
+    "Neurology",
+    "Gastroenterology",
+];
 
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -45,6 +77,8 @@ const validate = (req, res, next) => {
     }
     next();
 }
+
+const uploadStaffLicenses = uploadLicense.any();
 
 // Google Login
 router.get('/auth/google', 
@@ -69,8 +103,26 @@ router.post('/register',
     register
 );
 router.post('/register/doctor',
-    uploadLicense.single('license'), 
-    handleUploadError, // Much cleaner!
+    uploadStaffLicenses, 
+    handleUploadError,
+    [
+        body('firstName').trim().notEmpty().escape().withMessage('First name is required'),
+        body('lastName').trim().notEmpty().escape().withMessage('Last name is required'),
+        body('email').isEmail().normalizeEmail().withMessage('Invalid email'),
+        body('password').isLength({ min: 8 }).withMessage('Password too short'),
+        body('department')
+            .trim()
+            .notEmpty()
+            .withMessage('Department is required')
+            .isIn(ALLOWED_DOCTOR_DEPARTMENTS)
+            .withMessage('Selected doctor department is not allowed')
+    ],
+    validate,
+    registerDoctor
+);
+router.post('/register/nurse',
+    uploadStaffLicenses,
+    handleUploadError,
     [
         body('firstName').trim().notEmpty().escape().withMessage('First name is required'),
         body('lastName').trim().notEmpty().escape().withMessage('Last name is required'),
@@ -79,14 +131,7 @@ router.post('/register/doctor',
         body('department').trim().notEmpty().escape().withMessage('Department is required')
     ],
     validate,
-    async (req, res, next) => {
-        try {
-            const controller = await import('../Controllers/UserController.js');
-            return controller.registerDoctor(req, res, next);
-        } catch (err) {
-            next(err);
-        }
-    }
+    registerNurse
 );
 
 router.post('/login',
@@ -186,7 +231,7 @@ router.post('/appointments',
     authMiddleware,
     authorizeRoles('user'), 
     [
-        body('doctorId').optional().isMongoId().withMessage('Invalid Doctor ID'),
+        body('doctorId').isMongoId().withMessage('Invalid Doctor ID'),
         body('scheduledDate').isISO8601().toDate().withMessage('Invalid Date'),
         body('department').trim().notEmpty().escape(),
         body('reason').optional().trim().escape()
@@ -194,6 +239,22 @@ router.post('/appointments',
     validate,
     createAppointment
 );
+router.get('/appointments/doctors/available',
+    authMiddleware,
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin', 'nurse'),
+    getAvailableDoctorsByDepartment
+)
+// Backward-compatible aliases for doctor availability lookup.
+router.get('/appointments/available-doctors',
+    authMiddleware,
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin', 'nurse'),
+    getAvailableDoctorsByDepartment
+)
+router.get('/doctor/appointments/doctors/available',
+    authMiddleware,
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin', 'nurse'),
+    getAvailableDoctorsByDepartment
+)
 router.patch('/appointments/:appointmentId/status',
     authMiddleware,
     authorizeRoles('doctor', 'admin', 'system_admin'),
@@ -244,6 +305,11 @@ router.get('/users',
     authorizeRoles('admin', 'system_admin'),
     getAllUsers
 )
+router.get('/ledger',
+    authMiddleware,
+    authorizeRoles('admin', 'system_admin'),
+    getLedger
+)
 router.put('/admin/users/:userId',
     authMiddleware,
     authorizeRoles('admin', 'system_admin'),
@@ -255,11 +321,46 @@ router.put('/admin/users/:userId',
     validate,
     updateUserByAdmin
 )
+router.get('/admin/staff-applications',
+    authMiddleware,
+    authorizeRoles('admin', 'system_admin'),
+    getPendingStaffApplications
+)
+router.patch('/admin/staff-applications/:userId/approve',
+    authMiddleware,
+    authorizeRoles('admin', 'system_admin'),
+    approveStaffApplication
+)
+router.delete('/admin/staff-applications/:userId/reject',
+    authMiddleware,
+    authorizeRoles('admin', 'system_admin'),
+    rejectStaffApplication
+)
+router.get('/admin/staff-applications/:userId/license',
+    authMiddleware,
+    authorizeRoles('admin', 'system_admin'),
+    viewStaffApplicationLicense
+)
 
 router.get('/admin/audit-logs/download', 
     authMiddleware, 
     authorizeRoles('admin', 'system_admin'), 
     downloadAuditBackup
+);
+router.get('/admin/error-logs/download',
+    authMiddleware,
+    authorizeRoles('admin', 'system_admin'),
+    downloadErrorBackup
+);
+router.get('/admin/audit-logs',
+    authMiddleware,
+    authorizeRoles('admin', 'system_admin'),
+    getAuditLogs
+);
+router.get('/admin/error-logs',
+    authMiddleware,
+    authorizeRoles('admin', 'system_admin'),
+    getErrorLogs
 );
 router.get('/admin/backups/system',
     authMiddleware,
@@ -268,5 +369,106 @@ router.get('/admin/backups/system',
 );
 
 router.post('/symptoms', checkSymptoms);
+
+// Doctor dashboard routes appended for queue/timeline, triage overview, SOAP notes, and prescriptions.
+router.get('/doctor/dashboard/overview',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    async (req, res, next) => {
+        try {
+            const controllerModule = await import('../Controllers/AppointmentsController.js')
+            return controllerModule.getDoctorDashboardOverview(req, res, next)
+        } catch (err) {
+            next(err)
+        }
+    }
+)
+router.get('/doctor/queue/timeline',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    async (req, res, next) => {
+        try {
+            const controllerModule = await import('../Controllers/AppointmentsController.js')
+            return controllerModule.getDoctorQueueTimeline(req, res, next)
+        } catch (err) {
+            next(err)
+        }
+    }
+)
+router.patch('/doctor/appointments/:appointmentId/queue-status',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    [
+        body('queueStatus').isIn(['Waiting', 'Arrived', 'In-Consultation', 'Checked-Out', 'No-Show']).withMessage('Invalid queue status'),
+    ],
+    validate,
+    async (req, res, next) => {
+        try {
+            const controllerModule = await import('../Controllers/AppointmentsController.js')
+            return controllerModule.updateDoctorQueueStatus(req, res, next)
+        } catch (err) {
+            next(err)
+        }
+    }
+)
+router.put('/doctor/appointments/:appointmentId/soap-note',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    [
+        body('subjective').optional().isString(),
+        body('objective').optional().isString(),
+        body('assessment').optional().isString(),
+        body('plan').optional().isString(),
+    ],
+    validate,
+    async (req, res, next) => {
+        try {
+            const controllerModule = await import('../Controllers/AppointmentsController.js')
+            return controllerModule.saveAppointmentSoapNote(req, res, next)
+        } catch (err) {
+            next(err)
+        }
+    }
+)
+router.put('/doctor/appointments/:appointmentId/prescriptions',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    [
+        body('prescriptions').isArray({ min: 1 }).withMessage('prescriptions must be a non-empty array'),
+    ],
+    validate,
+    async (req, res, next) => {
+        try {
+            const controllerModule = await import('../Controllers/AppointmentsController.js')
+            return controllerModule.saveAppointmentPrescriptions(req, res, next)
+        } catch (err) {
+            next(err)
+        }
+    }
+)
+router.get('/doctor/medications/search',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    async (req, res, next) => {
+        try {
+            const controllerModule = await import('../Controllers/AppointmentsController.js')
+            return controllerModule.getMedicationSearch(req, res, next)
+        } catch (err) {
+            next(err)
+        }
+    }
+)
+router.get('/doctor/prescriptions/frequent',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    async (req, res, next) => {
+        try {
+            const controllerModule = await import('../Controllers/AppointmentsController.js')
+            return controllerModule.getFrequentPrescriptions(req, res, next)
+        } catch (err) {
+            next(err)
+        }
+    }
+)
 
 export default router;

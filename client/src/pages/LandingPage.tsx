@@ -3,11 +3,14 @@ import type { AppPage } from '../types/navigation'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import type { Reservation } from '../types'
 import AppLogoBadge from '../components/branding/AppLogoBadge'
+import { isDoctorRole } from '../utils/dashboardRoutes'
 
 type LandingPageProps = {
   onNavigate?: (page: AppPage) => void
   latestReservation?: Reservation
   isAuthenticated?: boolean
+  authRole?: string | null
+  authAccountType?: string | null
   onLogout?: () => void
 }
 
@@ -30,7 +33,7 @@ const featureCards = [
   },
   {
     title: 'Role-Safe Access',
-    detail: 'User, nurse, admin, and super admin routes are separated clearly.',
+    detail: 'Patient, doctor, and admin routes are separated clearly.',
   },
 ]
 
@@ -46,6 +49,8 @@ const LandingPage = ({
   onNavigate,
   latestReservation,
   isAuthenticated = false,
+  authRole = null,
+  authAccountType = null,
   onLogout,
 }: LandingPageProps) => {
   const [activeSection, setActiveSection] = useState<LandingSectionId>('overview')
@@ -54,6 +59,11 @@ const LandingPage = ({
   const [message, setMessage] = useState('')
   const [errors, setErrors] = useState<ContactFormErrors>({})
   const [submitted, setSubmitted] = useState(false)
+  const doctorDestination: AppPage = isDoctorRole(authRole, authAccountType)
+    ? 'doctor_dashboard'
+    : 'doctor_login'
+  const adminDestination: AppPage =
+    authRole === 'admin' || authRole === 'system_admin' ? 'admin' : 'admin_login'
 
   const overviewRef = useRef<HTMLElement | null>(null)
   const detailsRef = useRef<HTMLElement | null>(null)
@@ -175,13 +185,6 @@ const LandingPage = ({
           <div className="order-2 flex flex-wrap items-center gap-2 md:order-3 md:justify-self-end">
             {!isAuthenticated ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => onNavigate?.('admin_login')}
-                  className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
-                >
-                  Staff Login
-                </button>
                 <button
                   type="button"
                   onClick={() => onNavigate?.('login')}
@@ -362,9 +365,27 @@ const LandingPage = ({
 
       <footer
         id="site-footer"
-        className="border-t border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-4 text-center text-xs text-[color:var(--agent-muted)] sm:px-6"
+        className="border-t border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-4 text-xs text-[color:var(--agent-muted)] sm:px-6"
       >
-        AI Health Care
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3">
+          <span>AI Health Care</span>
+          <div className="flex flex-wrap items-center gap-4">
+            <button
+              type="button"
+              onClick={() => onNavigate?.(adminDestination)}
+              className="font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
+            >
+              Admin Dashboard
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate?.(doctorDestination)}
+              className="font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
+            >
+              Doctor Dashboard
+            </button>
+          </div>
+        </div>
       </footer>
     </div>
   )

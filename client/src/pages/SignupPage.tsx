@@ -1,14 +1,42 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import { api } from '../services/api'
 import type { AppPage } from '../types/navigation'
 import type { AuthSession, SignupDraft } from '../types'
 
+type SignupVariant = 'user' | 'doctor' | 'nurse'
+
 type SignupPageProps = {
+  variant?: SignupVariant
   onNavigate?: (page: AppPage) => void
   onSignupSuccess?: (session: AuthSession) => void
   onGoBack?: () => void
 }
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const ALLOWED_LICENSE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf']
+const MAX_LICENSE_FILES = 5
+const DOCTOR_DEPARTMENTS = [
+  'Internal Medicine',
+  'Pediatrics',
+  'Surgery',
+  'Obstetrics and Gynecology',
+  'Family and Community Medicine',
+  'Anesthesiology',
+  'Radiology',
+  'Pathology',
+  'Psychiatry',
+  'Ophthalmology',
+  'Otorhinolaryngology',
+  'Rehabilitation Medicine',
+  'Dermatology',
+  'Emergency Medicine',
+  'Cardiology',
+  'Pulmonology',
+  'Nephrology',
+  'Neurology',
+  'Gastroenterology',
+] as const
 
 const meetsPasswordPolicy = (value: string) => {
   if (value.length < 8) return false
@@ -31,8 +59,13 @@ const getPasswordStrength = (value: string): { label: 'Weak' | 'Medium' | 'Stron
   return { label: 'Weak', score: 1 }
 }
 
-const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) => {
+const SignupPage = ({ variant = 'user', onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) => {
+  const isStaffSignup = variant === 'doctor' || variant === 'nurse'
+  const roleLabel = variant === 'doctor' ? 'Doctor' : variant === 'nurse' ? 'Nurse' : 'Patient'
+
   const [fullName, setFullName] = useState('')
+  const [department, setDepartment] = useState('')
+  const [licenseFiles, setLicenseFiles] = useState<File[]>([])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -43,6 +76,25 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
   const [signupSession, setSignupSession] = useState<AuthSession | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const licensePreviews = useMemo(
+    () =>
+      licenseFiles.map((file) => ({
+        key: `${file.name}-${file.size}-${file.lastModified}`,
+        file,
+        isImage: file.type.startsWith('image/'),
+        url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+      })),
+    [licenseFiles]
+  )
+
+  useEffect(() => {
+    return () => {
+      for (const preview of licensePreviews) {
+        if (preview.url) URL.revokeObjectURL(preview.url)
+      }
+    }
+  }, [licensePreviews])
+
   const passwordStrength = getPasswordStrength(password)
   const passwordsMatch = password.length > 0 && confirmPassword.length > 0 && password === confirmPassword
 
@@ -52,7 +104,9 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
         <div className="space-y-4">
           <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Account created</h2>
           <p className="text-sm text-[color:var(--agent-muted)]">
-            Your account is ready. Sign in and verify OTP to continue.
+            {isStaffSignup
+              ? `${roleLabel} signup submitted. Your account is pending admin approval after license review.`
+              : 'Your account is ready. Sign in and verify OTP to continue.'}
           </p>
           <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4 text-sm text-[color:var(--agent-muted)]">
             <p>Username: {signupSession.user.username}</p>
@@ -66,6 +120,8 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                 setSignupSession(null)
                 setSubmitError(null)
                 setFullName('')
+                setDepartment('')
+                setLicenseFiles([])
                 setEmail('')
                 setPassword('')
                 setConfirmPassword('')
@@ -97,8 +153,36 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             Back
           </button>
 
-          <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Create your account</h2>
-          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">Start your AI-powered health journey today</p>
+          <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">
+            {isStaffSignup ? `${roleLabel} signup` : 'Create your account'}
+          </h2>
+          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+            {isStaffSignup
+              ? `Register as a ${roleLabel.toLowerCase()} and upload your professional license for approval.`
+              : 'Start your AI-powered health journey today'}
+          </p>
+
+          {!isStaffSignup && (
+            <div className="mt-4 rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3">
+              <p className="text-xs text-[color:var(--agent-muted)]">Need a staff account?</p>
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('doctor_signup')}
+                  className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
+                >
+                  Sign up as Doctor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('nurse_signup')}
+                  className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
+                >
+                  Sign up as Nurse
+                </button>
+              </div>
+            </div>
+          )}
 
           <form
             className="mt-6 space-y-4"
@@ -106,9 +190,9 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
               event.preventDefault()
               const cleanedFullName = fullName.trim()
               const cleanedEmail = email.trim().toLowerCase()
-              const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
               const cleanedPassword = password.trim()
               const cleanedConfirmPassword = confirmPassword.trim()
+              const cleanedDepartment = department.trim()
 
               if (!cleanedFullName || !cleanedEmail || !cleanedPassword || !cleanedConfirmPassword) {
                 setSubmitError('Please complete all required fields.')
@@ -128,13 +212,63 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                 setSubmitError('Password and confirm password do not match.')
                 return
               }
+              if (isStaffSignup) {
+                if (!cleanedDepartment) {
+                  setSubmitError('Department is required for staff signup.')
+                  return
+                }
+                if (variant === 'doctor' && !DOCTOR_DEPARTMENTS.includes(cleanedDepartment as (typeof DOCTOR_DEPARTMENTS)[number])) {
+                  setSubmitError('Please select a valid doctor department from the list.')
+                  return
+                }
+                if (licenseFiles.length === 0) {
+                  setSubmitError('Please upload at least one license file (JPG, PNG, or PDF).')
+                  return
+                }
+                if (licenseFiles.length > MAX_LICENSE_FILES) {
+                  setSubmitError(`You can upload up to ${MAX_LICENSE_FILES} license files.`)
+                  return
+                }
+                if (licenseFiles.some((file) => !ALLOWED_LICENSE_TYPES.includes(file.type))) {
+                  setSubmitError('Invalid license file type. Only JPG, PNG, and PDF are allowed.')
+                  return
+                }
+              }
               if (!acceptedTerms) {
                 setSubmitError('Please accept the Terms and Conditions to continue.')
                 return
               }
+
               setIsSubmitting(true)
               setSubmitError(null)
+
               try {
+                if (variant === 'doctor' && licenseFiles.length > 0) {
+                  await api.signupDoctor({
+                    email: cleanedEmail,
+                    password: cleanedPassword,
+                    fullName: cleanedFullName,
+                    department: cleanedDepartment,
+                    licenseFiles,
+                  })
+                  const session = { user: { username: cleanedEmail, role: 'user' } } as unknown as AuthSession
+                  setSignupSession(session)
+                  return
+                }
+
+                if (variant === 'nurse' && licenseFiles.length > 0) {
+                  await api.signupNurse({
+                    email: cleanedEmail,
+                    password: cleanedPassword,
+                    fullName: cleanedFullName,
+                    department: cleanedDepartment,
+                    licenseFiles,
+                  })
+                  const session = { user: { username: cleanedEmail, role: 'user' } } as unknown as AuthSession
+                  setSignupSession(session)
+                  return
+                }
+
                 const payload: SignupDraft = {
                   username: cleanedEmail,
                   password: cleanedPassword,
@@ -200,6 +334,106 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                 className="agent-input agent-input-icon"
               />
             </div>
+
+            {isStaffSignup && (
+              <>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 7h18" />
+                      <path d="M5 7l1 12h12l1-12" />
+                      <path d="M10 11v4" />
+                      <path d="M14 11v4" />
+                      <path d="M9 7V4h6v3" />
+                    </svg>
+                  </span>
+                  {variant === 'doctor' ? (
+                    <select
+                      value={department}
+                      onChange={(event) => setDepartment(event.target.value)}
+                      className="agent-input agent-input-icon appearance-none"
+                    >
+                      <option value="">Select doctor department</option>
+                      {DOCTOR_DEPARTMENTS.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      value={department}
+                      onChange={(event) => setDepartment(event.target.value)}
+                      placeholder="Department"
+                      className="agent-input agent-input-icon"
+                    />
+                  )}
+                </div>
+
+                <label className="block rounded-xl border border-[color:var(--card-border)] bg-white/[0.03] px-3 py-2">
+                  <p className="text-xs font-semibold text-[color:var(--agent-muted)]">
+                    Upload license files (JPG, PNG, PDF) - up to {MAX_LICENSE_FILES}
+                  </p>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf"
+                    multiple
+                    onChange={(event) => {
+                      const selected = Array.from(event.target.files ?? [])
+                      setLicenseFiles((previous) => [...previous, ...selected].slice(0, MAX_LICENSE_FILES))
+                      event.currentTarget.value = ''
+                      if (submitError) setSubmitError(null)
+                    }}
+                    className="mt-2 block w-full text-xs text-[color:var(--agent-muted)] file:mr-3 file:rounded-lg file:border-0 file:bg-[color:var(--agent-accent)] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[color:var(--agent-on-accent)]"
+                  />
+                  {licensePreviews.length > 0 ? (
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {licensePreviews.map((preview, index) => (
+                        <div
+                          key={preview.key}
+                          className="flex items-center gap-2 rounded-lg border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-2"
+                        >
+                          {preview.isImage && preview.url ? (
+                            <img
+                              src={preview.url}
+                              alt={preview.file.name}
+                              className="h-12 w-12 rounded-md border border-[color:var(--card-border)] object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-12 w-12 items-center justify-center rounded-md border border-[color:var(--card-border)] text-[10px] font-semibold text-[color:var(--agent-muted)]">
+                              PDF
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs text-[color:var(--agent-muted)]">{preview.file.name}</p>
+                            <p className="text-[11px] text-[color:var(--agent-muted-soft)]">
+                              {(preview.file.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLicenseFiles((previous) => previous.filter((_, fileIndex) => fileIndex !== index))
+                            }
+                            className="rounded-md border border-[color:var(--card-border)] px-2 py-1 text-[11px] font-semibold text-[color:var(--agent-muted)] hover:text-[color:var(--agent-ink)]"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </label>
+              </>
+            )}
 
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
@@ -339,7 +573,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             )}
 
             <button type="submit" disabled={isSubmitting} className="agent-button w-full disabled:cursor-not-allowed">
-              {isSubmitting ? 'Creating...' : 'Create Account'}
+              {isSubmitting ? 'Creating...' : isStaffSignup ? `Submit ${roleLabel} Registration` : 'Create Account'}
             </button>
 
             <label className="flex items-start gap-2 rounded-xl border border-[color:var(--card-border)] bg-white/[0.03] px-3 py-2 text-xs text-[color:var(--agent-muted)]">

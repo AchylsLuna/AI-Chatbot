@@ -77,6 +77,7 @@ const startServer = async () => {
 
         app.listen(config.PORT, '0.0.0.0', () => {
             console.log(`Server is running on http://localhost:${config.PORT}`);
+            console.log('Registered admin endpoints: GET /api/ledger, GET /api/admin/audit-logs, GET /api/admin/error-logs');
         });
     } catch (error) {
         console.error('Failed to connect to DB: ', error);

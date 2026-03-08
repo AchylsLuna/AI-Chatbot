@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import type { UserRole } from '../../types'
-import { api } from '../../services/api'
 
 type ChatMessage = {
   id: string
@@ -39,10 +38,10 @@ const quickSupportPrompts = [
 ]
 
 const roleLabel = (role?: UserRole | null) => {
-  if (role === 'system_admin') return 'Super Admin'
-  if (role === 'admin') return 'Admin / Doctor'
-  if (role === 'nurse') return 'Nurse'
-  if (role === 'user') return 'User'
+  if (role === 'system_admin') return 'Admin'
+  if (role === 'admin') return 'Admin'
+  if (role === 'nurse') return 'Doctor'
+  if (role === 'user') return 'Patient'
   return 'Guest'
 }
 
@@ -57,8 +56,8 @@ const buildIntroReply = (context: { isIdentified: boolean; userRole?: UserRole |
   return [
     'Welcome to AI Health Care.',
     identityLine,
-    'This system helps with finding the possible condition based on your symptoms, and recommends you the department to book your appointment.',
-    'Ask me: "I have a fever and cough, what should I do?" as an example.',
+    'This system helps with appointment booking, appointment tracking, and role-based dashboards.',
+    'Ask me: "How do I book an appointment?" or "How do I use the system?"',
   ].join(' ')
 }
 
@@ -173,10 +172,10 @@ const buildReply = (
     return `${guestHint}OTP is currently optional in this build. Standard sign-in uses email and password.`
   }
   if (normalized.includes('admin')) {
-    return `${guestHint}Admin Login supports Super Admin, Admin (Doctor), and Nurse accounts.`
+    return `${guestHint}Admin Login supports Admin and Doctor accounts.`
   }
   if (normalized.includes('doctor') || normalized.includes('dashboard')) {
-    return `${guestHint}Doctor's Dashboard is available for Nurse, Admin, and Super Admin after Admin Login.`
+    return `${guestHint}Doctor's Dashboard is available for Doctor and Admin accounts after sign-in.`
   }
   if (normalized.includes('login') || normalized.includes('register') || normalized.includes('sign up')) {
     return `${guestHint}Register first, then sign in to access protected pages.`
@@ -192,7 +191,6 @@ const GlobalAssistantChat = ({
   const [isOpen, setIsOpen] = useState(false)
   const [liftedFromFooter, setLiftedFromFooter] = useState(false)
   const [input, setInput] = useState('')
-  const [isSending, setIsSending] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const messagesViewportRef = useRef<HTMLDivElement | null>(null)
   const nextMessageIdRef = useRef(1)
@@ -278,49 +276,36 @@ const GlobalAssistantChat = ({
     return id
   }
 
-  const sendToAssistant = async (text: string) => {
-    if (isSending) return
+  const sendMessage = () => {
+    const text = input.trim()
+    if (!text) return
 
     const userMessage: ChatMessage = {
       id: createMessageId('u'),
       sender: 'user',
       text,
     }
-    setMessages((prev) => [...prev, userMessage])
-    setIsSending(true)
-    try {
-      const reply = await api.checkSymptoms(text)
-      const assistantMessage: ChatMessage = {
-        id: createMessageId('a'),
-        sender: 'assistant',
-        text: reply || buildReply(text, { isIdentified, userRole }),
-      }
-      setMessages((prev) => [...prev, assistantMessage])
-    } catch (error) {
-      const assistantMessage: ChatMessage = {
-        id: createMessageId('a'),
-        sender: 'assistant',
-        text:
-          error instanceof Error
-            ? error.message
-            : 'Medical bot service is currently unavailable.',
-      }
-      setMessages((prev) => [...prev, assistantMessage])
-    } finally {
-      setIsSending(false)
+    const assistantMessage: ChatMessage = {
+      id: createMessageId('a'),
+      sender: 'assistant',
+      text: buildReply(text, { isIdentified, userRole }),
     }
-  }
-
-  const sendMessage = async () => {
-    const text = input.trim()
-    if (!text || isSending) return
+    setMessages((prev) => [...prev, userMessage, assistantMessage])
     setInput('')
-    await sendToAssistant(text)
   }
 
-  const sendPresetPrompt = async (text: string) => {
-    if (isSending) return
-    await sendToAssistant(text)
+  const sendPresetPrompt = (text: string) => {
+    const userMessage: ChatMessage = {
+      id: createMessageId('u'),
+      sender: 'user',
+      text,
+    }
+    const assistantMessage: ChatMessage = {
+      id: createMessageId('a'),
+      sender: 'assistant',
+      text: buildReply(text, { isIdentified, userRole }),
+    }
+    setMessages((prev) => [...prev, userMessage, assistantMessage])
   }
 
   return (
@@ -379,6 +364,18 @@ const GlobalAssistantChat = ({
         </div>
 
         <div className="border-t border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] px-3.5 py-3.5">
+          <div className="mb-3 flex flex-wrap gap-2">
+            {quickSupportPrompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => sendPresetPrompt(prompt)}
+                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)]"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
 
           <div className="flex items-end gap-2">
             <input
@@ -392,16 +389,14 @@ const GlobalAssistantChat = ({
                 }
               }}
               placeholder="Type your message..."
-              disabled={isSending}
               className="min-w-0 flex-1 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3.5 py-2.5 text-sm text-[color:var(--agent-ink)] placeholder:text-[color:var(--agent-muted-soft)] outline-none transition focus:border-[color:var(--agent-accent)] focus:ring-2 focus:ring-[color:var(--agent-accent-soft)]"
             />
             <button
               type="button"
               onClick={sendMessage}
-              disabled={isSending}
               className="shrink-0 rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
             >
-              {isSending ? 'Sending...' : 'Send'}
+              Send
             </button>
           </div>
         </div>

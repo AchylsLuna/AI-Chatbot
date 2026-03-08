@@ -5,7 +5,10 @@ export type AuthSession = {
   token: string
   user: {
     username: string
+    firstName?: string
+    lastName?: string
     role: UserRole
+    accountType?: string | null
     authMethod?: string
     mfa?: boolean
     sessionId?: string | null

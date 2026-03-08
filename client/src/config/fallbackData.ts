@@ -39,3 +39,11 @@ export const fallbackLedger: LedgerEntry[] = [
     chainId: '31337',
   },
 ]
+
+export const doctorNurseAssignments: Record<string, string> = {
+  'Dr. Mara Santos': 'Nurse Elena Cruz',
+  'Dr. Ian Clarke': 'Nurse Paolo Reyes',
+  'Dr. Liza Moreno': 'Nurse Mae Villanueva',
+  'Dr. Rafiq Noor': 'Nurse Andre Ramos',
+  'Dr. Mei Tan': 'Nurse Carla Mendoza',
+}

@@ -6,6 +6,18 @@ const parseDate = (value: string) => {
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
+const resolveReservationAction = (status: Reservation['status']) => {
+  if (status === 'Failed') return 'RESERVATION_FAILED'
+  if (status === 'Booked') return 'RESERVATION_BOOKED'
+  return 'RESERVATION_RECORDED'
+}
+
+const getBrowserUserAgent = () => {
+  if (typeof window === 'undefined') return undefined
+  if (typeof window.navigator?.userAgent !== 'string') return undefined
+  return window.navigator.userAgent
+}
+
 const fallbackLogs: DashboardLogItem[] = [
   {
     id: 'SYS-LOG-001',
@@ -13,6 +25,12 @@ const fallbackLogs: DashboardLogItem[] = [
     source: 'System',
     title: 'Daily dashboard snapshot generated',
     detail: 'Automated integrity check completed for workspace event timeline.',
+    userId: 'system-service',
+    action: 'SYSTEM_AUDIT',
+    details: 'Automated integrity check completed for workspace event timeline.',
+    ipAddress: '127.0.0.1',
+    userAgent: 'System Service',
+    timestamp: '2026-02-17T15:00:00.000Z',
     createdAt: '2026-02-17T15:00:00.000Z',
     severity: 'Info',
   },
@@ -22,6 +40,12 @@ const fallbackLogs: DashboardLogItem[] = [
     source: 'System',
     title: 'Session policy verification',
     detail: 'Session policy checks completed with no elevated-risk findings.',
+    userId: 'system-security',
+    action: 'SYSTEM_AUDIT',
+    details: 'Session policy checks completed with no elevated-risk findings.',
+    ipAddress: '127.0.0.1',
+    userAgent: 'System Service',
+    timestamp: '2026-02-16T09:40:00.000Z',
     createdAt: '2026-02-16T09:40:00.000Z',
     severity: 'Info',
   },
@@ -32,6 +56,7 @@ export const buildDashboardLogItems = (params: {
   authUser: AuthSession['user'] | null
   sessionStatus: string
 }): DashboardLogItem[] => {
+  const browserUserAgent = getBrowserUserAgent()
   const reservationLogs = [...params.reservations]
     .sort((a, b) => parseDate(b.createdAt) - parseDate(a.createdAt))
     .slice(0, 20)
@@ -43,24 +68,40 @@ export const buildDashboardLogItems = (params: {
             ? 'Warning'
             : 'Info'
 
+      const detail = `${reservation.department} appointment is ${reservation.status.toLowerCase()} at ${reservation.requestedTime}.`
+
       return {
         id: `RES-LOG-${reservation.id}-${reservation.createdAt}`,
         actor: 'Booking engine',
         source: 'Reservation',
         title: `${reservation.patientName} (${reservation.id})`,
-        detail: `${reservation.department} appointment is ${reservation.status.toLowerCase()} at ${reservation.requestedTime}.`,
+        detail,
+        userId: reservation.id,
+        action: resolveReservationAction(reservation.status),
+        details: detail,
+        ipAddress: '127.0.0.1',
+        userAgent: browserUserAgent,
+        timestamp: reservation.createdAt,
         createdAt: reservation.createdAt,
         severity,
       }
     })
 
+  const authLogCreatedAt = new Date().toISOString()
+  const authDetails = `Session status: ${params.sessionStatus}.`
   const authLog: DashboardLogItem = {
     id: 'AUTH-LOG-CURRENT-SESSION',
     actor: params.authUser?.username ?? 'Unknown user',
     source: 'Auth',
     title: 'Current privileged session',
-    detail: `Session status: ${params.sessionStatus}.`,
-    createdAt: new Date().toISOString(),
+    detail: authDetails,
+    userId: params.authUser?.username ?? 'unknown-user',
+    action: 'SESSION_AUDIT',
+    details: authDetails,
+    ipAddress: '127.0.0.1',
+    userAgent: browserUserAgent,
+    timestamp: authLogCreatedAt,
+    createdAt: authLogCreatedAt,
     severity: 'Info',
   }
 
