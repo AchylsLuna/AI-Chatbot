@@ -16,7 +16,7 @@ const app = express();
 const config = {
     PORT: process.env.PORT || 5000,
     MONGO_URI: process.env.MONGO_URI,
-    ORIGIN: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    ORIGIN: process.env.CLIENT_ORIGIN || process.env.ORIGIN || 'http://localhost:5173',
     DB_NAME: 'hospital_ai_blockchain',
 };
 

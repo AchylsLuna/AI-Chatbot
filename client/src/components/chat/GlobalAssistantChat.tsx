@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { UserRole } from '../../types'
+import { api } from '../../services/api'
 
 type ChatMessage = {
   id: string
@@ -191,6 +192,7 @@ const GlobalAssistantChat = ({
   const [isOpen, setIsOpen] = useState(false)
   const [liftedFromFooter, setLiftedFromFooter] = useState(false)
   const [input, setInput] = useState('')
+  const [isSending, setIsSending] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const messagesViewportRef = useRef<HTMLDivElement | null>(null)
   const nextMessageIdRef = useRef(1)
@@ -276,36 +278,52 @@ const GlobalAssistantChat = ({
     return id
   }
 
-  const sendMessage = () => {
-    const text = input.trim()
-    if (!text) return
-
+  const appendAssistantReply = async (text: string) => {
     const userMessage: ChatMessage = {
       id: createMessageId('u'),
       sender: 'user',
       text,
     }
-    const assistantMessage: ChatMessage = {
-      id: createMessageId('a'),
-      sender: 'assistant',
-      text: buildReply(text, { isIdentified, userRole }),
+    setMessages((prev) => [...prev, userMessage])
+
+    setIsSending(true)
+    try {
+      const response = await api.askAssistant(text, {
+        isIdentified,
+        userRole,
+      })
+
+      const assistantText = response.reply?.trim() || buildReply(text, { isIdentified, userRole })
+      const assistantMessage: ChatMessage = {
+        id: createMessageId('a'),
+        sender: 'assistant',
+        text: assistantText,
+      }
+
+      setMessages((prev) => [...prev, assistantMessage])
+    } catch {
+      const assistantMessage: ChatMessage = {
+        id: createMessageId('a'),
+        sender: 'assistant',
+        text: buildReply(text, { isIdentified, userRole }),
+      }
+      setMessages((prev) => [...prev, assistantMessage])
+    } finally {
+      setIsSending(false)
     }
-    setMessages((prev) => [...prev, userMessage, assistantMessage])
-    setInput('')
   }
 
-  const sendPresetPrompt = (text: string) => {
-    const userMessage: ChatMessage = {
-      id: createMessageId('u'),
-      sender: 'user',
-      text,
-    }
-    const assistantMessage: ChatMessage = {
-      id: createMessageId('a'),
-      sender: 'assistant',
-      text: buildReply(text, { isIdentified, userRole }),
-    }
-    setMessages((prev) => [...prev, userMessage, assistantMessage])
+  const sendMessage = async () => {
+    if (isSending) return
+    const text = input.trim()
+    if (!text) return
+    setInput('')
+    await appendAssistantReply(text)
+  }
+
+  const sendPresetPrompt = async (text: string) => {
+    if (isSending) return
+    await appendAssistantReply(text)
   }
 
   return (
@@ -369,7 +387,10 @@ const GlobalAssistantChat = ({
               <button
                 key={prompt}
                 type="button"
-                onClick={() => sendPresetPrompt(prompt)}
+                onClick={() => {
+                  void sendPresetPrompt(prompt)
+                }}
+                disabled={isSending}
                 className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)]"
               >
                 {prompt}
@@ -385,18 +406,22 @@ const GlobalAssistantChat = ({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault()
-                  sendMessage()
+                  void sendMessage()
                 }
               }}
               placeholder="Type your message..."
+              disabled={isSending}
               className="min-w-0 flex-1 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3.5 py-2.5 text-sm text-[color:var(--agent-ink)] placeholder:text-[color:var(--agent-muted-soft)] outline-none transition focus:border-[color:var(--agent-accent)] focus:ring-2 focus:ring-[color:var(--agent-accent-soft)]"
             />
             <button
               type="button"
-              onClick={sendMessage}
+              onClick={() => {
+                void sendMessage()
+              }}
+              disabled={isSending}
               className="shrink-0 rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
             >
-              Send
+              {isSending ? 'Sending...' : 'Send'}
             </button>
           </div>
         </div>

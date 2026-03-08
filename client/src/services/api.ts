@@ -407,6 +407,27 @@ export type DoctorPatientProfile = {
   }
 }
 
+export type AssistantChatResponse = {
+  reply: string
+  meta?: {
+    model?: string
+    usedFallback?: boolean
+    fallbackReason?: string
+    triage?: {
+      code?: string
+      outcome?: {
+        title?: string
+        text?: string
+      } | null
+    }
+    matches?: Array<{
+      disease: string
+      score: number
+      matchedSymptoms: string[]
+    }>
+  }
+}
+
 export const api = {
   login: async (username: string, password: string): Promise<AuthSession | LoginOtpChallenge> => {
     const response = await request(`${API_BASE}/login`, {
@@ -1206,6 +1227,32 @@ export const api = {
     const payload = await handleResponse(await request(`${API_BASE}/access-requests`, withAuth()))
     const data = parseApiSchema(accessRequestsResponseSchema, payload, 'access requests')
     return data.requests
+  },
+  askAssistant: async (
+    message: string,
+    options?: { isIdentified?: boolean; userRole?: string | null }
+  ): Promise<AssistantChatResponse> => {
+    const response = await request(
+      `${API_BASE}/symptoms`,
+      withAuth({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          isIdentified: Boolean(options?.isIdentified),
+          userRole: options?.userRole ?? null,
+        }),
+      })
+    )
+
+    const payload = (await handleResponse(response as Response)) as Record<string, unknown>
+    return {
+      reply: String(payload.reply || ''),
+      meta:
+        payload.meta && typeof payload.meta === 'object'
+          ? (payload.meta as AssistantChatResponse['meta'])
+          : undefined,
+    }
   },
   logAiAlertAction: async (
     alertId: string,
