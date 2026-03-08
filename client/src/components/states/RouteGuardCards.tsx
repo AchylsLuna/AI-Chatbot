@@ -1,3 +1,5 @@
+import { stateCardClass } from '../../styles/uiClassNames'
+
 type AuthLoadingCardProps = {
   label: string
 }
@@ -12,8 +14,10 @@ type AccessDeniedCardProps = {
 export const AuthLoadingCard = ({ label }: AuthLoadingCardProps) => (
   <div className="min-h-screen pb-20">
     <div className="mx-auto w-full max-w-6xl px-6 py-10">
-      <div className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-6 text-sm text-white/70 shadow-2xl shadow-black/40">
-        {label}
+      <div className={`${stateCardClass} p-7`}>
+        <p className="agent-eyebrow">Preparing workspace</p>
+        <h1 className="mt-4 text-2xl font-semibold text-[color:var(--agent-ink)]">Checking access</h1>
+        <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--agent-muted)]">{label}</p>
       </div>
     </div>
   </div>
@@ -27,22 +31,22 @@ export const AccessDeniedCard = ({
 }: AccessDeniedCardProps) => (
   <div className="min-h-screen pb-20">
     <div className="mx-auto w-full max-w-4xl px-6 py-14">
-      <div className="rounded-3xl border border-white/10 bg-[color:var(--agent-surface)] p-8 shadow-2xl shadow-black/40">
-        <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
+      <div className={`${stateCardClass} p-8`}>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--agent-danger)]">
           Access blocked
         </p>
-        <h1 className="mt-2 text-2xl font-display font-semibold text-white">{title}</h1>
+        <h1 className="mt-3 font-serif text-4xl font-semibold text-[color:var(--agent-ink)]">{title}</h1>
         <p className="mt-2 text-sm text-[color:var(--agent-muted)]">{detail}</p>
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             onClick={onSwitchAccount}
-            className="rounded-xl bg-[color:var(--agent-accent)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:-translate-y-0.5"
+            className="agent-button px-4 py-2.5 text-xs text-[color:var(--agent-on-accent)]"
           >
             Switch account
           </button>
           <button
             onClick={onBackToOverview}
-            className="rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
+            className="agent-button-ghost px-4 py-2.5 text-xs"
           >
             Back to overview
           </button>

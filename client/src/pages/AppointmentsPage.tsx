@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import DashboardTopBar from '../components/layout/DashboardTopBar'
 import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
 import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
 import WorkspaceSidebarShell from '../components/layout/WorkspaceSidebarShell'
+import WorkspaceTopShell from '../components/layout/WorkspaceTopShell'
 import {
+  workspaceAlertErrorClass,
+  workspaceAlertSuccessClass,
   workspaceFieldClass,
   workspaceGhostButtonClass,
   workspacePrimaryButtonClass,
@@ -104,9 +106,9 @@ const resolvePatientDisplayName = (user: AuthSession['user'] | null) => {
 }
 
 const statusBadgeClass = (status: Reservation['status']) => {
-  if (status === 'Recorded') return 'bg-emerald-100 text-emerald-700 border-emerald-300/70'
-  if (status === 'Failed') return 'bg-rose-100 text-rose-700 border-rose-300/70'
-  return 'bg-sky-100 text-sky-700 border-sky-300/70'
+  if (status === 'Recorded') return 'agent-status-badge agent-status-badge--success'
+  if (status === 'Failed') return 'agent-status-badge agent-status-badge--danger'
+  return 'agent-status-badge agent-status-badge--info'
 }
 
 const isUserSidebarSection = (key: string): key is UserSidebarSection =>
@@ -371,10 +373,8 @@ const AppointmentsPage = ({
           />
         </label>
 
-        {bookingError ? <p className="mt-3 text-sm font-semibold text-rose-600">{bookingError}</p> : null}
-        {bookingMessage ? (
-          <p className="mt-3 text-sm font-semibold text-emerald-600">{bookingMessage}</p>
-        ) : null}
+        {bookingError ? <p className={`mt-3 ${workspaceAlertErrorClass}`}>{bookingError}</p> : null}
+        {bookingMessage ? <p className={`mt-3 ${workspaceAlertSuccessClass}`}>{bookingMessage}</p> : null}
 
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="submit" className={workspacePrimaryButtonClass} disabled={isSubmittingBooking}>
@@ -409,11 +409,7 @@ const AppointmentsPage = ({
               </p>
               <p>{new Date(activeBookedAppointment.requestedTime).toLocaleString()}</p>
               <p>{activeBookedAppointment.summary}</p>
-              <span
-                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(activeBookedAppointment.status)}`}
-              >
-                {activeBookedAppointment.status}
-              </span>
+              <span className={statusBadgeClass(activeBookedAppointment.status)}>{activeBookedAppointment.status}</span>
             </div>
           ) : (
             <p className="reference-widget-subtle mt-2">
@@ -473,9 +469,7 @@ const AppointmentsPage = ({
                   {item.department} · {item.requestedTime}
                 </p>
               </div>
-              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(item.status)}`}>
-                {item.status}
-              </span>
+              <span className={statusBadgeClass(item.status)}>{item.status}</span>
             </div>
             <p className="mt-3 text-sm text-[color:var(--agent-muted)]">{item.summary}</p>
           </article>
@@ -664,10 +658,8 @@ const AppointmentsPage = ({
               className={workspaceFieldClass}
             />
           </div>
-          {passwordError ? <p className="mt-3 text-xs font-semibold text-rose-500">{passwordError}</p> : null}
-          {passwordMessage ? (
-            <p className="mt-3 text-xs font-semibold text-emerald-600">{passwordMessage}</p>
-          ) : null}
+          {passwordError ? <p className={`mt-3 ${workspaceAlertErrorClass}`}>{passwordError}</p> : null}
+          {passwordMessage ? <p className={`mt-3 ${workspaceAlertSuccessClass}`}>{passwordMessage}</p> : null}
           <button type="submit" className={`mt-4 ${workspacePrimaryButtonClass}`}>
             Update password
           </button>
@@ -677,18 +669,70 @@ const AppointmentsPage = ({
   )
 
   const profileName = authUser?.username ?? 'User'
-  const sectionTitleMap: Record<UserSidebarSection, string> = {
-    booking_appointments: 'Booking Appointments',
-    history: 'History',
-    notifications: 'Notifications',
-    settings: 'Account Settings',
+  const sectionMetaMap: Record<
+    UserSidebarSection,
+    {
+      title: string
+      description: string
+      searchPlaceholder: string
+      showSearch: boolean
+      metrics: Array<{ key: string; label: string; value: number | string; caption?: string }>
+    }
+  > = {
+    booking_appointments: {
+      title: 'Patient booking workspace',
+      description:
+        'Submit appointment requests, review the current active booking, and keep booking details complete enough for faster triage.',
+      searchPlaceholder: 'Search booking history by id or department',
+      showSearch: false,
+      metrics: [
+        { key: 'total', label: 'Total bookings', value: metrics.total, caption: 'All appointment requests on record' },
+        { key: 'booked', label: 'Active booked', value: metrics.booked, caption: 'Current appointment requests awaiting completion' },
+        { key: 'status', label: 'Session status', value: sessionStatus, caption: 'Workspace sync and session state' },
+        { key: 'privacy', label: 'Data masking', value: dataMaskingEnabled ? 'Enabled' : 'Disabled', caption: 'Identifier masking in the current session' },
+      ],
+    },
+    history: {
+      title: 'Appointment history',
+      description:
+        'Review booking status history, search by patient or department, and keep track of completed or failed requests.',
+      searchPlaceholder: 'Search booking history',
+      showSearch: true,
+      metrics: [
+        { key: 'history-total', label: 'Visible records', value: visibleReservations.length, caption: 'Records shown after filtering' },
+        { key: 'history-recorded', label: 'Recorded', value: metrics.recorded, caption: 'Requests marked as completed' },
+        { key: 'history-failed', label: 'Needs follow-up', value: metrics.failed, caption: 'Requests that did not complete successfully' },
+        { key: 'history-query', label: 'Current search', value: searchQuery.trim() || 'All history', caption: 'Active search scope' },
+      ],
+    },
+    notifications: {
+      title: 'Notification preferences',
+      description:
+        'Control delivery channels for appointment reminders, browser updates, and security-related workspace events.',
+      searchPlaceholder: 'Search notification preferences',
+      showSearch: false,
+      metrics: [
+        { key: 'alerts-email', label: 'Email alerts', value: notificationPrefs.emailAlerts ? 'On' : 'Off' },
+        { key: 'alerts-browser', label: 'Browser alerts', value: notificationPrefs.browserAlerts ? 'On' : 'Off' },
+        { key: 'alerts-reminders', label: 'Reminders', value: notificationPrefs.appointmentReminders ? 'On' : 'Off' },
+        { key: 'alerts-security', label: 'Security alerts', value: notificationPrefs.securityAlerts ? 'On' : 'Off' },
+      ],
+    },
+    settings: {
+      title: 'Patient account settings',
+      description:
+        'Manage privacy controls, session options, theme mode, and password changes from the same patient workspace.',
+      searchPlaceholder: 'Search account settings',
+      showSearch: false,
+      metrics: [
+        { key: 'settings-role', label: 'Workspace', value: `${getWorkspaceRoleLabel(authUser?.role)} workspace` },
+        { key: 'settings-theme', label: 'Theme', value: theme === 'dark' ? 'Dark' : 'Light' },
+        { key: 'settings-session', label: 'Session', value: sessionStatus },
+        { key: 'settings-privacy', label: 'Masking', value: dataMaskingEnabled ? 'On' : 'Off' },
+      ],
+    },
   }
-  const sectionSearchPlaceholderMap: Record<UserSidebarSection, string> = {
-    booking_appointments: 'Search booking history by id or department',
-    history: 'Search booking history',
-    notifications: 'Search notification preferences',
-    settings: 'Search account settings',
-  }
+  const activeMeta = sectionMetaMap[activeSection]
 
   return (
     <WorkspaceCanvas>
@@ -731,25 +775,48 @@ const AppointmentsPage = ({
           }
           content={
             <section className="reference-main reference-theme">
-              {activeSection !== 'settings' ? (
-                <DashboardTopBar
-                  title={sectionTitleMap[activeSection]}
-                  searchValue={searchQuery}
-                  showSearch={activeSection !== 'booking_appointments'}
-                  searchPlaceholder={sectionSearchPlaceholderMap[activeSection]}
-                  onSearchChange={setSearchQuery}
-                  profileName={profileName}
-                  profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
-                  messageCount={Math.min(metrics.total, 99)}
-                  notificationCount={Math.min(metrics.failed + 1, 99)}
-                  showMessages={false}
-                  showNotifications
-                  showProfile
-                  showAccountMenu
-                  onSignOut={() => setShowLogoutConfirm(true)}
-                  borderlessActions
-                />
-              ) : null}
+              <WorkspaceTopShell
+                eyebrow="Patient session"
+                title={activeMeta.title}
+                description={activeMeta.description}
+                searchValue={searchQuery}
+                searchPlaceholder={activeMeta.searchPlaceholder}
+                onSearchChange={setSearchQuery}
+                showSearch={activeMeta.showSearch}
+                profileName={profileName}
+                profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
+                showNotifications
+                notificationCount={Math.min(metrics.failed + 1, 99)}
+                onSignOut={() => setShowLogoutConfirm(true)}
+                metrics={activeMeta.metrics}
+                quickActions={
+                  <>
+                    <button
+                      type="button"
+                      className={workspacePrimaryButtonClass}
+                      onClick={() => setSection('booking_appointments')}
+                    >
+                      New booking
+                    </button>
+                    <button
+                      type="button"
+                      className={workspaceGhostButtonClass}
+                      onClick={() => setSection('history')}
+                    >
+                      View history
+                    </button>
+                    {activeSection === 'history' && searchQuery ? (
+                      <button
+                        type="button"
+                        className={workspaceGhostButtonClass}
+                        onClick={() => setSearchQuery('')}
+                      >
+                        Clear search
+                      </button>
+                    ) : null}
+                  </>
+                }
+              />
 
               {activeSection === 'booking_appointments' ? (
                 renderBookingAppointments()

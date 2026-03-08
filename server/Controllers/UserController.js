@@ -525,10 +525,11 @@ export async function debugUser(req, res) {
 }
 
 export async function googleCallback(req, res) {
+    const frontendBaseUrl = appConfig.frontendUrl.replace(/\/$/, "");
     try {
         const user = req.user;
         if (!user) {
-            return res.redirect("/login-failed");
+            return res.redirect(`${frontendBaseUrl}/login`);
         }
 
         const token = createJwtToken(user);
@@ -550,14 +551,19 @@ export async function googleCallback(req, res) {
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
-        const frontendUrl = appConfig.frontendUrl;
         const normalizedRole = normalizeRole(user.role);
         const redirectPath =
-            normalizedRole === "user" ? "/appointments" : normalizedRole === "nurse" ? "/doctor-dashboard" : "/admin";
+            normalizedRole === "user"
+                ? "/appointments"
+                : normalizedRole === "nurse"
+                  ? "/doctor/dashboard"
+                  : normalizedRole === "admin" || normalizedRole === "system_admin"
+                    ? "/admin"
+                    : "/login";
 
-        return res.redirect(`${frontendUrl.replace(/\/$/, "")}${redirectPath}`);
+        return res.redirect(`${frontendBaseUrl}${redirectPath}`);
     } catch (error) {
         console.error("Google auth failed", error);
-        return res.redirect("/login-failed");
+        return res.redirect(`${frontendBaseUrl}/login`);
     }
 }

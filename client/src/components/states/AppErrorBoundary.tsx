@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { stateCardClass } from '../../styles/uiClassNames'
 
 type AppErrorBoundaryProps = {
   children: ReactNode
@@ -45,23 +46,23 @@ class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorBoundary
 
     return (
       <section className="mx-auto w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
-        <div className="rounded-3xl border border-rose-400/35 bg-[rgba(72,16,24,0.62)] p-6 shadow-[0_16px_36px_rgba(0,0,0,0.35)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-200/85">
+        <div className={`${stateCardClass} p-6`}>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--agent-danger)]">
             Protected UI Recovery
           </p>
-          <h2 className="mt-2 text-2xl font-semibold text-rose-100">
+          <h2 className="mt-3 text-2xl font-semibold text-[color:var(--agent-ink)]">
             {this.props.section} failed safely
           </h2>
-          <p className="mt-2 text-sm text-rose-100/85">
+          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
             A rendering error was contained to prevent the whole workspace from crashing.
           </p>
           {this.state.message ? (
-            <p className="mt-2 text-xs font-semibold text-rose-200">{this.state.message}</p>
+            <p className="agent-alert agent-alert--error mt-3">{this.state.message}</p>
           ) : null}
           <button
             type="button"
             onClick={this.handleReset}
-            className="mt-4 rounded-xl border border-rose-300/45 bg-rose-300/20 px-4 py-2 text-sm font-semibold text-rose-50 transition hover:bg-rose-300/30"
+            className="agent-button mt-4 px-4 py-2.5 text-sm text-[color:var(--agent-on-accent)]"
           >
             Retry section
           </button>

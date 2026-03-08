@@ -2,6 +2,7 @@ import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
 import type { LoginOtpChallenge } from '../types'
+import { backChipButtonClass } from '../styles/uiClassNames'
 
 type OtpPageProps = {
   challenge: LoginOtpChallenge | null
@@ -53,7 +54,7 @@ const OtpPage = ({
         <button
           type="button"
           onClick={onCancelOtp}
-          className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
+          className={`${backChipButtonClass} mb-4`}
         >
           <svg
             viewBox="0 0 24 24"
@@ -69,11 +70,9 @@ const OtpPage = ({
           Back to login
         </button>
 
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--agent-accent)]">
-          OTP Verification
-        </p>
-        <h2 className="mt-3 text-3xl font-semibold text-[color:var(--agent-ink)]">Enter one-time code</h2>
-        <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+        <p className="agent-eyebrow">OTP verification</p>
+        <h2 className="mt-4 agent-section-title">Enter one-time code</h2>
+        <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
           {challenge
             ? `We generated a code for ${challenge.username}.`
             : 'Start from login to request a one-time code.'}
@@ -85,7 +84,7 @@ const OtpPage = ({
         )}
 
         {challenge?.otpPreview && (
-          <div className="mt-4 rounded-2xl border border-emerald-300/30 bg-emerald-300/10 px-4 py-3 text-xs text-emerald-200">
+          <div className="agent-alert agent-alert--success mt-4 text-xs">
             Demo OTP: <span className="font-semibold">{challenge.otpPreview}</span>
           </div>
         )}
@@ -118,7 +117,7 @@ const OtpPage = ({
             <button
               type="submit"
               disabled={isAuthLoading || code.length !== 6}
-              className="agent-button w-full disabled:cursor-not-allowed"
+              className="agent-button w-full text-[color:var(--agent-on-accent)] disabled:cursor-not-allowed"
             >
               {isAuthLoading ? 'Verifying...' : 'Verify and continue'}
             </button>
@@ -134,19 +133,11 @@ const OtpPage = ({
               Cancel
             </button>
 
-            {resendSuccess && (
-              <p className="rounded-xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-xs font-semibold text-emerald-300">
-                OTP resent successfully. Check your email.
-              </p>
-            )}
+            {resendSuccess && <p className="agent-alert agent-alert--success">OTP resent successfully. Check your email.</p>}
           </form>
         )}
 
-        {authError && (
-          <p className="mt-4 rounded-xl border border-rose-300/30 bg-rose-300/10 px-3 py-2 text-xs font-semibold text-rose-300">
-            {authError}
-          </p>
-        )}
+        {authError && <p className="agent-alert agent-alert--error mt-4">{authError}</p>}
       </div>
     </AuthSplitLayout>
   )

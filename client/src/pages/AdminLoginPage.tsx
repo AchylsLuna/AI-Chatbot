@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
+import { backChipButtonClass } from '../styles/uiClassNames'
 import type { AppPage } from '../types/navigation'
 import type { AuthProvider, AuthSession } from '../types'
 import { formatRoleLabel } from '../utils/roles'
@@ -33,20 +34,38 @@ const AdminLoginPage = ({
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
 
   const hasAdminLoginAccess = authUser
     ? authUser.role === 'nurse' || authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
   const hasAdminWorkspaceAccess = authUser
-    ? authUser.role === 'nurse' || authUser.role === 'admin' || authUser.role === 'system_admin'
+    ? authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
 
   return (
     <AuthSplitLayout layout="center" centerBorderless>
       <div className="mx-auto w-full max-w-md rounded-3xl bg-[color:var(--agent-surface)] p-6 sm:p-8">
+        <button
+          type="button"
+          onClick={() => onNavigate?.('landing')}
+          className={`${backChipButtonClass} mb-4`}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Back
+        </button>
         <div className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center text-[color:var(--agent-accent)]">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-accent)]">
             <svg
               viewBox="0 0 24 24"
               className="h-5 w-5"
@@ -60,29 +79,30 @@ const AdminLoginPage = ({
               <path d="M9 12l2 2 4-4" />
             </svg>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--agent-accent)]">
-            Restricted Access
-          </p>
-          <h2 className="mt-3 text-3xl font-semibold text-[color:var(--agent-ink)]">Admin Login</h2>
-          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+          <p className="agent-eyebrow mt-5 justify-center">Restricted access</p>
+          <h2 className="mt-4 agent-section-title">Admin Login</h2>
+          <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
             Use an Admin or Doctor account to continue.
           </p>
         </div>
 
         {authUser ? (
           <div className="mt-6 space-y-4 text-center">
-            <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4 text-sm text-[color:var(--agent-muted)]">
+            <div className="agent-alert agent-alert--info">
               Signed in as <span className="font-semibold text-[color:var(--agent-ink)]">{authUser.username}</span> (
               {formatRoleLabel(authUser.role)}).
             </div>
 
             {hasAdminLoginAccess ? (
               <div className="space-y-3">
-                <p className="text-sm text-emerald-300">
+                <p className="agent-alert agent-alert--success">
                   Access verified. Continue to the Doctor Dashboard.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button w-full">
+                  <button
+                    onClick={() => onNavigate?.('doctor_dashboard')}
+                    className="agent-button w-full text-[color:var(--agent-on-accent)]"
+                  >
                     Open Doctor Dashboard
                   </button>
                   {hasAdminWorkspaceAccess && (
@@ -100,7 +120,7 @@ const AdminLoginPage = ({
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-rose-300">
+                <p className="agent-alert agent-alert--error">
                   This account does not have admin portal access. Sign out and use an Admin or
                   Doctor account.
                 </p>
@@ -119,13 +139,14 @@ const AdminLoginPage = ({
           <form
             className="mt-6 space-y-4 text-left"
             onSubmit={(event) => {
-              event.preventDefault()
-              const email = username.trim().toLowerCase()
-              if (!COM_EMAIL_PATTERN.test(email)) {
-                setFormError('Use a valid .com email address before signing in.')
+            event.preventDefault()
+            const email = username.trim().toLowerCase()
+            if (!COM_EMAIL_PATTERN.test(email)) {
+                setEmailError('Use a valid .com email address before signing in.')
                 return
               }
-              onLogin(email, password, 'doctor_dashboard')
+              setEmailError(null)
+              onLogin(email, password, 'admin')
             }}
           >
             <div className="space-y-2">
@@ -158,12 +179,14 @@ const AdminLoginPage = ({
                   value={username}
                   onChange={(event) => {
                     setUsername(event.target.value)
-                    if (formError) setFormError(null)
+                    if (emailError) setEmailError(null)
                   }}
                   placeholder="Admin email address"
                   className="agent-input agent-input-icon"
+                  aria-invalid={emailError ? 'true' : 'false'}
                 />
               </div>
+              {emailError ? <p className="agent-field-error" role="alert">{emailError}</p> : null}
             </div>
 
             <div className="space-y-2">
@@ -195,7 +218,6 @@ const AdminLoginPage = ({
                   value={password}
                   onChange={(event) => {
                     setPassword(event.target.value)
-                    if (formError) setFormError(null)
                   }}
                   placeholder="Password"
                   className="agent-input agent-input-icon agent-input-icon-right"
@@ -239,16 +261,16 @@ const AdminLoginPage = ({
               </div>
             </div>
 
-            {(formError || authError) && (
-              <p className="rounded-xl border border-rose-300/30 bg-rose-300/10 px-3 py-2 text-xs font-semibold text-rose-300">
-                {formError ?? authError}
+            {authError ? (
+              <p className="agent-alert agent-alert--error" role="alert">
+                {authError}
               </p>
-            )}
+            ) : null}
 
             <button
               type="submit"
               disabled={isAuthLoading}
-              className="agent-button w-full disabled:cursor-not-allowed"
+              className="agent-button w-full text-[color:var(--agent-on-accent)] disabled:cursor-not-allowed"
             >
               {isAuthLoading ? 'Signing in...' : 'Sign in'}
             </button>

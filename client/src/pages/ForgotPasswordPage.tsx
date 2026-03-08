@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
+import { backChipButtonClass } from '../styles/uiClassNames'
 
 type ForgotPasswordPageProps = {
   onNavigate?: (page: AppPage) => void
@@ -11,24 +12,24 @@ type ForgotPasswordPageProps = {
 const ForgotPasswordPage = ({ onNavigate, onGoBack }: ForgotPasswordPageProps) => {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
     const trimmedEmail = email.trim()
 
     if (!trimmedEmail) {
-      setError('Please enter your email address.')
+      setEmailError('Please enter your email address.')
       return
     }
 
     const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)
     if (!isValidEmail) {
-      setError('Please enter a valid email address.')
+      setEmailError('Please enter a valid email address.')
       return
     }
 
-    setError(null)
+    setEmailError(null)
     setSubmitted(true)
   }
 
@@ -37,7 +38,7 @@ const ForgotPasswordPage = ({ onNavigate, onGoBack }: ForgotPasswordPageProps) =
       <button
         type="button"
         onClick={() => (onGoBack ? onGoBack() : onNavigate?.('login'))}
-        className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
+        className={`${backChipButtonClass} mb-4`}
       >
         <svg
           viewBox="0 0 24 24"
@@ -55,26 +56,27 @@ const ForgotPasswordPage = ({ onNavigate, onGoBack }: ForgotPasswordPageProps) =
 
       {submitted ? (
         <div>
-          <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Check your inbox</h2>
-          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+          <p className="agent-eyebrow">Reset requested</p>
+          <h2 className="mt-4 agent-section-title">Check your inbox</h2>
+          <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
             If an account exists for <span className="font-semibold text-[color:var(--agent-ink)]">{email}</span>,
             password reset instructions were sent.
           </p>
 
-          <div className="mt-5 rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4 text-sm text-[color:var(--agent-muted)]">
+          <div className="agent-alert agent-alert--info mt-5">
             Reset links expire for security. If you do not receive an email soon, try again.
           </div>
 
           <div className="mt-5 flex flex-wrap gap-3">
-            <button onClick={() => onNavigate?.('login')} className="agent-button">
+            <button onClick={() => onNavigate?.('login')} className="agent-button px-4 py-2.5 text-[color:var(--agent-on-accent)]">
               Back to login
             </button>
             <button
               onClick={() => {
                 setSubmitted(false)
-                setError(null)
+                setEmailError(null)
               }}
-              className="agent-button-ghost"
+              className="agent-button-ghost px-4 py-2.5"
             >
               Try another email
             </button>
@@ -82,8 +84,9 @@ const ForgotPasswordPage = ({ onNavigate, onGoBack }: ForgotPasswordPageProps) =
         </div>
       ) : (
         <div>
-          <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Forgot password</h2>
-          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+          <p className="agent-eyebrow">Recovery</p>
+          <h2 className="mt-4 agent-section-title">Forgot password</h2>
+          <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
             Enter your account email and we will send reset instructions.
           </p>
 
@@ -107,15 +110,18 @@ const ForgotPasswordPage = ({ onNavigate, onGoBack }: ForgotPasswordPageProps) =
               <input
                 type="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  if (emailError) setEmailError(null)
+                }}
                 placeholder="Email address"
                 className="agent-input agent-input-icon"
+                aria-invalid={emailError ? 'true' : 'false'}
               />
             </div>
+            {emailError ? <p className="agent-field-error" role="alert">{emailError}</p> : null}
 
-            {error && <p className="text-xs font-semibold text-rose-300">{error}</p>}
-
-            <button type="submit" className="agent-button w-full">
+            <button type="submit" className="agent-button w-full text-[color:var(--agent-on-accent)]">
               Send reset link
             </button>
 

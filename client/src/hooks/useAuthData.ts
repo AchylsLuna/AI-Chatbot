@@ -432,6 +432,19 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     return canonical
   }
 
+  const resolveAuthPageForTarget = (
+    targetPage?: AppPage | null
+  ): Extract<AppPage, 'login' | 'doctor_login' | 'admin_login'> => {
+    if (targetPage === 'admin') return 'admin_login'
+    if (targetPage === 'doctor_dashboard') return 'doctor_login'
+    return 'login'
+  }
+
+  const resolveOtpFallbackAuthPage = () => {
+    const targetPage = pendingOtpChallenge?.targetPage ?? postLoginPage ?? null
+    return resolveAuthPageForTarget(targetPage)
+  }
+
   const finalizeAuthenticatedSession = (
     session: AuthSession,
     preferredTargetPage?: AppPage | null,
@@ -534,7 +547,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const handleVerifyOtp = async (code: string) => {
     if (!pendingOtpChallenge) {
       setAuthError('No active OTP challenge. Start login again.')
-      navigateToPage('login')
+      navigateToPage(resolveOtpFallbackAuthPage())
       return
     }
 
@@ -557,14 +570,15 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   }
 
   const handleCancelOtp = () => {
+    const fallbackAuthPage = resolveOtpFallbackAuthPage()
     setPendingOtpChallenge(null)
-    navigateToPage('login')
+    navigateToPage(fallbackAuthPage)
   }
 
   const handleResendOtp = async () => {
     if (!pendingOtpChallenge) {
       setAuthError('No active OTP challenge. Start login again.')
-      navigateToPage('login')
+      navigateToPage(resolveOtpFallbackAuthPage())
       return
     }
 

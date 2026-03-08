@@ -24,7 +24,7 @@ import {
 } from '../schemas/apiSchemas'
 import { normalizeRoleForSession } from '../utils/dashboardRoutes'
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api'
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5001/api'
 let authToken: string | null = null
 const NETWORK_ERROR_MESSAGE =
   'Cannot reach API server. Start the backend and verify your API URL.'

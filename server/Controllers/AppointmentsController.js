@@ -96,6 +96,15 @@ const mapLedgerEntry = (entry) => ({
     chainId: entry.chainId ? String(entry.chainId) : undefined,
 });
 
+const toIdString = (value) => {
+    if (!value) return "";
+    if (typeof value === "object") {
+        if (value._id) return String(value._id);
+        if (value.id) return String(value.id);
+    }
+    return String(value);
+};
+
 const createLedgerEntry = async ({ appointment, action, patientName, actorUserId }) => {
     const timestamp = new Date();
     const hash = crypto
@@ -132,12 +141,13 @@ const canEditAppointment = ({ role, userId, appointment }) => {
     if (role === "admin" || role === "system_admin") return true;
 
     if (role === "nurse") {
-        if (!appointment.doctor) return true;
-        return String(appointment.doctor) === String(userId);
+        const doctorId = toIdString(appointment.doctor);
+        if (!doctorId) return true;
+        return doctorId === String(userId);
     }
 
     if (role === "user") {
-        return String(appointment.patient) === String(userId);
+        return toIdString(appointment.patient) === String(userId);
     }
 
     return false;

@@ -63,7 +63,7 @@ const dbName = String(process.env.DB_NAME || 'hospital_ai_blockchain').trim() ||
 export const appConfig = Object.freeze({
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction,
-  port: toPort(process.env.PORT, 5000),
+  port: toPort(process.env.PORT, 5001),
   mongoUri,
   dbName,
   useInMemoryMongo: isTruthy(process.env.USE_IN_MEMORY_MONGO || ''),

@@ -8,6 +8,7 @@
     "start:server": "npm run start --prefix server",
     "backend:migrate": "npm run migrate --prefix server",
     "backend:seed": "npm run seed:core --prefix server",
+    "backend:smoke:routes": "node server/scripts/smokeRoutes.js",
     "backend:seed:test": "NODE_ENV=development CORE_ADMIN_EMAIL=test.admin@aihealthcare.com CORE_ADMIN_PASSWORD=AdminTest2026 CORE_ADMIN_FIRST_NAME=Test CORE_ADMIN_LAST_NAME=Admin CORE_NURSE_EMAIL=test.doctor@aihealthcare.com CORE_NURSE_PASSWORD=DoctorTest2026 CORE_NURSE_FIRST_NAME=Test CORE_NURSE_LAST_NAME=Doctor CORE_USER_EMAIL=test.patient@aihealthcare.com CORE_USER_PASSWORD=PatientTest2026 CORE_USER_FIRST_NAME=Test CORE_USER_LAST_NAME=Patient npm run seed:core --prefix server",
     "db:up": "docker compose up -d mongo",
     "db:down": "docker compose down",

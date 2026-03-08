@@ -38,6 +38,8 @@ import {
 } from '../Controllers/adminController.js';
 
 const router = Router();
+const frontendBaseUrl = appConfig.frontendUrl.replace(/\/$/, '');
+const frontendLoginUrl = `${frontendBaseUrl}/login`;
 
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -58,7 +60,7 @@ if (isGoogleAuthEnabled) {
     // Google Callback
     router.get(
         '/auth/google/callback',
-        passport.authenticate('google', { session: false, failureRedirect: '/login-failed' }),
+        passport.authenticate('google', { session: false, failureRedirect: frontendLoginUrl }),
         googleCallback
     );
 } else {

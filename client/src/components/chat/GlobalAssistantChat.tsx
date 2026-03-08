@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { UserRole } from '../../types'
+import { chipButtonClass } from '../../styles/uiClassNames'
 
 type ChatMessage = {
   id: string
@@ -30,12 +31,6 @@ const RobotLogo = ({ className = 'h-5 w-5' }: { className?: string }) => (
     <path d="M9 16h6" />
   </svg>
 )
-
-const quickSupportPrompts = [
-  'Introduce the system',
-  'How do I book an appointment?',
-  'How do I use the system?',
-]
 
 const roleLabel = (role?: UserRole | null) => {
   if (role === 'system_admin') return 'Admin'
@@ -294,20 +289,6 @@ const GlobalAssistantChat = ({
     setInput('')
   }
 
-  const sendPresetPrompt = (text: string) => {
-    const userMessage: ChatMessage = {
-      id: createMessageId('u'),
-      sender: 'user',
-      text,
-    }
-    const assistantMessage: ChatMessage = {
-      id: createMessageId('a'),
-      sender: 'assistant',
-      text: buildReply(text, { isIdentified, userRole }),
-    }
-    setMessages((prev) => [...prev, userMessage, assistantMessage])
-  }
-
   return (
     <div
       className={`fixed right-2 z-50 flex max-w-[calc(100vw-1rem)] flex-col items-end gap-2 transition-[bottom] duration-200 sm:right-4 sm:max-w-[calc(100vw-2rem)] ${
@@ -316,21 +297,21 @@ const GlobalAssistantChat = ({
     >
       <div
         aria-hidden={!isOpen}
-        className={`origin-bottom-right flex flex-col overflow-hidden rounded-[26px] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] shadow-[var(--card-shadow)] backdrop-blur-xl transition-all duration-200 ${
+        className={`origin-bottom-right flex flex-col overflow-hidden rounded-[30px] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] shadow-[var(--card-shadow)] transition-all duration-200 ${
           isOpen
             ? 'pointer-events-auto mb-1 h-[min(72vh,38.5rem)] w-[min(26rem,calc(100vw-1rem))] translate-y-0 opacity-100'
             : 'pointer-events-none h-0 w-0 translate-y-2 opacity-0'
         }`}
       >
-        <div className="flex items-center justify-between border-b border-[color:var(--card-border)] px-4 py-3.5">
+        <div className="flex items-center justify-between border-b border-[color:var(--card-border)] px-4 py-4">
           <div className="flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-accent)]">
+            <span className="grid h-10 w-10 place-items-center rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-accent)]">
               <RobotLogo className="h-4 w-4" />
             </span>
             <div>
               <p className="text-sm font-semibold text-[color:var(--agent-ink)]">AI Assistant</p>
-              <p className="mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--agent-muted)]">
-                <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.9)]" />
+              <p className="mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted)]">
+                <span className="h-2 w-2 rounded-full bg-[color:var(--agent-success)] shadow-[0_0_10px_rgba(34,136,93,0.45)]" />
                 Online
               </p>
             </div>
@@ -339,7 +320,7 @@ const GlobalAssistantChat = ({
           <button
             type="button"
             onClick={() => setIsOpen(false)}
-            className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-xs font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-overlay-strong)] hover:text-[color:var(--agent-ink)]"
+            className={chipButtonClass}
           >
             Close
           </button>
@@ -347,15 +328,15 @@ const GlobalAssistantChat = ({
 
         <div
           ref={messagesViewportRef}
-          className="flex-1 space-y-3 overflow-y-auto px-3.5 py-3.5 sm:px-4"
+          className="flex-1 space-y-3 overflow-y-auto px-3.5 py-4 sm:px-4"
         >
           {messages.map((message) => (
             <article
               key={message.id}
-              className={`max-w-[90%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed sm:max-w-[86%] ${
+              className={`max-w-[90%] whitespace-pre-line rounded-[1.2rem] px-3.5 py-3 text-sm leading-relaxed sm:max-w-[86%] ${
                 message.sender === 'user'
-                  ? 'ml-auto rounded-br-md bg-[linear-gradient(140deg,var(--agent-accent),var(--agent-accent-strong))] text-[color:var(--agent-on-accent)]'
-                  : 'mr-auto rounded-bl-md border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] text-[color:var(--agent-ink)]'
+                  ? 'ml-auto rounded-br-md bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
+                  : 'mr-auto rounded-bl-md border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] text-[color:var(--agent-ink)]'
               }`}
             >
               {message.text}
@@ -364,19 +345,6 @@ const GlobalAssistantChat = ({
         </div>
 
         <div className="border-t border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] px-3.5 py-3.5">
-          <div className="mb-3 flex flex-wrap gap-2">
-            {quickSupportPrompts.map((prompt) => (
-              <button
-                key={prompt}
-                type="button"
-                onClick={() => sendPresetPrompt(prompt)}
-                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)]"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-
           <div className="flex items-end gap-2">
             <input
               ref={inputRef}
@@ -389,12 +357,12 @@ const GlobalAssistantChat = ({
                 }
               }}
               placeholder="Type your message..."
-              className="min-w-0 flex-1 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3.5 py-2.5 text-sm text-[color:var(--agent-ink)] placeholder:text-[color:var(--agent-muted-soft)] outline-none transition focus:border-[color:var(--agent-accent)] focus:ring-2 focus:ring-[color:var(--agent-accent-soft)]"
+              className="agent-input min-w-0 flex-1"
             />
             <button
               type="button"
               onClick={sendMessage}
-              className="shrink-0 rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
+              className="agent-button shrink-0 px-4 py-2.5 text-sm text-[color:var(--agent-on-accent)]"
             >
               Send
             </button>
@@ -406,9 +374,9 @@ const GlobalAssistantChat = ({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-label={isOpen ? 'Close AI chat' : 'Open AI chat'}
-        className="group inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-[9px] text-[color:var(--agent-accent)] shadow-[var(--card-shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-[var(--card-shadow)] sm:h-[74px] sm:w-[74px] sm:p-[11px]"
+        className="group inline-flex h-14 w-14 items-center justify-center rounded-[1.25rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-[9px] text-[color:var(--agent-accent)] shadow-[var(--card-shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-[var(--card-shadow)] sm:h-[74px] sm:w-[74px] sm:p-[11px]"
       >
-        <span className="grid h-full w-full place-items-center rounded-full bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-accent)]">
+        <span className="grid h-full w-full place-items-center rounded-[1rem] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-accent)]">
           <RobotLogo className="h-6 w-6" />
         </span>
       </button>

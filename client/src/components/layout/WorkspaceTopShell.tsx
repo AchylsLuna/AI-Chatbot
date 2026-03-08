@@ -4,7 +4,6 @@ import {
   workspaceFieldClass,
   workspaceHeadingTextClass,
   workspaceMutedTextClass,
-  workspacePanelClass,
   workspacePanelSoftClass,
   workspaceSubtleTextClass,
 } from '../../styles/workspaceUi'
@@ -56,39 +55,39 @@ const WorkspaceTopShell = ({
   const showRightRail = showControlRow || Boolean(quickActions)
 
   return (
-    <section className={`${workspacePanelClass} p-5 sm:p-6`}>
+    <section className="overflow-hidden rounded-[1.6rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-5 shadow-[var(--card-shadow)] sm:p-6">
       <div
-        className={`grid gap-4 ${showRightRail ? 'lg:grid-cols-[1fr_minmax(260px,420px)] lg:items-start' : ''}`}
+        className={`grid gap-5 ${showRightRail ? 'lg:grid-cols-[1fr_minmax(280px,420px)] lg:items-start' : ''}`}
       >
         <div>
           {eyebrow ? (
-            <p className={`text-xs uppercase tracking-[0.16em] ${workspaceSubtleTextClass}`}>{eyebrow}</p>
+            <p className={`agent-eyebrow ${workspaceSubtleTextClass}`}>{eyebrow}</p>
           ) : null}
-          <h1 className={`mt-2 text-2xl font-semibold tracking-tight sm:text-3xl ${workspaceHeadingTextClass}`}>
+          <h1 className="mt-4 agent-section-title agent-section-title--hero">
             {title}
           </h1>
-          <p className={`mt-2 max-w-3xl text-sm sm:text-base ${workspaceMutedTextClass}`}>{description}</p>
+          <p className={`mt-3 max-w-3xl text-sm leading-7 sm:text-base ${workspaceMutedTextClass}`}>{description}</p>
 
-          {!showRightRail && quickActions ? <div className="mt-3 flex flex-wrap gap-2">{quickActions}</div> : null}
+          {!showRightRail && quickActions ? <div className="mt-5 flex flex-wrap gap-2">{quickActions}</div> : null}
         </div>
 
         {showRightRail ? (
-          <div className="space-y-3">
+          <div className="space-y-3 rounded-[1.2rem] border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] p-3">
             {showControlRow ? (
               <div className="flex items-center gap-2.5">
                 {showSearch ? (
                   <div className="min-w-0 flex-1">
                     <label className="sr-only" htmlFor="workspace-shell-search">
-                      Search workspace
-                    </label>
-                    <input
-                      id="workspace-shell-search"
-                      value={searchValue}
-                      onChange={(event) => onSearchChange(event.target.value)}
-                      className={workspaceFieldClass}
-                      placeholder={searchPlaceholder ?? 'Search records'}
-                    />
-                  </div>
+                        Search workspace
+                      </label>
+                      <input
+                        id="workspace-shell-search"
+                        value={searchValue}
+                        onChange={(event) => onSearchChange(event.target.value)}
+                        className={workspaceFieldClass}
+                        placeholder={searchPlaceholder ?? 'Search records'}
+                      />
+                    </div>
                 ) : null}
                 {canShowAccountMenu ? (
                   <WorkspaceAccountMenu
@@ -107,18 +106,20 @@ const WorkspaceTopShell = ({
         ) : null}
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => {
           const isLongTextValue = typeof metric.value === 'string' && metric.value.length > 20
           return (
-            <article key={metric.key} className={`${workspacePanelSoftClass} p-4`}>
+            <article key={metric.key} className={`${workspacePanelSoftClass} min-h-[7.5rem] p-4`}>
               <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>{metric.label}</p>
               <p
-                className={`mt-2 font-semibold ${workspaceHeadingTextClass} ${isLongTextValue ? 'break-all text-xl leading-tight' : 'text-2xl'}`}
+                className={`mt-3 text-[1.9rem] font-semibold leading-none tracking-[-0.04em] ${workspaceHeadingTextClass} ${isLongTextValue ? 'break-all text-xl leading-tight' : ''}`}
               >
                 {metric.value}
               </p>
-              {metric.caption ? <p className={`mt-1 text-xs ${workspaceMutedTextClass}`}>{metric.caption}</p> : null}
+              {metric.caption ? (
+                <p className={`mt-2 text-xs leading-6 ${workspaceMutedTextClass}`}>{metric.caption}</p>
+              ) : null}
             </article>
           )
         })}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import { api } from '../services/api'
+import { backChipButtonClass, modalBackdropClass, modalPanelClass } from '../styles/uiClassNames'
 import type { AppPage } from '../types/navigation'
 import type { AuthSession, SignupDraft } from '../types'
 
@@ -42,6 +43,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null)
   const [signupSession, setSignupSession] = useState<AuthSession | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const passwordStrength = getPasswordStrength(password)
   const passwordsMatch = password.length > 0 && confirmPassword.length > 0 && password === confirmPassword
@@ -50,15 +52,16 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
     <AuthSplitLayout>
       {signupSession ? (
         <div className="space-y-4">
-          <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Account created</h2>
-          <p className="text-sm text-[color:var(--agent-muted)]">
+          <p className="agent-eyebrow">Registration complete</p>
+          <h2 className="mt-4 agent-section-title">Account created</h2>
+          <p className="text-sm leading-7 text-[color:var(--agent-muted)]">
             Your account is ready. Sign in and verify OTP to continue.
           </p>
-          <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4 text-sm text-[color:var(--agent-muted)]">
+          <div className="agent-alert agent-alert--success">
             <p>Username: {signupSession.user.username}</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => onNavigate?.('login')} className="agent-button">
+            <button onClick={() => onNavigate?.('login')} className="agent-button px-4 py-2.5 text-[color:var(--agent-on-accent)]">
               Go to login
             </button>
             <button
@@ -70,7 +73,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                 setPassword('')
                 setConfirmPassword('')
               }}
-              className="agent-button-ghost"
+              className="agent-button-ghost px-4 py-2.5"
             >
               Create another account
             </button>
@@ -81,7 +84,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
           <button
             type="button"
             onClick={() => (onGoBack ? onGoBack() : onNavigate?.('login'))}
-            className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
+            className={`${backChipButtonClass} mb-4`}
           >
             <svg
               viewBox="0 0 24 24"
@@ -97,8 +100,11 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             Back
           </button>
 
-          <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Create your account</h2>
-          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">Start your AI-powered health journey today</p>
+          <p className="agent-eyebrow">Create account</p>
+          <h2 className="mt-4 agent-section-title">Create your account</h2>
+          <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
+            Register once to access patient booking workflows and secure clinical entry points.
+          </p>
 
           <form
             className="mt-6 space-y-4"
@@ -111,13 +117,16 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
               const cleanedConfirmPassword = confirmPassword.trim()
 
               if (!cleanedFullName || !cleanedEmail || !cleanedPassword || !cleanedConfirmPassword) {
+                setEmailError(null)
                 setSubmitError('Please complete all required fields.')
                 return
               }
               if (!EMAIL_PATTERN.test(cleanedEmail)) {
-                setSubmitError('Please use a valid email address.')
+                setEmailError('Please use a valid email address.')
+                setSubmitError(null)
                 return
               }
+              setEmailError(null)
               if (!meetsPasswordPolicy(cleanedPassword)) {
                 setSubmitError(
                   'Use a stronger password: at least 8 characters with uppercase, lowercase, and number.'
@@ -195,11 +204,16 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
               <input
                 type="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  if (emailError) setEmailError(null)
+                }}
                 placeholder="Email address"
                 className="agent-input agent-input-icon"
+                aria-invalid={emailError ? 'true' : 'false'}
               />
             </div>
+            {emailError ? <p className="agent-field-error" role="alert">{emailError}</p> : null}
 
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
@@ -273,10 +287,10 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                   <span
                     className={`font-semibold ${
                       passwordStrength.label === 'Strong'
-                        ? 'text-emerald-300'
+                        ? 'text-[color:var(--agent-success)]'
                         : passwordStrength.label === 'Medium'
-                          ? 'text-amber-300'
-                          : 'text-rose-300'
+                          ? 'text-[color:var(--agent-warning)]'
+                          : 'text-[color:var(--agent-danger)]'
                     }`}
                   >
                     {passwordStrength.label}
@@ -289,11 +303,11 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
                       className={`h-1.5 rounded-full ${
                         passwordStrength.score >= bar
                           ? passwordStrength.label === 'Strong'
-                            ? 'bg-emerald-400'
+                            ? 'bg-[color:var(--agent-success)]'
                             : passwordStrength.label === 'Medium'
-                              ? 'bg-amber-400'
-                              : 'bg-rose-400'
-                          : 'bg-white/10'
+                              ? 'bg-[color:var(--agent-warning)]'
+                              : 'bg-[color:var(--agent-danger)]'
+                          : 'bg-[color:var(--agent-overlay)]'
                       }`}
                     />
                   ))}
@@ -333,16 +347,24 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
             </div>
 
             {confirmPassword.length > 0 && (
-              <p className={`text-xs font-semibold ${passwordsMatch ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <p
+                className={`text-xs font-semibold ${
+                  passwordsMatch ? 'text-[color:var(--agent-success)]' : 'text-[color:var(--agent-danger)]'
+                }`}
+              >
                 {passwordsMatch ? 'Passwords match.' : 'Passwords do not match.'}
               </p>
             )}
 
-            <button type="submit" disabled={isSubmitting} className="agent-button w-full disabled:cursor-not-allowed">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="agent-button w-full text-[color:var(--agent-on-accent)] disabled:cursor-not-allowed"
+            >
               {isSubmitting ? 'Creating...' : 'Create Account'}
             </button>
 
-            <label className="flex items-start gap-2 rounded-xl border border-[color:var(--card-border)] bg-white/[0.03] px-3 py-2 text-xs text-[color:var(--agent-muted)]">
+            <label className="flex items-start gap-2 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-3 text-xs text-[color:var(--agent-muted)]">
               <input
                 type="checkbox"
                 checked={acceptedTerms}
@@ -381,7 +403,7 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
               </span>
             </label>
 
-            {submitError && <p className="text-xs font-semibold text-rose-300">{submitError}</p>}
+            {submitError && <p className="agent-alert agent-alert--error">{submitError}</p>}
 
             <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-[color:var(--agent-muted)]">
               <span>Already have an account?</span>
@@ -396,8 +418,8 @@ const SignupPage = ({ onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) 
           </form>
 
           {legalModal && (
-            <div className="fixed inset-0 z-[70] grid place-items-center bg-black/55 p-4">
-              <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-[color:var(--agent-surface)] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
+            <div className={`${modalBackdropClass} z-[70]`}>
+              <div className={`${modalPanelClass} max-w-lg`}>
                 <div className="flex items-center justify-between gap-4">
                   <h3 className="text-base font-semibold text-[color:var(--agent-ink)]">
                     {legalModal === 'terms' ? 'Terms and Conditions' : 'Privacy Policy'}

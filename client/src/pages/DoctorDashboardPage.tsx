@@ -5,6 +5,8 @@ import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
 import WorkspaceSidebarShell from '../components/layout/WorkspaceSidebarShell'
 import WorkspaceTopShell from '../components/layout/WorkspaceTopShell'
 import {
+  workspaceAlertErrorClass,
+  workspaceAlertSuccessClass,
   workspaceFieldClass,
   workspaceGhostButtonClass,
   workspaceHeadingTextClass,
@@ -127,17 +129,17 @@ const formatTime = (value: string) => {
 }
 
 const priorityChipClass = (priority: Reservation['priority']) => {
-  if (priority === 'High') return 'border-rose-300/70 bg-rose-100 text-rose-700'
-  if (priority === 'Routine') return 'border-sky-300/70 bg-sky-100 text-sky-700'
-  if (priority === 'Low') return 'border-slate-300/70 bg-slate-100 text-slate-700'
-  return 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]'
+  if (priority === 'High') return 'agent-status-badge agent-status-badge--danger'
+  if (priority === 'Routine') return 'agent-status-badge agent-status-badge--info'
+  if (priority === 'Low') return 'agent-status-badge agent-status-badge--neutral'
+  return 'agent-status-badge agent-status-badge--neutral'
 }
 
 const statusChipClass = (status: Reservation['status']) => {
-  if (status === 'Recorded') return 'border-emerald-300/70 bg-emerald-100 text-emerald-700'
-  if (status === 'Failed') return 'border-rose-300/70 bg-rose-100 text-rose-700'
-  if (status === 'Booked') return 'border-sky-300/70 bg-sky-100 text-sky-700'
-  return 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]'
+  if (status === 'Recorded') return 'agent-status-badge agent-status-badge--success'
+  if (status === 'Failed') return 'agent-status-badge agent-status-badge--danger'
+  if (status === 'Booked') return 'agent-status-badge agent-status-badge--info'
+  return 'agent-status-badge agent-status-badge--neutral'
 }
 
 const meetsPasswordPolicy = (value: string) => {
@@ -559,7 +561,7 @@ const DoctorDashboardPage = ({
               {/* APPOINTMENTS VIEW */}
               {activeSection === 'appointments' ? (
                 <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Appointment list</h2>
+                  <h2 className="agent-section-title agent-section-title--compact">Appointment list</h2>
                   <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
                     Complete queue of patient appointments with priority flags and triage data.
                   </p>
@@ -590,25 +592,21 @@ const DoctorDashboardPage = ({
                                 <div className="flex items-center gap-2">
                                   <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
                                   {apt.flagged && (
-                                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" title="Flagged" />
+                                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-[color:var(--agent-danger)]" title="Flagged" />
                                   )}
                                 </div>
                                 <p className={`text-xs ${workspaceMutedTextClass}`}>{displayId}</p>
                                 <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>{apt.symptoms}</p>
                               </div>
                               <div className="flex flex-col gap-2">
-                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(apt.priority)}`}>
-                                  {apt.priority}
-                                </span>
+                                <span className={priorityChipClass(apt.priority)}>{apt.priority}</span>
                               </div>
                             </div>
 
                             <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                               <span className={workspaceMutedTextClass}>{apt.department}</span>
                               <span className={workspaceMutedTextClass}>{formatTime(apt.requestedTime)}</span>
-                              <span className={`inline-flex rounded-full border px-2.5 py-1 font-semibold ${statusChipClass(apt.status)}`}>
-                                {apt.status}
-                              </span>
+                              <span className={statusChipClass(apt.status)}>{apt.status}</span>
                             </div>
                           </div>
                         )
@@ -621,7 +619,7 @@ const DoctorDashboardPage = ({
               {/* QUEUE MANAGEMENT VIEW */}
               {activeSection === 'queue' ? (
                 <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Patient queue</h2>
+                  <h2 className="agent-section-title agent-section-title--compact">Patient queue</h2>
                   <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
                     Active queue of pending patients awaiting doctor review and status updates.
                   </p>
@@ -666,9 +664,7 @@ const DoctorDashboardPage = ({
                                 <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.department}</td>
                                 <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{formatTime(item.requestedTime)}</td>
                                 <td className="px-3 py-3">
-                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(item.priority)}`}>
-                                    {item.priority}
-                                  </span>
+                                  <span className={priorityChipClass(item.priority)}>{item.priority}</span>
                                 </td>
                                 <td className="px-3 py-3">
                                   <button
@@ -696,7 +692,7 @@ const DoctorDashboardPage = ({
               {activeSection === 'analytics' ? (
                 <section className="space-y-4">
                   <div className={`${workspacePanelClass} p-5`}>
-                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Department breakdown</h2>
+                    <h2 className="agent-section-title agent-section-title--compact">Department breakdown</h2>
                     <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
                       Appointment distribution across departments.
                     </p>
@@ -715,7 +711,7 @@ const DoctorDashboardPage = ({
                           <div className="flex items-center gap-3">
                             <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
                               <div
-                                className="h-full bg-blue-500"
+                                className="h-full bg-[color:var(--agent-accent)]"
                                 style={{
                                   width: `${(count / appointmentItems.length) * 100}%`,
                                 }}
@@ -729,7 +725,7 @@ const DoctorDashboardPage = ({
                   </div>
 
                   <div className={`${workspacePanelClass} p-5`}>
-                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Status distribution</h2>
+                    <h2 className="agent-section-title agent-section-title--compact">Status distribution</h2>
                     <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
                       Current appointment status breakdown.
                     </p>
@@ -739,17 +735,17 @@ const DoctorDashboardPage = ({
                         {
                           label: 'Booked',
                           count: appointmentItems.filter((i) => i.status === 'Booked').length,
-                          color: 'bg-sky-500',
+                          color: 'bg-[color:var(--agent-info)]',
                         },
                         {
                           label: 'Recorded',
                           count: appointmentItems.filter((i) => i.status === 'Recorded').length,
-                          color: 'bg-emerald-500',
+                          color: 'bg-[color:var(--agent-success)]',
                         },
                         {
                           label: 'Failed',
                           count: appointmentItems.filter((i) => i.status === 'Failed').length,
-                          color: 'bg-rose-500',
+                          color: 'bg-[color:var(--agent-danger)]',
                         },
                       ].map(({ label, count, color }) => (
                         <div key={label} className="flex items-center justify-between">
@@ -775,7 +771,7 @@ const DoctorDashboardPage = ({
               {activeSection === 'settings' ? (
                 <section className="space-y-4">
                   <section className={`${workspacePanelClass} p-5`}>
-                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Profile details</h2>
+                    <h2 className="agent-section-title agent-section-title--compact">Profile details</h2>
                     <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
                       Update your display name for this workspace.
                     </p>
@@ -816,12 +812,8 @@ const DoctorDashboardPage = ({
                           placeholder="Enter your full name"
                           className={`mt-2 ${workspaceFieldClass}`}
                         />
-                        {profileError ? (
-                          <p className="mt-3 text-xs font-semibold text-rose-500">{profileError}</p>
-                        ) : null}
-                        {profileMessage ? (
-                          <p className="mt-3 text-xs font-semibold text-emerald-600">{profileMessage}</p>
-                        ) : null}
+                        {profileError ? <p className={`mt-3 ${workspaceAlertErrorClass}`}>{profileError}</p> : null}
+                        {profileMessage ? <p className={`mt-3 ${workspaceAlertSuccessClass}`}>{profileMessage}</p> : null}
                         <div className="mt-3 flex flex-wrap gap-2">
                           <button
                             type="submit"
@@ -848,7 +840,7 @@ const DoctorDashboardPage = ({
                   </section>
 
                   <section className={`${workspacePanelClass} p-5`}>
-                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Change password</h2>
+                    <h2 className="agent-section-title agent-section-title--compact">Change password</h2>
                     <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
                       Use a strong password to keep your workspace secure.
                     </p>
@@ -895,12 +887,8 @@ const DoctorDashboardPage = ({
                       />
                     </form>
 
-                    {passwordError ? (
-                      <p className="mt-3 text-xs font-semibold text-rose-500">{passwordError}</p>
-                    ) : null}
-                    {passwordMessage ? (
-                      <p className="mt-3 text-xs font-semibold text-emerald-600">{passwordMessage}</p>
-                    ) : null}
+                    {passwordError ? <p className={`mt-3 ${workspaceAlertErrorClass}`}>{passwordError}</p> : null}
+                    {passwordMessage ? <p className={`mt-3 ${workspaceAlertSuccessClass}`}>{passwordMessage}</p> : null}
 
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       <button
@@ -920,7 +908,7 @@ const DoctorDashboardPage = ({
                   </section>
 
                   <section className={`${workspacePanelClass} p-5`}>
-                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>
+                    <h2 className="agent-section-title agent-section-title--compact">
                       Workspace preferences
                     </h2>
                     <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
@@ -994,17 +982,13 @@ const DoctorDashboardPage = ({
               <div>
                 <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Status</p>
                 <p className="mt-1">
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChipClass(selectedAppointment.status)}`}>
-                    {selectedAppointment.status}
-                  </span>
+                  <span className={statusChipClass(selectedAppointment.status)}>{selectedAppointment.status}</span>
                 </p>
               </div>
               <div>
                 <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Priority</p>
                 <p className="mt-1">
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(selectedAppointment.priority)}`}>
-                    {selectedAppointment.priority}
-                  </span>
+                  <span className={priorityChipClass(selectedAppointment.priority)}>{selectedAppointment.priority}</span>
                 </p>
               </div>
               <div>

@@ -1,5 +1,6 @@
 import type { AppPage } from '../../types/navigation'
 import AppLogoBadge from '../branding/AppLogoBadge'
+import { chipButtonClass } from '../../styles/uiClassNames'
 
 type AppHeaderProps = {
   theme: 'light' | 'dark'
@@ -7,37 +8,34 @@ type AppHeaderProps = {
   onNavigate: (page: AppPage) => void
 }
 
-const navButtonClass =
-  'rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]'
-
 const AppHeader = ({ theme, onToggleTheme, onNavigate }: AppHeaderProps) => (
-  <header className="sticky top-0 z-40 border-b border-[color:var(--card-border)] bg-[color:var(--agent-bg)]/96 backdrop-blur">
-    <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+  <header className="sticky top-0 z-50 border-b border-[color:var(--card-border)] bg-[color:var(--agent-bg)]">
+    <div className="mx-auto flex w-full max-w-[84rem] flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
       <button
         onClick={() => onNavigate('landing')}
-        className="group flex items-center gap-2.5 text-left"
+        className="inline-flex items-center gap-3 text-left"
         aria-label="Go to landing page"
       >
         <AppLogoBadge className="h-9 w-9" />
         <div>
-          <p className="text-sm font-semibold text-[color:var(--agent-ink)]">AI Health Care</p>
+          <p className="text-sm font-extrabold text-[color:var(--agent-ink)]">AI Health Care</p>
           <p className="text-xs text-[color:var(--agent-muted)]">Appointments and care workflows</p>
         </div>
       </button>
 
-      <nav className="flex flex-wrap items-center gap-2">
-        <button onClick={onToggleTheme} className={navButtonClass}>
+      <nav className="flex flex-wrap items-center justify-end gap-2">
+        <button onClick={onToggleTheme} className={chipButtonClass}>
           {theme === 'dark' ? 'Light mode' : 'Dark mode'}
         </button>
-        <button onClick={() => onNavigate('appointments')} className={navButtonClass}>
+        <button onClick={() => onNavigate('appointments')} className={chipButtonClass}>
           Appointments
         </button>
-        <button onClick={() => onNavigate('login')} className={navButtonClass}>
+        <button onClick={() => onNavigate('login')} className={chipButtonClass}>
           Login
         </button>
         <button
           onClick={() => onNavigate('signup')}
-          className="rounded-full bg-[color:var(--agent-accent)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
+          className="agent-button px-4 py-2 text-xs text-[color:var(--agent-on-accent)]"
         >
           Sign up
         </button>

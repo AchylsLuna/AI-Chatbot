@@ -2,6 +2,7 @@ import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
 import type { AuthProvider, AuthSession } from '../types'
+import { backChipButtonClass } from '../styles/uiClassNames'
 import { getDefaultPageForRole } from '../utils/roles'
 
 const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
@@ -37,7 +38,7 @@ const LoginPage = ({
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
   const [roleTab, setRoleTab] = useState<LoginRoleTab>(defaultRoleTab)
   const homePage: AppPage = getDefaultPageForRole(authUser?.role)
   const homeLabel =
@@ -55,7 +56,7 @@ const LoginPage = ({
         <button
           type="button"
           onClick={() => (onGoBack ? onGoBack() : onNavigate?.('landing'))}
-          className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
+          className={`${backChipButtonClass} mb-4`}
         >
           <svg
             viewBox="0 0 24 24"
@@ -71,20 +72,22 @@ const LoginPage = ({
           Back
         </button>
 
-        <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Welcome back</h2>
-        <p className="mt-2 text-sm text-[color:var(--agent-muted)]">Sign in to continue.</p>
+        <h2 className="agent-section-title">Welcome back</h2>
+        <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
+          Sign in to continue with appointment booking, tracking, and role-aware clinical workspaces.
+        </p>
       </div>
 
       {authUser ? (
         <div className="mt-6 space-y-4">
-          <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4 text-sm text-[color:var(--agent-muted)]">
+          <div className="agent-alert agent-alert--info">
             Signed in as <span className="font-semibold text-[color:var(--agent-ink)]">{authUser.username}</span>.
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={onLogout} className="agent-button-ghost">
+            <button onClick={onLogout} className="agent-button-ghost px-4 py-2.5">
               Sign out
             </button>
-            <button onClick={() => onNavigate?.(homePage)} className="agent-button">
+            <button onClick={() => onNavigate?.(homePage)} className="agent-button px-4 py-2.5 text-[color:var(--agent-on-accent)]">
               {homeLabel}
             </button>
           </div>
@@ -96,23 +99,24 @@ const LoginPage = ({
             event.preventDefault()
             const email = username.trim().toLowerCase()
             if (!COM_EMAIL_PATTERN.test(email)) {
-              setFormError('Use a valid .com email address before signing in.')
+              setEmailError('Use a valid .com email address before signing in.')
               return
             }
+            setEmailError(null)
             onLogin(email, password, roleTab === 'doctor' ? 'doctor_dashboard' : 'appointments')
           }}
         >
-          <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-1">
+          <div className="rounded-[1.1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-1.5">
             <div className="grid grid-cols-2 gap-1">
               <button
                 type="button"
                 onClick={() => {
                   setRoleTab('patient')
-                  if (formError) setFormError(null)
+                  if (emailError) setEmailError(null)
                 }}
-                className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                className={`rounded-[0.9rem] px-3 py-2.5 text-xs font-semibold transition ${
                   roleTab === 'patient'
-                    ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
+                    ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)] shadow-[0_10px_20px_rgba(19,121,125,0.16)]'
                     : 'border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-ink)] hover:bg-[color:var(--agent-overlay)]'
                 }`}
               >
@@ -122,11 +126,11 @@ const LoginPage = ({
                 type="button"
                 onClick={() => {
                   setRoleTab('doctor')
-                  if (formError) setFormError(null)
+                  if (emailError) setEmailError(null)
                 }}
-                className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                className={`rounded-[0.9rem] px-3 py-2.5 text-xs font-semibold transition ${
                   roleTab === 'doctor'
-                    ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]'
+                    ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)] shadow-[0_10px_20px_rgba(19,121,125,0.16)]'
                     : 'border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-ink)] hover:bg-[color:var(--agent-overlay)]'
                 }`}
               >
@@ -156,12 +160,14 @@ const LoginPage = ({
               value={username}
               onChange={(event) => {
                 setUsername(event.target.value)
-                if (formError) setFormError(null)
+                if (emailError) setEmailError(null)
               }}
               placeholder="Email address"
               className="agent-input agent-input-icon"
+              aria-invalid={emailError ? 'true' : 'false'}
             />
           </div>
+          {emailError ? <p className="agent-field-error" role="alert">{emailError}</p> : null}
 
           <div className="relative">
             <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
@@ -183,7 +189,6 @@ const LoginPage = ({
               value={password}
               onChange={(event) => {
                 setPassword(event.target.value)
-                if (formError) setFormError(null)
               }}
               placeholder="Password"
               className="agent-input agent-input-icon agent-input-icon-right"
@@ -236,7 +241,11 @@ const LoginPage = ({
             </button>
           </div>
 
-          <button type="submit" disabled={isAuthLoading} className="agent-button w-full disabled:cursor-not-allowed">
+          <button
+            type="submit"
+            disabled={isAuthLoading}
+            className="agent-button w-full disabled:cursor-not-allowed text-[color:var(--agent-on-accent)]"
+          >
             {isAuthLoading ? 'Signing in...' : 'Sign in'}
           </button>
 
@@ -244,7 +253,7 @@ const LoginPage = ({
             <button
               type="button"
               onClick={() => {
-                const apiBase = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api').replace(/\/$/, '')
+                const apiBase = (import.meta.env.VITE_API_URL ?? 'http://localhost:5001/api').replace(/\/$/, '')
                 window.location.href = `${apiBase}/auth/google`
               }}
               disabled={isAuthLoading}
@@ -271,9 +280,7 @@ const LoginPage = ({
             </p>
           ) : null}
 
-          {(formError || authError) && (
-            <p className="text-xs font-semibold text-rose-300">{formError ?? authError}</p>
-          )}
+          {authError ? <p className="agent-alert agent-alert--error" role="alert">{authError}</p> : null}
 
           <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-[color:var(--agent-muted)]">
             <span>Don't have an account?</span>

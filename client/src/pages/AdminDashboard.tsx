@@ -237,22 +237,22 @@ const formatDateTime = (value: string) => {
 }
 
 const statusChipClass = (status: AdminUserSummaryItem['latestStatus']) => {
-  if (status === 'Recorded') return 'border-emerald-300/70 bg-emerald-100 text-emerald-700'
-  if (status === 'Failed') return 'border-rose-300/70 bg-rose-100 text-rose-700'
-  if (status === 'Booked') return 'border-sky-300/70 bg-sky-100 text-sky-700'
-  return 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]'
+  if (status === 'Recorded') return 'agent-status-badge agent-status-badge--success'
+  if (status === 'Failed') return 'agent-status-badge agent-status-badge--danger'
+  if (status === 'Booked') return 'agent-status-badge agent-status-badge--info'
+  return 'agent-status-badge agent-status-badge--neutral'
 }
 
 const staffStatusChipClass = (status: AdminStaffSummaryItem['status']) => {
-  if (status === 'Online') return 'border-emerald-300/70 bg-emerald-100 text-emerald-700'
-  if (status === 'Idle') return 'border-amber-300/70 bg-amber-100 text-amber-700'
-  return 'border-slate-300/70 bg-slate-100 text-slate-700'
+  if (status === 'Online') return 'agent-status-badge agent-status-badge--success'
+  if (status === 'Idle') return 'agent-status-badge agent-status-badge--warning'
+  return 'agent-status-badge agent-status-badge--neutral'
 }
 
 const historySeverityChipClass = (severity: AdminHistoryItem['severity']) => {
-  if (severity === 'Critical') return 'border-rose-300/70 bg-rose-100 text-rose-700'
-  if (severity === 'Warning') return 'border-amber-300/70 bg-amber-100 text-amber-700'
-  return 'border-sky-300/70 bg-sky-100 text-sky-700'
+  if (severity === 'Critical') return 'agent-status-badge agent-status-badge--danger'
+  if (severity === 'Warning') return 'agent-status-badge agent-status-badge--warning'
+  return 'agent-status-badge agent-status-badge--info'
 }
 
 const isStaffRole = (role?: AuthSession['user']['role'] | null) =>
@@ -724,7 +724,7 @@ const AdminDashboard = ({
 
               {activeSection === 'user_management' ? (
                 <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>User directory</h2>
+                  <h2 className="agent-section-title agent-section-title--compact">User directory</h2>
                   <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
                     Frontend-derived user booking visibility with fallback records when activity is empty.
                   </p>
@@ -762,9 +762,7 @@ const AdminDashboard = ({
                                 <td className={`px-3 py-3 ${workspaceHeadingTextClass}`}>{item.bookingCount}</td>
                                 <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{formatDateTime(item.latestActivity)}</td>
                                 <td className="px-3 py-3">
-                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChipClass(item.latestStatus)}`}>
-                                    {item.latestStatus}
-                                  </span>
+                                  <span className={statusChipClass(item.latestStatus)}>{item.latestStatus}</span>
                                 </td>
                               </tr>
                             )
@@ -778,7 +776,7 @@ const AdminDashboard = ({
 
               {activeSection === 'staff_management' ? (
                 <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Staff directory</h2>
+                  <h2 className="agent-section-title agent-section-title--compact">Staff directory</h2>
                   <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
                     Staff role visibility for doctor and admin workflows.
                   </p>
@@ -812,9 +810,7 @@ const AdminDashboard = ({
                               <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.workspace}</td>
                               <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.lastAction}</td>
                               <td className="px-3 py-3">
-                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${staffStatusChipClass(item.status)}`}>
-                                  {item.status}
-                                </span>
+                                <span className={staffStatusChipClass(item.status)}>{item.status}</span>
                               </td>
                             </tr>
                           ))}
@@ -842,9 +838,7 @@ const AdminDashboard = ({
                             <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>{item.subject}</h2>
                             <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{item.detail}</p>
                           </div>
-                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${historySeverityChipClass(item.severity)}`}>
-                            {item.severity}
-                          </span>
+                          <span className={historySeverityChipClass(item.severity)}>{item.severity}</span>
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-[color:var(--agent-muted-soft)]">
@@ -876,7 +870,7 @@ const AdminDashboard = ({
                             <div className="flex items-center gap-2">
                               {!item.read ? (
                                 <span
-                                  className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500"
+                                  className="inline-block h-2.5 w-2.5 rounded-full bg-[color:var(--agent-accent)]"
                                   title="Unread"
                                 />
                               ) : null}
@@ -889,11 +883,7 @@ const AdminDashboard = ({
                             </h2>
                             <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{item.detail}</p>
                           </div>
-                          <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${historySeverityChipClass(item.severity)}`}
-                          >
-                            {item.severity}
-                          </span>
+                          <span className={historySeverityChipClass(item.severity)}>{item.severity}</span>
                         </div>
 
                         <div className="mt-3 text-xs text-[color:var(--agent-muted-soft)]">
@@ -907,7 +897,7 @@ const AdminDashboard = ({
 
               {activeSection === 'settings' ? (
                 <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Account settings</h2>
+                  <h2 className="agent-section-title agent-section-title--compact">Account settings</h2>
                   <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
                     Manage profile visibility and workspace preferences from a single tab.
                   </p>
