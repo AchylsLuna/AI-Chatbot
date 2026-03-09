@@ -3,12 +3,10 @@ import AppLogoBadge from '../branding/AppLogoBadge'
 import { chipButtonClass } from '../../styles/uiClassNames'
 
 type AppHeaderProps = {
-  theme: 'light' | 'dark'
-  onToggleTheme: () => void
   onNavigate: (page: AppPage) => void
 }
 
-const AppHeader = ({ theme, onToggleTheme, onNavigate }: AppHeaderProps) => (
+const AppHeader = ({ onNavigate }: AppHeaderProps) => (
   <header className="sticky top-0 z-50 border-b border-[color:var(--card-border)] bg-[color:var(--agent-bg)]">
     <div className="mx-auto flex w-full max-w-[84rem] flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
       <button
@@ -24,9 +22,6 @@ const AppHeader = ({ theme, onToggleTheme, onNavigate }: AppHeaderProps) => (
       </button>
 
       <nav className="flex flex-wrap items-center justify-end gap-2">
-        <button onClick={onToggleTheme} className={chipButtonClass}>
-          {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-        </button>
         <button onClick={() => onNavigate('appointments')} className={chipButtonClass}>
           Appointments
         </button>

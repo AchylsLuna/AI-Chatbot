@@ -29,6 +29,24 @@ let authToken: string | null = null
 const NETWORK_ERROR_MESSAGE =
   'Cannot reach API server. Start the backend and verify your API URL.'
 
+export type UserSettings = {
+  theme: 'light' | 'dark'
+  notifications: {
+    email: boolean
+    sms: boolean
+    push: boolean
+  }
+}
+
+const normalizeUserSettings = (settings?: Partial<UserSettings>): UserSettings => ({
+  theme: settings?.theme === 'dark' ? 'dark' : 'light',
+  notifications: {
+    email: settings?.notifications?.email ?? true,
+    sms: settings?.notifications?.sms ?? false,
+    push: settings?.notifications?.push ?? true,
+  },
+})
+
 export const setAuthToken = (token: string | null) => {
   authToken = token
 }
@@ -219,12 +237,12 @@ export const api = {
     const data = parseApiSchema(reservationsResponseSchema, payload, 'reservations')
     return data.reservations
   },
-  getUserSettings: async (): Promise<{ notifications: { email: boolean; sms: boolean; push: boolean } }> => {
+  getUserSettings: async (): Promise<UserSettings> => {
     const response = await request(`${API_BASE}/users/me/settings`, withAuth())
     const payload = await handleResponse(response as Response)
-    return (payload as any).settings ?? { notifications: { email: true, sms: false, push: true } }
+    return normalizeUserSettings((payload as any).settings as Partial<UserSettings> | undefined)
   },
-  updateUserSettings: async (settings: any) => {
+  updateUserSettings: async (settings: Partial<UserSettings>): Promise<UserSettings> => {
     const response = await request(
       `${API_BASE}/users/me/settings`,
       withAuth({
@@ -234,7 +252,7 @@ export const api = {
       })
     )
     const payload = await handleResponse(response as Response)
-    return (payload as any).settings
+    return normalizeUserSettings((payload as any).settings as Partial<UserSettings> | undefined)
   },
   updateProfile: async (payload: { name?: string; firstName?: string; lastName?: string }) => {
     const response = await request(

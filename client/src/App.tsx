@@ -18,7 +18,9 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import OtpPage from './pages/OtpPage'
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
 import SignupPage from './pages/SignupPage'
+import TermsPage from './pages/TermsPage'
 import ConfirmModal from './components/ui/ConfirmModal'
 import type { AppPage } from './types/navigation'
 
@@ -40,7 +42,6 @@ const resolveAuthRedirectLabel = (page: ProtectedPage) => {
 
 function App() {
   const { currentPage, navigateToPage, navigateBack, isLanding, isAuthPage } = useAppRouting()
-  const { theme, toggleTheme } = useAppTheme(isLanding || isAuthPage)
   const [dataMaskingEnabled, setDataMaskingEnabled] = useState(true)
 
   const {
@@ -68,6 +69,9 @@ function App() {
     idleRemainingSeconds,
     acknowledgeIdle,
   } = useAuthData({ currentPage, navigateToPage })
+  const { theme, toggleTheme } = useAppTheme(
+    authUser ? `${authUser.username}:${authUser.role}` : null
+  )
 
   const isProtectedRoute =
     currentPage === 'appointments' || currentPage === 'doctor_dashboard' || currentPage === 'admin'
@@ -233,8 +237,6 @@ function App() {
           onNavigate={navigateToPage}
           latestReservation={latestReservation}
           isAuthenticated={Boolean(authUser)}
-          authRole={authUser?.role ?? null}
-          authAccountType={authUser?.accountType ?? null}
           onLogout={handleLogout}
         />
       )
@@ -371,6 +373,18 @@ function App() {
       )
       break
 
+    case 'terms':
+      pageContent = (
+        <TermsPage onNavigate={navigateToPage} onGoBack={() => navigateBack('signup')} />
+      )
+      break
+
+    case 'privacy_policy':
+      pageContent = (
+        <PrivacyPolicyPage onNavigate={navigateToPage} onGoBack={() => navigateBack('signup')} />
+      )
+      break
+
     case 'forgot_password':
       pageContent = (
         <ForgotPasswordPage onNavigate={navigateToPage} onGoBack={() => navigateBack('login')} />
@@ -406,7 +420,7 @@ function App() {
           }}
         />
         {showPublicHeader && (
-          <AppHeader theme={theme} onToggleTheme={toggleTheme} onNavigate={navigateToPage} />
+          <AppHeader onNavigate={navigateToPage} />
         )}
         {showWorkspaceHeader && authUser && (
           <WorkspaceHeader

@@ -61,6 +61,11 @@ const UserSchema = new mongoose.Schema(
         }
         ,
         settings: {
+            theme: {
+                type: String,
+                enum: ["light", "dark"],
+                default: "light",
+            },
             notifications: {
                 email: { type: Boolean, default: true },
                 sms: { type: Boolean, default: false },

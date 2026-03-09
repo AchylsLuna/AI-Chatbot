@@ -9,3 +9,5 @@ export type AppPage =
   | 'otp'
   | 'forgot_password'
   | 'signup'
+  | 'terms'
+  | 'privacy_policy'

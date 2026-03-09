@@ -1,69 +1,29 @@
 import type { ReactNode } from 'react'
 import AppLogoBadge from '../branding/AppLogoBadge'
-import { softPanelClass } from '../../styles/uiClassNames'
+import healthHeroImage from '../../assets/auth/health-ai-hero.jpg'
 
 type AuthSplitLayoutProps = {
   children: ReactNode
   layout?: 'split' | 'center'
   centerBorderless?: boolean
+  variant?: 'default' | 'lovable'
 }
 
 const AuthShowcase = () => (
-  <div className="rounded-[2rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-6 shadow-[var(--card-shadow)] sm:p-7">
+  <div className="rounded-[1.6rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-6 shadow-[var(--card-shadow-soft)] sm:p-7">
     <div className="flex items-center gap-3">
       <AppLogoBadge className="h-10 w-10" />
       <div>
-        <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-[color:var(--agent-accent)]">
-          AI Health Care
-        </p>
-        <p className="text-sm text-[color:var(--agent-muted)]">Clinical access and appointment operations</p>
+        <p className="text-sm font-extrabold text-[color:var(--agent-ink)]">AI Health Care</p>
+        <p className="text-xs text-[color:var(--agent-muted)]">Clinical access and appointment operations</p>
       </div>
     </div>
-    <div className="mt-8 space-y-4">
-      <span className="agent-eyebrow">Secure entry</span>
-      <h1 className="font-serif text-4xl font-bold leading-[0.98] tracking-[-0.04em] text-[color:var(--agent-ink)] sm:text-5xl">
-        Care operations with a calmer, clearer clinical interface.
-      </h1>
-      <p className="max-w-xl text-base leading-7 text-[color:var(--agent-muted)]">
-        Sign in to continue with role-based access, appointment tracking, operational visibility,
-        and staff workspace controls.
-      </p>
-    </div>
-
-    <div className="mt-6 grid gap-3 lg:grid-cols-2">
-      <article className={`${softPanelClass} p-4`}>
-        <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-          Role-aware routing
-        </p>
-        <p className="mt-2 text-sm leading-6 text-[color:var(--agent-muted)]">
-          Patients, doctors, and administrators are guided into the correct workspace without extra steps.
-        </p>
-      </article>
-      <article className={`${softPanelClass} p-4`}>
-        <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-          Protected sessions
-        </p>
-        <p className="mt-2 text-sm leading-6 text-[color:var(--agent-muted)]">
-          Session checks, OTP flows, and logout safeguards stay intact while the UI becomes more legible.
-        </p>
-      </article>
-      <article className={`${softPanelClass} p-4`}>
-        <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-          Faster daily use
-        </p>
-        <p className="mt-2 text-sm leading-6 text-[color:var(--agent-muted)]">
-          Cleaner fields, clearer hierarchy, and stronger feedback reduce friction for repeat workflows.
-        </p>
-      </article>
-      <article className={`${softPanelClass} p-4`}>
-        <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-          Clinical visual language
-        </p>
-        <p className="mt-2 text-sm leading-6 text-[color:var(--agent-muted)]">
-          Warm neutrals, disciplined contrast, and measured accent color create a more professional product feel.
-        </p>
-      </article>
-    </div>
+    <h1 className="mt-6 max-w-[16ch] text-3xl font-semibold leading-tight text-[color:var(--agent-ink)] sm:text-4xl">
+      Secure access for appointment and care workflows
+    </h1>
+    <p className="mt-3 max-w-[46ch] text-sm leading-7 text-[color:var(--agent-muted)]">
+      Sign in to continue with role-based access, appointment tracking, and staff dashboards.
+    </p>
   </div>
 )
 
@@ -71,6 +31,7 @@ const AuthSplitLayout = ({
   children,
   layout = 'split',
   centerBorderless = false,
+  variant = 'default',
 }: AuthSplitLayoutProps) => {
   if (layout === 'center') {
     const centerCardClass = centerBorderless
@@ -87,11 +48,56 @@ const AuthSplitLayout = ({
     )
   }
 
+  if (variant === 'lovable') {
+    return (
+      <div className="auth-lovable-root min-h-screen">
+        <div className="flex min-h-screen">
+          <section className="auth-lovable-showcase hidden lg:flex lg:w-1/2">
+            <div className="auth-lovable-showcase-media">
+              <img src={healthHeroImage} alt="AI healthcare" className="h-full w-full object-cover opacity-40" />
+              <div className="auth-lovable-showcase-overlay" />
+            </div>
+
+            <div className="auth-lovable-showcase-content">
+              <div className="mb-8 flex items-center gap-3">
+                <div className="auth-lovable-brand-icon pulse-ring">
+                  <AppLogoBadge className="h-6 w-6" />
+                </div>
+                <span className="auth-lovable-brand-name">AI Health Care</span>
+              </div>
+              <h1 className="auth-lovable-heading">
+                Secure access for appointment and care workflows
+              </h1>
+              <p className="mt-4 text-base leading-relaxed text-[color:var(--auth-lovable-muted)]">
+                Sign in to continue with role-based access, appointment tracking, and staff
+                dashboards.
+              </p>
+            </div>
+          </section>
+
+          <section className="auth-lovable-form-wrap w-full lg:w-1/2">
+            <div className="auth-lovable-form-inner">
+              <div className="mb-8 flex items-center gap-3 lg:hidden">
+                <div className="auth-lovable-mobile-icon">
+                  <AppLogoBadge className="h-5 w-5" />
+                </div>
+                <span className="auth-lovable-mobile-brand">AI Health Care</span>
+              </div>
+              <div className="auth-lovable-card w-full max-w-md">
+                {children}
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[color:var(--agent-bg)] px-4 py-8 text-[color:var(--agent-ink)] sm:px-6">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center gap-5 lg:grid-cols-[1fr_0.94fr]">
         <AuthShowcase />
-        <div className="rounded-[1.7rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-5 shadow-[var(--card-shadow)] sm:p-7">
+        <div className="rounded-[1.35rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-5 shadow-[var(--card-shadow-soft)] sm:p-6">
           {children}
         </div>
       </div>

@@ -374,6 +374,7 @@ export async function getSettings(req, res) {
 
         return res.json({
             settings: user.settings || {
+                theme: "light",
                 notifications: { email: true, sms: false, push: true },
             },
         });
@@ -394,6 +395,9 @@ export async function updateSettings(req, res) {
         }
 
         const update = {};
+        if (settings.theme === "light" || settings.theme === "dark") {
+            update["settings.theme"] = settings.theme;
+        }
         if (settings.notifications && typeof settings.notifications === "object") {
             update["settings.notifications.email"] = !!settings.notifications.email;
             update["settings.notifications.sms"] = !!settings.notifications.sms;

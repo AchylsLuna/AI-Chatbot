@@ -6,6 +6,8 @@ export const ROUTES = {
   otp: '/otp',
   forgotPassword: '/forgot-password',
   signup: '/signup',
+  terms: '/terms',
+  privacyPolicy: '/privacy-policy',
   appointments: '/appointments',
   admin: {
     root: '/admin',

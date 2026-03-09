@@ -22,6 +22,8 @@ This document reflects the current frontend routing and redirect behavior implem
 | `/otp` | `otp` | OTP verification |
 | `/forgot-password` | `forgot_password` | Password recovery |
 | `/signup` | `signup` | Account registration |
+| `/terms` | `terms` | Terms and Conditions |
+| `/privacy-policy` | `privacy_policy` | Privacy Policy (RA 10173) |
 
 ### Patient Workspace
 
@@ -99,6 +101,10 @@ These routes are still accepted and resolve to current workspace pages:
 | `/admin/login` | `/admin-login` |
 | `/doctor-login` | `/doctor-sign-in` |
 | `/doctor-signin` | `/doctor-sign-in` |
+| `/terms-and-conditions` | `/terms` |
+| `/terms_and_conditions` | `/terms` |
+| `/privacy` | `/privacy-policy` |
+| `/privacy_policy` | `/privacy-policy` |
 | `/doctor-dashboard` | `/doctor/dashboard` |
 | `/doctor_dashboard` | `/doctor/dashboard` |
 | `/dashboard` | `/doctor/dashboard` |

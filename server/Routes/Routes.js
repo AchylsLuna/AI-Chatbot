@@ -140,6 +140,7 @@ router.put(
     authMiddleware,
     [
         body('settings').optional().isObject(),
+        body('settings.theme').optional().isIn(['light', 'dark']),
         body('settings.notifications.email').optional().isBoolean(),
         body('settings.notifications.sms').optional().isBoolean(),
         body('settings.notifications.push').optional().isBoolean(),

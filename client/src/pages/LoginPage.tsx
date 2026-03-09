@@ -2,7 +2,6 @@ import { useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
 import type { AuthProvider, AuthSession } from '../types'
-import { backChipButtonClass } from '../styles/uiClassNames'
 import { getDefaultPageForRole } from '../utils/roles'
 
 const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
@@ -39,7 +38,9 @@ const LoginPage = ({
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [emailError, setEmailError] = useState<string | null>(null)
+  const [doctorIdError, setDoctorIdError] = useState<string | null>(null)
   const [roleTab, setRoleTab] = useState<LoginRoleTab>(defaultRoleTab)
+  const [doctorLicenseId, setDoctorLicenseId] = useState('')
   const homePage: AppPage = getDefaultPageForRole(authUser?.role)
   const homeLabel =
     homePage === 'appointments'
@@ -51,96 +52,83 @@ const LoginPage = ({
           : 'Go to dashboard'
 
   return (
-    <AuthSplitLayout>
-      <div>
-        <button
-          type="button"
-          onClick={() => (onGoBack ? onGoBack() : onNavigate?.('landing'))}
-          className={`${backChipButtonClass} mb-4`}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+    <AuthSplitLayout variant="lovable">
+      <div className="auth-lovable-page">
+        {onGoBack ? (
+          <button
+            type="button"
+            onClick={() => (onGoBack ? onGoBack() : onNavigate?.('landing'))}
+            className="auth-lovable-back-link"
           >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          Back
-        </button>
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            Back
+          </button>
+        ) : null}
 
-        <h2 className="agent-section-title">Welcome back</h2>
-        <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
-          Sign in to continue with appointment booking, tracking, and role-aware clinical workspaces.
-        </p>
-      </div>
+        <h2 className="auth-lovable-title">Welcome back</h2>
+        <p className="auth-lovable-subtitle">Sign in to continue your health journey</p>
 
-      {authUser ? (
-        <div className="mt-6 space-y-4">
-          <div className="agent-alert agent-alert--info">
-            Signed in as <span className="font-semibold text-[color:var(--agent-ink)]">{authUser.username}</span>.
+        {authUser ? (
+          <div className="mt-6 space-y-4">
+            <div className="rounded-xl border border-[color:var(--auth-lovable-border)] bg-[color:var(--auth-lovable-surface-soft)] p-3 text-sm text-[color:var(--auth-lovable-muted)]">
+              Signed in as{' '}
+              <span className="font-semibold text-[color:var(--auth-lovable-ink)]">
+                {authUser.username}
+              </span>
+              .
+            </div>
+            <div className="auth-lovable-actions">
+              <button onClick={onLogout} className="auth-lovable-secondary-button px-4 py-2.5">
+                Sign out
+              </button>
+              <button
+                onClick={() => onNavigate?.(homePage)}
+                className="auth-lovable-primary-button px-4 py-2.5"
+              >
+                {homeLabel}
+              </button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <button onClick={onLogout} className="agent-button-ghost px-4 py-2.5">
-              Sign out
-            </button>
-            <button onClick={() => onNavigate?.(homePage)} className="agent-button px-4 py-2.5 text-[color:var(--agent-on-accent)]">
-              {homeLabel}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <form
-          className="mt-6 space-y-4"
-          onSubmit={(event) => {
+        ) : (
+          <form
+            className="mt-6 space-y-4"
+            onSubmit={(event) => {
             event.preventDefault()
             const email = username.trim().toLowerCase()
+            const cleanedDoctorLicenseId = doctorLicenseId.trim()
             if (!COM_EMAIL_PATTERN.test(email)) {
               setEmailError('Use a valid .com email address before signing in.')
               return
             }
+            if (roleTab === 'doctor' && !cleanedDoctorLicenseId) {
+              setDoctorIdError('Medical License ID is required for doctor sign in.')
+              return
+            }
             setEmailError(null)
+            setDoctorIdError(null)
             onLogin(email, password, roleTab === 'doctor' ? 'doctor_dashboard' : 'appointments')
           }}
         >
-          <div className="rounded-[1.1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-1.5">
-            <div className="grid grid-cols-2 gap-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('patient')
-                  if (emailError) setEmailError(null)
-                }}
-                className={`rounded-[0.9rem] px-3 py-2.5 text-xs font-semibold transition ${
-                  roleTab === 'patient'
-                    ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)] shadow-[0_10px_20px_rgba(19,121,125,0.16)]'
-                    : 'border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-ink)] hover:bg-[color:var(--agent-overlay)]'
-                }`}
-              >
-                Patient Sign in
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('doctor')
-                  if (emailError) setEmailError(null)
-                }}
-                className={`rounded-[0.9rem] px-3 py-2.5 text-xs font-semibold transition ${
-                  roleTab === 'doctor'
-                    ? 'bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)] shadow-[0_10px_20px_rgba(19,121,125,0.16)]'
-                    : 'border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-ink)] hover:bg-[color:var(--agent-overlay)]'
-                }`}
-              >
-                Doctor Sign in
-              </button>
-            </div>
-          </div>
-
-          <div className="relative">
-            <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
+          <div className="auth-lovable-role-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setRoleTab('patient')
+                if (emailError) setEmailError(null)
+                if (doctorIdError) setDoctorIdError(null)
+              }}
+              className={`auth-lovable-role-button ${roleTab === 'patient' ? 'is-active' : ''}`}
+            >
               <svg
                 viewBox="0 0 24 24"
                 className="h-4 w-4"
@@ -150,9 +138,48 @@ const LoginPage = ({
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <path d="M4 4h16v16H4z" opacity="0" />
+                <path d="M12 12a4 4 0 100-8 4 4 0 000 8z" />
+                <path d="M4 21a8 8 0 0116 0" />
+              </svg>
+              Patient
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRoleTab('doctor')
+                if (emailError) setEmailError(null)
+              }}
+              className={`auth-lovable-role-button ${roleTab === 'doctor' ? 'is-active' : ''}`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 3v18M3 12h18" />
+              </svg>
+              Doctor
+            </button>
+          </div>
+
+          <div className="relative">
+            <span className="auth-lovable-input-icon">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M4 6h16" />
                 <path d="M4 6l8 6 8-6" />
+                <rect x="4" y="4" width="16" height="16" rx="2" opacity="0" />
               </svg>
             </span>
             <input
@@ -162,15 +189,50 @@ const LoginPage = ({
                 setUsername(event.target.value)
                 if (emailError) setEmailError(null)
               }}
-              placeholder="Email address"
-              className="agent-input agent-input-icon"
+              placeholder={roleTab === 'doctor' ? 'Doctor email address' : 'Email address'}
+              className="auth-lovable-input pl-10"
               aria-invalid={emailError ? 'true' : 'false'}
             />
           </div>
-          {emailError ? <p className="agent-field-error" role="alert">{emailError}</p> : null}
+          {emailError ? <p className="auth-lovable-field-error" role="alert">{emailError}</p> : null}
+
+          {roleTab === 'doctor' ? (
+            <div className="relative">
+              <span className="auth-lovable-input-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="4" y="3" width="16" height="18" rx="2" />
+                  <path d="M8 7h8M8 11h8M8 15h5" />
+                </svg>
+              </span>
+              <input
+                type="text"
+                value={doctorLicenseId}
+                onChange={(event) => {
+                  setDoctorLicenseId(event.target.value)
+                  if (doctorIdError) setDoctorIdError(null)
+                }}
+                placeholder="Medical License ID"
+                className="auth-lovable-input pl-10"
+                aria-invalid={doctorIdError ? 'true' : 'false'}
+              />
+            </div>
+          ) : null}
+          {doctorIdError ? (
+            <p className="auth-lovable-field-error" role="alert">
+              {doctorIdError}
+            </p>
+          ) : null}
 
           <div className="relative">
-            <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
+            <span className="auth-lovable-input-icon">
               <svg
                 viewBox="0 0 24 24"
                 className="h-4 w-4"
@@ -191,13 +253,13 @@ const LoginPage = ({
                 setPassword(event.target.value)
               }}
               placeholder="Password"
-              className="agent-input agent-input-icon agent-input-icon-right"
+              className="auth-lovable-input pl-10 pr-10"
             />
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--agent-muted-soft)] transition hover:text-[color:var(--agent-ink)]"
+              className="auth-lovable-password-toggle"
             >
               {showPassword ? (
                 <svg
@@ -231,22 +293,18 @@ const LoginPage = ({
             </button>
           </div>
 
-          <div className="flex items-center justify-end">
+          <div className="flex justify-end">
             <button
               type="button"
               onClick={() => onNavigate?.('forgot_password')}
-              className="text-xs font-semibold text-[color:var(--agent-accent)] transition hover:text-[color:var(--agent-accent-strong)]"
+              className="auth-lovable-link text-sm"
             >
               Forgot password?
             </button>
           </div>
 
-          <button
-            type="submit"
-            disabled={isAuthLoading}
-            className="agent-button w-full disabled:cursor-not-allowed text-[color:var(--agent-on-accent)]"
-          >
-            {isAuthLoading ? 'Signing in...' : 'Sign in'}
+          <button type="submit" disabled={isAuthLoading} className="auth-lovable-primary-button w-full h-12">
+            {isAuthLoading ? 'Signing in...' : roleTab === 'doctor' ? 'Sign In as Doctor' : 'Sign In'}
           </button>
 
           <div className="space-y-2">
@@ -257,43 +315,40 @@ const LoginPage = ({
                 window.location.href = `${apiBase}/auth/google`
               }}
               disabled={isAuthLoading}
-              className="agent-button-ghost w-full disabled:cursor-not-allowed"
+              className="auth-lovable-secondary-button h-11 w-full"
             >
               Continue with Google
             </button>
+
+            {onProviderLogin ? (
+              <button
+                type="button"
+                disabled={isAuthLoading}
+                onClick={onProviderLogin}
+                className="auth-lovable-secondary-button h-11 w-full"
+              >
+                Continue with Auth0
+              </button>
+            ) : null}
           </div>
 
-          {onProviderLogin ? (
-            <button
-              type="button"
-              disabled={isAuthLoading}
-              onClick={onProviderLogin}
-              className="agent-button-ghost w-full disabled:cursor-not-allowed"
-            >
-              Continue with Auth0
-            </button>
-          ) : null}
-
           {authProvider === 'auth0' ? (
-            <p className="text-center text-[11px] text-[color:var(--agent-muted)]">
+            <p className="text-center text-[11px] text-[color:var(--auth-lovable-muted)]">
               Secure SSO mode is active{isBiometricReady ? ' with biometric hooks ready.' : '.'}
             </p>
           ) : null}
 
-          {authError ? <p className="agent-alert agent-alert--error" role="alert">{authError}</p> : null}
+          {authError ? <p className="auth-lovable-alert-error">{authError}</p> : null}
 
-          <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-[color:var(--agent-muted)]">
-            <span>Don't have an account?</span>
-            <button
-              type="button"
-              onClick={() => onNavigate?.('signup')}
-              className="font-semibold text-[color:var(--agent-accent)] transition hover:text-[color:var(--agent-accent-strong)]"
-            >
-              Create one
-            </button>
-          </div>
-        </form>
-      )}
+            <p className="text-center text-sm text-[color:var(--auth-lovable-muted)]">
+              Don&apos;t have an account?{' '}
+              <button type="button" onClick={() => onNavigate?.('signup')} className="auth-lovable-link font-medium">
+                Create one
+              </button>
+            </p>
+          </form>
+        )}
+      </div>
     </AuthSplitLayout>
   )
 }
