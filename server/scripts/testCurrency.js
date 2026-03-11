@@ -1,6 +1,11 @@
 async function runConcurrencyTest() {
-    const url = 'http://localhost:5000/api/doctor/appointments/69aece9bc7e76f8567a9e4ad/soap-note';
-    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YTgwMGU1YzJmZTBhODZjNjVhZDRhNSIsInJvbGUiOiJkb2N0b3IiLCJlbWFpbCI6ImZyb3N0aW52b2tlcjcyMEBnbWFpbC5jb20iLCJpYXQiOjE3NzMyMDA1ODMsImV4cCI6MTc3MzgwNTM4M30.NW3VYAaAsD6yvAiAQZcJ2e5E_hQoExm9JllQbz7MYwo'; // Keep your token here
+    const url = process.env.TEST_SOAP_URL || 'http://localhost:5000/api/doctor/appointments/<appointment-id>/soap-note';
+    const token = String(process.env.TEST_BEARER_TOKEN || '').trim();
+
+    if (!token || url.includes('<appointment-id>')) {
+        console.error('Set TEST_BEARER_TOKEN and TEST_SOAP_URL before running this script.');
+        process.exit(1);
+    }
 
     console.log("Sending 50 concurrent requests...");
 

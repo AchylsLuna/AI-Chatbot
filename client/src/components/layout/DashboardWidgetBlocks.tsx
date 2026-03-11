@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
 type DashboardActivityItem = {
   id: string
@@ -61,6 +61,14 @@ const buildPolyline = (values: number[], maxValue: number) => {
     .join(' ')
 }
 
+function LegendDot({ color }: { color: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (ref.current) ref.current.style.backgroundColor = color
+  }, [color])
+  return <span ref={ref} className="reference-legend-dot" />
+}
+
 const DashboardWidgetBlocks = ({
   summaryTitle,
   summaryValue,
@@ -88,6 +96,13 @@ const DashboardWidgetBlocks = ({
     return highest
   }, [chartSeries])
 
+  const ringRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (ringRef.current) {
+      ringRef.current.style.background = `conic-gradient(var(--reference-blue-500) ${ringPercent}%, var(--reference-border) ${ringPercent}% 100%)`
+    }
+  }, [ringPercent])
+
   return (
     <div className="space-y-4">
       <div className="reference-dashboard-grid">
@@ -95,10 +110,8 @@ const DashboardWidgetBlocks = ({
           {showSummaryPanel ? (
             <div className="reference-progress-wrap">
               <div
+                ref={ringRef}
                 className="reference-progress-ring"
-                style={{
-                  background: `conic-gradient(var(--reference-blue-500) ${ringPercent}%, var(--reference-border) ${ringPercent}% 100%)`,
-                }}
                 aria-hidden="true"
               >
                 <div className="reference-progress-inner">
@@ -134,7 +147,7 @@ const DashboardWidgetBlocks = ({
             <div className="reference-legend-list">
               {chartSeries.map((series) => (
                 <span key={series.key} className="reference-legend-item">
-                  <span className="reference-legend-dot" style={{ backgroundColor: series.color }} />
+                  <LegendDot color={series.color} />
                   {series.label}
                 </span>
               ))}

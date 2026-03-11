@@ -47,6 +47,7 @@ const resolveApiBase = () => {
 
 const API_BASE = resolveApiBase()
 let authToken: string | null = null
+const COOKIE_SESSION_MARKER = 'cookie-session'
 const NETWORK_ERROR_MESSAGE =
   'Cannot reach API server. Start the backend and verify your API URL.'
 const EMPTY_LEDGER: LedgerEntry[] = []
@@ -536,7 +537,10 @@ export const api = {
     // Map server user shape to client schema if necessary
     const payloadUser = (payload as Record<string, unknown>)?.user as Record<string, unknown> | undefined
     const mapped = {
-      token: (payload as any).token,
+      token:
+        typeof (payload as any).token === 'string' && (payload as any).token.trim().length > 0
+          ? (payload as any).token
+          : COOKIE_SESSION_MARKER,
       user: {
         username: (payloadUser?.email as string | undefined) ?? username,
         firstName: (payloadUser?.firstName as string | undefined) ?? undefined,
@@ -574,7 +578,10 @@ export const api = {
     // Map server response to client authSession shape
     const payloadUser = (payload as Record<string, unknown>)?.user as Record<string, unknown> | undefined
     const mapped = {
-      token: (payload as any).token,
+      token:
+        typeof (payload as any).token === 'string' && (payload as any).token.trim().length > 0
+          ? (payload as any).token
+          : COOKIE_SESSION_MARKER,
       user: {
         username:
           (payloadUser?.email as string | undefined) ??

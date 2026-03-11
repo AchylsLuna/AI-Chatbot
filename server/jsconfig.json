@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "checkJs": false,
+    "allowJs": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022"
+  },
+  "include": [
+    "./**/*.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "uploads",
+    "dataset",
+    "docs"
+  ]
+}

@@ -244,6 +244,14 @@ const buildDoctorDisplayName = (user: AuthSession['user'] | null) => {
   return 'Doctor'
 }
 
+function ProgressFill({ percent, className = '' }: { percent: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (ref.current) ref.current.style.width = `${percent}%`
+  }, [percent])
+  return <div ref={ref} className={className} />
+}
+
 const DoctorDashboardPage = ({
   authUser,
   reservations,
@@ -1399,11 +1407,9 @@ const DoctorDashboardPage = ({
                           <span className={`text-sm ${workspaceHeadingTextClass}`}>{dept}</span>
                           <div className="flex items-center gap-3">
                             <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
-                              <div
+                              <ProgressFill
                                 className="h-full bg-blue-500"
-                                style={{
-                                  width: `${(count / appointmentItems.length) * 100}%`,
-                                }}
+                                percent={(count / appointmentItems.length) * 100}
                               />
                             </div>
                             <span className={`w-8 text-right text-sm font-semibold ${workspaceHeadingTextClass}`}>{count}</span>
@@ -1441,11 +1447,9 @@ const DoctorDashboardPage = ({
                           <span className={`text-sm ${workspaceHeadingTextClass}`}>{label}</span>
                           <div className="flex items-center gap-3">
                             <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
-                              <div
+                              <ProgressFill
                                 className={color}
-                                style={{
-                                  width: `${appointmentItems.length > 0 ? (count / appointmentItems.length) * 100 : 0}%`,
-                                }}
+                                percent={appointmentItems.length > 0 ? (count / appointmentItems.length) * 100 : 0}
                               />
                             </div>
                             <span className={`w-8 text-right text-sm font-semibold ${workspaceHeadingTextClass}`}>{count}</span>

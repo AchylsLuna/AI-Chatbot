@@ -12,8 +12,16 @@ async function run() {
   await mongoose.connect(MONGO, { dbName: DB_NAME })
   console.log('Connected to mongo db:', mongoose.connection.name)
   try {
-    const email = 'canvanalifetimehshshsh@gmail.com'
-    const password = 'admin123'
+    const email = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase()
+    const password = String(process.env.ADMIN_PASSWORD || '')
+    const firstName = String(process.env.ADMIN_FIRST_NAME || 'System').trim() || 'System'
+    const lastName = String(process.env.ADMIN_LAST_NAME || 'Admin').trim() || 'Admin'
+
+    if (!email || !password) {
+      console.error('Missing ADMIN_EMAIL or ADMIN_PASSWORD environment variables.')
+      process.exit(1)
+    }
+
     const existing = await User.findOne({ email })
     if (existing) {
       console.log('User already exists:', email)
@@ -22,15 +30,14 @@ async function run() {
 
     const user = new User({
       email,
-      firstName: 'System',
-      lastName: 'Admin',
+      firstName,
+      lastName,
       role: 'admin',
       status: 'active'
     })
     await user.setPassword(password)
     await user.save()
     console.log('Created admin user:', email)
-    console.log('Password:', password)
     process.exit(0)
   } catch (err) {
     console.error('Failed to create admin user', err)

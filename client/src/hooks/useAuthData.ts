@@ -41,15 +41,14 @@ type UseAuthDataArgs = {
 const unauthorizedSessionPattern =
   /invalid|expired|missing authorization|forbidden|unauthorized|mfa token required|mfa required|multi-factor|2fa|required for this role/i
 
+const LOCAL_SESSION_MARKER = 'cookie-session'
+
 const isUnauthorizedSessionError = (message: string) => unauthorizedSessionPattern.test(message)
 
 const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const authProvider = getAuthProvider()
   const auth0Enabled = isAuth0Enabled()
-  const initialStoredToken =
-    authProvider === 'local' && typeof window !== 'undefined'
-      ? localStorage.getItem('pulse-ledger-token')
-      : null
+  const initialStoredToken = null
   const reservations = useSecureHealthStore((state) => state.reservations)
   const ledgerEntries = useSecureHealthStore((state) => state.ledgerEntries)
   const latestReservationId = useSecureHealthStore((state) => state.latestReservationId)
@@ -75,10 +74,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const [idleRemainingSeconds, setIdleRemainingSeconds] = useState<number>(0)
 
   const clearLocalTokenStorage = useCallback(() => {
-    if (authProvider === 'local') {
-      localStorage.removeItem('pulse-ledger-token')
-    }
-  }, [authProvider])
+    if (typeof window === 'undefined') return
+    localStorage.removeItem('pulse-ledger-token')
+  }, [])
 
   const clearUnauthorizedSession = useCallback(() => {
     setAuthTokenState(null)
@@ -97,8 +95,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   )
 
   useEffect(() => {
-    setAuthToken(authToken)
-  }, [authToken])
+    // Local auth uses httpOnly cookies; only Auth0-style flows need bearer propagation.
+    setAuthToken(authProvider === 'local' ? null : authToken)
+  }, [authProvider, authToken])
 
   // Idle/session timeout handling
   const WARNING_MS = 5 * 60 * 1000 // 10 minutes
@@ -211,15 +210,6 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   }, [])
 
   useEffect(() => {
-    if (authProvider !== 'local') return
-    const storedToken = localStorage.getItem('pulse-ledger-token')
-    if (storedToken && !authToken) {
-      setAuthTokenState(storedToken)
-      setIsAuthLoading(true)
-    }
-  }, [authProvider, authToken])
-
-  useEffect(() => {
     if (!auth0Enabled) return
     let isMounted = true
 
@@ -279,6 +269,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
           const user = await api.getSession()
           if (!isMounted) return
           if (user) {
+            setAuthTokenState(LOCAL_SESSION_MARKER)
             setAuthUser(user)
             setApiReady(true)
             return
@@ -366,12 +357,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     return () => {
       isMounted = false
     }
-  }, [
-    authToken,
-    clearUnauthorizedSession,
-    setStoreLedgerEntries,
-    setStoreReservations,
-  ])
+  }, [authToken, clearUnauthorizedSession, setStoreLedgerEntries, setStoreReservations])
 
   const handleCreateReservation = async (draft: ReservationDraft) => {
     try {
@@ -422,11 +408,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     preferredTargetPage?: AppPage | null,
     preferredTargetPath?: string | null
   ) => {
-    setAuthTokenState(session.token)
+    setAuthTokenState(authProvider === 'local' ? LOCAL_SESSION_MARKER : session.token)
     setAuthUser(session.user)
-    if (authProvider === 'local') {
-      localStorage.setItem('pulse-ledger-token', session.token)
-    }
+    if (authProvider === 'local') clearLocalTokenStorage()
     setApiReady(true)
 
     const defaultPageByRole = getDefaultDashboardPage(session.user.role, session.user.accountType)
@@ -562,12 +546,10 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   }
 
   const handleSignupSuccess = (session: AuthSession) => {
-    setAuthTokenState(session.token)
+    setAuthTokenState(authProvider === 'local' ? LOCAL_SESSION_MARKER : session.token)
     setAuthUser(session.user)
     setAuthError(null)
-    if (authProvider === 'local') {
-      localStorage.setItem('pulse-ledger-token', session.token)
-    }
+    if (authProvider === 'local') clearLocalTokenStorage()
     setApiReady(true)
     navigateToPage(getDefaultDashboardPage(session.user.role, session.user.accountType))
   }

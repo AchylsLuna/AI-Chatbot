@@ -17,12 +17,18 @@ const app = express();
 const config = {
     PORT: process.env.PORT || 5000,
     MONGO_URI: process.env.MONGO_URI,
+    JWT_SECRET: process.env.JWT_SECRET,
     ORIGIN: process.env.CLIENT_ORIGIN || process.env.ORIGIN || 'http://localhost:5173',
     DB_NAME: 'hospital_ai_blockchain',
 };
 
 if (!config.MONGO_URI) {
     console.error('MONGO_URI is not defined');
+    process.exit(1);
+}
+
+if (!config.JWT_SECRET) {
+    console.error('JWT_SECRET is not defined');
     process.exit(1);
 }
 

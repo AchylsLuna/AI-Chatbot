@@ -7,6 +7,7 @@ import archiver from "archiver";
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
+import { PassThrough } from 'stream';
 
 async function resolveActorEmail(req) {
     const fallbackId = req.user?.id || req.user?._id;
@@ -22,6 +23,51 @@ async function resolveActorEmail(req) {
 }
 
 const STAFF_ROLES = ['doctor'];
+const BACKUP_MAGIC = Buffer.from('AGB1');
+
+const getBackupPassword = () => {
+    const password = String(process.env.BACKUP_PASSWORD || '').trim();
+    if (!password) {
+        throw new Error('BACKUP_PASSWORD is not configured.');
+    }
+    return password;
+};
+
+const buildZipBuffer = async (entries) => {
+    return new Promise((resolve, reject) => {
+        const archive = archiver('zip', { zlib: { level: 9 } });
+        const output = new PassThrough();
+        const chunks = [];
+
+        output.on('data', (chunk) => chunks.push(chunk));
+        output.on('end', () => resolve(Buffer.concat(chunks)));
+        output.on('error', reject);
+        archive.on('error', reject);
+
+        archive.pipe(output);
+
+        for (const entry of entries) {
+            if (!entry?.content) continue;
+            archive.append(entry.content, { name: entry.name });
+        }
+
+        archive.finalize().catch(reject);
+    });
+};
+
+const buildEncryptedBackupPayload = async (entries) => {
+    const password = getBackupPassword();
+    const zipBuffer = await buildZipBuffer(entries);
+    const salt = crypto.randomBytes(16);
+    const iv = crypto.randomBytes(12);
+    const key = crypto.scryptSync(password, salt, 32);
+
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encryptedContent = Buffer.concat([cipher.update(zipBuffer), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+
+    return Buffer.concat([BACKUP_MAGIC, salt, iv, authTag, encryptedContent]);
+};
 
 const toIsoString = (value, fallback = new Date(0).toISOString()) => {
     if (!value) return fallback;
@@ -453,32 +499,13 @@ export async function downloadAuditBackup(req, res) {
             userAgent: req.headers['user-agent']
         });
 
-        // 3. Setup Encryption (AES-256)
-        const algorithm = 'aes-256-cbc';
-        const password = process.env.BACKUP_PASSWORD || 'default_secret_password';
-        // Create a 32-byte key from the password
-        const key = crypto.scryptSync(password, 'salt', 32);
-        // Create a random Initialization Vector (IV)
-        const iv = crypto.randomBytes(16);
+        const payload = await buildEncryptedBackupPayload([
+            { name: 'audit_logs.csv', content: csv },
+        ]);
 
-        // 4. Set Response Headers
-        // We name it .enc so the OS knows it's not a normal zip
-        res.attachment('audit_logs_backup.zip.enc'); 
-        
-        // 5. Send the IV first (needed for decryption), then the encrypted stream
-        res.write(iv);
-
-        const cipher = crypto.createCipheriv(algorithm, key, iv);
-        const archive = archiver('zip', { zlib: { level: 9 } });
-
-        // Pipe: Archive (Zip) -> Cipher (Encrypt) -> Response (Download)
-        archive.pipe(cipher).pipe(res);
-
-        // Add CSV to the zip
-        archive.append(csv, { name: 'audit_logs.csv' });
-        
-        // Finalize
-        await archive.finalize();
+        res.attachment('audit_logs_backup.zip.enc');
+        res.type('application/octet-stream');
+        return res.send(payload);
 
     } catch (error) {
         console.error("Backup failed:", error);
@@ -511,21 +538,13 @@ export async function downloadErrorBackup(req, res) {
             userAgent: req.headers['user-agent']
         });
 
-        const algorithm = 'aes-256-cbc';
-        const password = process.env.BACKUP_PASSWORD || 'default_secret_password';
-        const key = crypto.scryptSync(password, 'salt', 32);
-        const iv = crypto.randomBytes(16);
+        const payload = await buildEncryptedBackupPayload([
+            { name: 'error_logs.csv', content: csv },
+        ]);
 
         res.attachment('error_logs_backup.zip.enc');
-        res.write(iv);
-
-        const cipher = crypto.createCipheriv(algorithm, key, iv);
-        const archive = archiver('zip', { zlib: { level: 9 } });
-        archive.pipe(cipher).pipe(res);
-
-        archive.append(csv, { name: 'error_logs.csv' });
-
-        await archive.finalize();
+        res.type('application/octet-stream');
+        return res.send(payload);
     } catch (error) {
         console.error("Error backup failed:", error);
         if (!res.headersSent) {
@@ -569,24 +588,16 @@ export async function downloadSystemBackup(req, res) {
             userAgent: req.headers['user-agent']
         });
 
-        const algorithm = 'aes-256-cbc';
-        const password = process.env.BACKUP_PASSWORD || 'default_secret_password';
-        const key = crypto.scryptSync(password, 'salt', 32);
-        const iv = crypto.randomBytes(16);
+        const payload = await buildEncryptedBackupPayload([
+            { name: 'appointments.csv', content: appointmentsCsv },
+            { name: 'appointments_archive.csv', content: archivedAppointmentsCsv },
+            { name: 'audit_logs.csv', content: auditCsv },
+            { name: 'error_logs.csv', content: errorCsv },
+        ]);
 
         res.attachment('system_backup.zip.enc');
-        res.write(iv);
-
-        const cipher = crypto.createCipheriv(algorithm, key, iv);
-        const archive = archiver('zip', { zlib: { level: 9 } });
-        archive.pipe(cipher).pipe(res);
-
-        if (appointmentsCsv) archive.append(appointmentsCsv, { name: 'appointments.csv' });
-        if (archivedAppointmentsCsv) archive.append(archivedAppointmentsCsv, { name: 'appointments_archive.csv' });
-        if (auditCsv) archive.append(auditCsv, { name: 'audit_logs.csv' });
-        if (errorCsv) archive.append(errorCsv, { name: 'error_logs.csv' });
-
-        await archive.finalize();
+        res.type('application/octet-stream');
+        return res.send(payload);
     } catch (error) {
         console.error("System backup failed:", error);
         if (!res.headersSent) {

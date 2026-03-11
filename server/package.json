@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon server.js --watch . --ext js,json",
     "start": "node server.js",
+    "postinstall": "node scripts/patchExpressRateLimitTsconfig.js",
     "create-admin": "node scripts/createAdmin.js",
     "create-doctor": "node scripts/createDoctor.js"
   },
@@ -19,7 +20,7 @@
     "ethers": "^6.15.0",
     "express": "^4.22.1",
     "express-mongo-sanitize": "^2.2.0",
-    "express-rate-limit": "^8.2.1",
+    "express-rate-limit": "^8.2.2",
     "express-validator": "^7.3.1",
     "helmet": "^8.1.0",
     "json2csv": "^6.0.0-alpha.2",
@@ -33,6 +34,7 @@
     "passport-google-oauth20": "^2.0.0"
   },
   "devDependencies": {
+    "@express-rate-limit/tsconfig": "^1.0.2",
     "nodemon": "^3.0.1"
   }
 }

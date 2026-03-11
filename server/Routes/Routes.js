@@ -44,7 +44,7 @@ import authMiddleware from '../Middleware/authMiddleware.js';
 import { authorizeRoles } from '../Middleware/rbacMiddleware.js';
 import User from '../Models/UserModel.js';
 import { uploadLicense, handleUploadError } from '../Middleware/uploadMiddleware.js';
-import { loginLimiter } from '../Middleware/rateLimiter.js';
+import { loginLimiter, otpVerifyLimiter, otpResendLimiter } from '../Middleware/rateLimiter.js';
 import { body, validationResult } from 'express-validator';
 import passport from 'passport';
 
@@ -133,13 +133,16 @@ router.post('/login',
     login
 );
 router.post('/verify-otp',
+    otpVerifyLimiter,
     [
         body('otp').trim().isLength({ min: 6, max: 6 }).escape(),
         body('userId').isMongoId()
     ],
+    validate,
     verifyOTP
 );
 router.post('/resend-otp',
+    otpResendLimiter,
     [
         body('userId').isMongoId()
     ],
