@@ -1,8 +1,99 @@
 import Appointments from "../Models/AppointmentsModel.js";
 import AuditLog from "../Models/AuditLogModel.js";
+import DoctorSchedule from "../Models/DoctorScheduleModel.js";
 import User from "../Models/UserModel.js";
 import crypto from 'crypto';
 import { blockchainService } from '../Utils/blockchainService.js';
+import {
+    CLINIC_TIMEZONE,
+    EMPTY_WEEK_DAYS,
+    WEEK_DAY_SEQUENCE,
+    parseDateKey,
+    getWeekStartDateKey,
+    getWeekStartDateKeyFromDateKey,
+    getDayKeyFromDateKey,
+    buildSlotsForDateByDaySessions,
+    normalizeWeekDays,
+    getWeekContextForDate,
+} from '../Utils/schedulingService.js';
+
+const ACTIVE_BOOKING_STATUSES = ['Pending', 'Confirmed']
+
+const formatDateKeyFromUtcDate = (value) => {
+    const date = value instanceof Date ? value : new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    const year = date.getUTCFullYear()
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(date.getUTCDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
+const weekStartDateFromKey = (weekStartDateKey) => new Date(`${weekStartDateKey}T00:00:00.000Z`)
+
+const resolveWeekStartDateKey = (value) => {
+    const asDateKey = parseDateKey(value)
+    if (asDateKey) {
+        return getWeekStartDateKeyFromDateKey(
+            `${asDateKey.year}-${String(asDateKey.month).padStart(2, '0')}-${String(asDateKey.day).padStart(2, '0')}`
+        )
+    }
+
+    const asDate = new Date(String(value || '').trim())
+    if (Number.isNaN(asDate.getTime())) return null
+    return getWeekStartDateKey(asDate)
+}
+
+const daySessionsToResponse = (daySessions = {}) => ({
+    morning: Boolean(daySessions?.morning),
+    afternoon: Boolean(daySessions?.afternoon),
+})
+
+const serializeSchedule = (schedule, fallback = {}) => {
+    const weekStart = schedule?.weekStart
+        ? formatDateKeyFromUtcDate(schedule.weekStart)
+        : String(fallback.weekStart || '')
+    const doctorId = String(schedule?.doctor || fallback.doctorId || '')
+    const normalizedDays = normalizeWeekDays(schedule?.days || fallback.days || EMPTY_WEEK_DAYS)
+
+    const hasEnabledSession = WEEK_DAY_SEQUENCE.some(
+        (dayKey) => normalizedDays[dayKey]?.morning || normalizedDays[dayKey]?.afternoon
+    )
+
+    return {
+        id: schedule?._id ? String(schedule._id) : undefined,
+        doctorId,
+        weekStart,
+        timezone: schedule?.timezone || CLINIC_TIMEZONE,
+        hasSchedule: Boolean(schedule),
+        hasEnabledSession,
+        days: WEEK_DAY_SEQUENCE.reduce((acc, dayKey) => {
+            acc[dayKey] = daySessionsToResponse(normalizedDays[dayKey])
+            return acc
+        }, {}),
+    }
+}
+
+const buildWeeklySlots = (schedulePayload) => {
+    const weekStartParts = parseDateKey(schedulePayload.weekStart)
+    if (!weekStartParts) return {}
+
+    const weeklySlots = {}
+    for (let index = 0; index < WEEK_DAY_SEQUENCE.length; index += 1) {
+        const dayKey = WEEK_DAY_SEQUENCE[index]
+        const date = new Date(
+            Date.UTC(weekStartParts.year, weekStartParts.month - 1, weekStartParts.day + index)
+        )
+        const dateKey = formatDateKeyFromUtcDate(date)
+        weeklySlots[dayKey] = buildSlotsForDateByDaySessions(dateKey, schedulePayload.days[dayKey]).map((slot) => ({
+            startIso: slot.startIso,
+            endIso: slot.endIso,
+            label: slot.label,
+            session: slot.session,
+        }))
+    }
+
+    return weeklySlots
+}
 
 export async function createAppointment(req, res) {
     try {
@@ -42,14 +133,19 @@ export async function createAppointment(req, res) {
             });
         }
 
-        if (new Date(scheduledDate) < Date.now()) {
+        const appointmentDate = scheduledDate instanceof Date ? scheduledDate : new Date(scheduledDate)
+        if (Number.isNaN(appointmentDate.getTime())) {
+            return res.status(400).json({ message: "Invalid appointment date." });
+        }
+
+        if (appointmentDate < Date.now()) {
             return res.status(400).json({ message: "Appointment date must be in the future." });
         }
 
         //Check for Existing Pending/Confirmed Appointments
         const existingAppointment = await Appointments.findOne({
             patient: patientId,
-            status: { $in: ["Pending", "Confirmed"] }
+            status: { $in: ACTIVE_BOOKING_STATUSES }
         });
 
         if (existingAppointment) {
@@ -80,11 +176,66 @@ export async function createAppointment(req, res) {
             return res.status(400).json({ message: "Selected doctor is invalid, unavailable, or not in the selected department." });
         }
 
+        const weekContext = getWeekContextForDate(appointmentDate)
+        if (!weekContext?.weekStartDateKey || !weekContext?.dayKey) {
+            return res.status(400).json({ message: 'Unable to resolve clinic schedule context for this appointment.' })
+        }
+
+        if (weekContext.second !== 0 || weekContext.millisecond !== 0) {
+            return res.status(400).json({
+                message: 'Appointments must start exactly at a scheduled slot time.',
+            })
+        }
+
+        if (!weekContext.sessionName) {
+            return res.status(400).json({
+                message: 'Select a valid 1-hour slot. Morning: 8:00, 9:00, 10:00, 11:00. Afternoon: 1:30, 2:30, 3:30 PM.',
+            })
+        }
+
+        const weekStartDate = weekStartDateFromKey(weekContext.weekStartDateKey)
+        const doctorSchedule = await DoctorSchedule.findOne({
+            doctor: doctorId,
+            weekStart: weekStartDate,
+        }).select('days')
+
+        if (!doctorSchedule) {
+            return res.status(400).json({
+                message: `No schedule is published for this doctor on week starting ${weekContext.weekStartDateKey}.`,
+            })
+        }
+
+        const normalizedDays = normalizeWeekDays(doctorSchedule.days)
+        const daySchedule = normalizedDays[weekContext.dayKey]
+        if (!daySchedule?.[weekContext.sessionName]) {
+            return res.status(400).json({
+                message: `Doctor is not available on ${weekContext.dayKey} ${weekContext.sessionName} session.`,
+            })
+        }
+
+        const validSlots = buildSlotsForDateByDaySessions(weekContext.clinicDateKey, daySchedule)
+        const isValidSlot = validSlots.some((slot) => slot.startAt.getTime() === appointmentDate.getTime())
+        if (!isValidSlot) {
+            return res.status(400).json({
+                message: 'Selected time is outside the doctor schedule or not a valid 1-hour slot.',
+            })
+        }
+
+        const conflictingAppointment = await Appointments.findOne({
+            doctor: doctorId,
+            scheduledDate: appointmentDate,
+            status: { $in: ACTIVE_BOOKING_STATUSES },
+        }).select('_id')
+        if (conflictingAppointment) {
+            return res.status(409).json({
+                message: 'Selected slot is already booked for this doctor.',
+            })
+        }
 
         const appointment = new Appointments({
             doctor: doctorId,
             patient: patientId,
-            scheduledDate,
+            scheduledDate: appointmentDate,
             department: normalizedDepartment,
             reason: reason || note || 'General consultation',
         });
@@ -114,6 +265,223 @@ export async function createAppointment(req, res) {
     } catch (error) {
         console.error("Failed to create appointment:", error);
         return res.status(500).json({ message: "Failed to create appointment." });
+    }
+}
+
+export async function getDoctorWeeklySchedule(req, res) {
+    try {
+        const actorId = req.user?.id || req.user?._id
+        const actorRole = req.user?.role
+        if (!actorId) return res.status(401).json({ message: 'Invalid session' })
+
+        const requestedDoctorId = String(req.query?.doctorId || '').trim()
+        const doctorId =
+            actorRole === 'admin' || actorRole === 'system_admin'
+                ? (requestedDoctorId || String(actorId))
+                : String(actorId)
+
+        if (!doctorId) {
+            return res.status(400).json({ message: 'doctorId is required for this role.' })
+        }
+
+        const weekStartDateKey = resolveWeekStartDateKey(req.params?.weekStart)
+        if (!weekStartDateKey) {
+            return res.status(400).json({ message: 'Invalid weekStart value. Use YYYY-MM-DD.' })
+        }
+
+        const doctor = await User.findOne({ _id: doctorId, role: 'doctor' }).select('_id status')
+        if (!doctor) {
+            return res.status(404).json({ message: 'Doctor not found.' })
+        }
+
+        const schedule = await DoctorSchedule.findOne({
+            doctor: doctorId,
+            weekStart: weekStartDateFromKey(weekStartDateKey),
+        })
+
+        const payload = serializeSchedule(schedule, { doctorId, weekStart: weekStartDateKey })
+        return res.json({
+            schedule: payload,
+            weeklySlots: buildWeeklySlots(payload),
+        })
+    } catch (error) {
+        console.error('Failed to load doctor weekly schedule', error)
+        return res.status(500).json({ message: 'Failed to load doctor weekly schedule.' })
+    }
+}
+
+export async function upsertDoctorWeeklySchedule(req, res) {
+    try {
+        const actorId = req.user?.id || req.user?._id
+        const actorRole = req.user?.role
+        if (!actorId) return res.status(401).json({ message: 'Invalid session' })
+
+        const requestedDoctorId = String(req.body?.doctorId || '').trim()
+        const doctorId =
+            actorRole === 'admin' || actorRole === 'system_admin'
+                ? requestedDoctorId
+                : String(actorId)
+
+        if (!doctorId) {
+            return res.status(400).json({ message: 'doctorId is required.' })
+        }
+
+        if (actorRole === 'doctor' && requestedDoctorId && requestedDoctorId !== String(actorId)) {
+            return res.status(403).json({ message: 'Doctors can only modify their own schedules.' })
+        }
+
+        const weekStartDateKey = resolveWeekStartDateKey(req.params?.weekStart)
+        if (!weekStartDateKey) {
+            return res.status(400).json({ message: 'Invalid weekStart value. Use YYYY-MM-DD.' })
+        }
+
+        const doctor = await User.findOne({ _id: doctorId, role: 'doctor' }).select('_id email status')
+        if (!doctor) {
+            return res.status(404).json({ message: 'Doctor not found.' })
+        }
+
+        const normalizedDays = normalizeWeekDays(req.body?.days || {})
+        const schedule = await DoctorSchedule.findOneAndUpdate(
+            {
+                doctor: doctorId,
+                weekStart: weekStartDateFromKey(weekStartDateKey),
+            },
+            {
+                $set: {
+                    timezone: CLINIC_TIMEZONE,
+                    days: normalizedDays,
+                },
+            },
+            {
+                new: true,
+                upsert: true,
+                setDefaultsOnInsert: true,
+            }
+        )
+
+        await AuditLog.create({
+            action: 'UPDATED_DOCTOR_WEEKLY_SCHEDULE',
+            userId: actorId,
+            details: `Doctor ${doctor.email} weekly schedule updated for week ${weekStartDateKey}.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        })
+
+        const payload = serializeSchedule(schedule)
+        return res.json({
+            message: 'Doctor weekly schedule saved.',
+            schedule: payload,
+            weeklySlots: buildWeeklySlots(payload),
+        })
+    } catch (error) {
+        console.error('Failed to save doctor weekly schedule', error)
+        return res.status(500).json({ message: 'Failed to save doctor weekly schedule.' })
+    }
+}
+
+export async function getDoctorAvailableSlots(req, res) {
+    try {
+        const doctorId = String(req.params?.doctorId || '').trim()
+        if (!doctorId) {
+            return res.status(400).json({ message: 'doctorId is required.' })
+        }
+
+        const dateKeyRaw = String(req.query?.date || '').trim()
+        const dateParts = parseDateKey(dateKeyRaw)
+        if (!dateParts) {
+            return res.status(400).json({ message: 'date query is required in YYYY-MM-DD format.' })
+        }
+
+        const dateKey = `${dateParts.year}-${String(dateParts.month).padStart(2, '0')}-${String(dateParts.day).padStart(2, '0')}`
+        const dayKey = getDayKeyFromDateKey(dateKey)
+        const weekStartDateKey = getWeekStartDateKeyFromDateKey(dateKey)
+        if (!dayKey || !weekStartDateKey) {
+            return res.status(400).json({ message: 'Unable to resolve schedule week/day for this date.' })
+        }
+
+        const doctor = await User.findOne({
+            _id: doctorId,
+            role: 'doctor',
+            status: 'active',
+        }).select('_id')
+        if (!doctor) {
+            return res.status(404).json({ message: 'Doctor not found or inactive.' })
+        }
+
+        const schedule = await DoctorSchedule.findOne({
+            doctor: doctorId,
+            weekStart: weekStartDateFromKey(weekStartDateKey),
+        }).select('days')
+
+        if (!schedule) {
+            return res.json({
+                doctorId,
+                date: dateKey,
+                weekStart: weekStartDateKey,
+                dayKey,
+                timezone: CLINIC_TIMEZONE,
+                hasWeekSchedule: false,
+                daySessions: daySessionsToResponse(),
+                slots: [],
+                availableCount: 0,
+            })
+        }
+
+        const normalizedDays = normalizeWeekDays(schedule.days)
+        const daySessions = daySessionsToResponse(normalizedDays[dayKey])
+        const daySlots = buildSlotsForDateByDaySessions(dateKey, daySessions)
+        if (daySlots.length === 0) {
+            return res.json({
+                doctorId,
+                date: dateKey,
+                weekStart: weekStartDateKey,
+                dayKey,
+                timezone: CLINIC_TIMEZONE,
+                hasWeekSchedule: true,
+                daySessions,
+                slots: [],
+                availableCount: 0,
+            })
+        }
+
+        const activeAppointments = await Appointments.find({
+            doctor: doctorId,
+            status: { $in: ACTIVE_BOOKING_STATUSES },
+            scheduledDate: { $in: daySlots.map((slot) => slot.startAt) },
+        }).select('scheduledDate')
+
+        const bookedSet = new Set(
+            activeAppointments.map((appointment) => new Date(appointment.scheduledDate).toISOString())
+        )
+        const nowMs = Date.now()
+        const slots = daySlots.map((slot) => {
+            const isBooked = bookedSet.has(slot.startIso)
+            const isPast = slot.startAt.getTime() <= nowMs
+            return {
+                startIso: slot.startIso,
+                endIso: slot.endIso,
+                label: slot.label,
+                session: slot.session,
+                isBooked,
+                isPast,
+                isAvailable: !isBooked && !isPast,
+            }
+        })
+
+        return res.json({
+            doctorId,
+            date: dateKey,
+            weekStart: weekStartDateKey,
+            dayKey,
+            timezone: CLINIC_TIMEZONE,
+            hasWeekSchedule: true,
+            daySessions,
+            slots,
+            availableCount: slots.filter((slot) => slot.isAvailable).length,
+        })
+    } catch (error) {
+        console.error('Failed to load doctor available slots', error)
+        return res.status(500).json({ message: 'Failed to load doctor available slots.' })
     }
 }
 
@@ -479,11 +847,18 @@ export async function updateDoctorQueueStatus(req, res) {
             return res.status(404).json({ message: 'Appointment not found.' })
         }
 
+        const previousStatus = appointment.status
         appointment.queueStatus = queueStatus
         if (queueStatus === 'Checked-Out') appointment.status = 'Completed'
         if (queueStatus === 'No-Show') appointment.status = 'Cancelled'
         if (queueStatus === 'Arrived' && appointment.status === 'Pending') appointment.status = 'Confirmed'
         await appointment.save()
+
+        // Keep blockchain status in sync when queue updates drive status transitions.
+        if (appointment.status !== previousStatus) {
+            blockchainService.updateStatusOnChain(appointment._id, appointment.status)
+                .catch((err) => console.error('Blockchain sync failed for queue status update:', err))
+        }
 
         await AuditLog.create({
             userId: doctorId,

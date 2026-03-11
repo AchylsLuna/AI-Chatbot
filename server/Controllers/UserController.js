@@ -465,63 +465,6 @@ export async function registerDoctor(req, res) {
     }
 }
 
-export async function registerNurse(req, res) {
-    try {
-        const { email, firstName, lastName, password, department } = req.body;
-        const licenseFiles = extractUploadedLicenses(req);
-        const licensePaths = licenseFiles.map((file) => String(file.path || '').trim()).filter(Boolean);
-        const normalizedDepartment = String(department || '').trim();
-
-        if (!firstName || !lastName || !password || !email || !normalizedDepartment) {
-            return res.status(400).json({ message: "Missing required field" });
-        }
-        if (licensePaths.length === 0) {
-            return res.status(400).json({ message: "At least one nursing license file is required" });
-        }
-
-        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com|yahoo\.com|outlook\.com)$/i;
-        if (!emailRegex.test(email)) {
-            return res.status(400).json({
-                message: "Email is invalid"
-            });
-        }
-
-        const emailExists = await User.findOne({ email });
-        if (emailExists) {
-            return res.status(409).json({ message: "Email is already registered." });
-        }
-
-        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-        if (!passwordRegex.test(password)) {
-            return res.status(400).json({
-                message: "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character."
-            });
-        }
-
-        const nurse = new User({
-            email,
-            firstName,
-            lastName,
-            role: "nurse",
-            department: normalizedDepartment,
-            licenseUrl: licensePaths[0],
-            licenseUrls: licensePaths,
-            status: "disabled",
-            staffApplicationReviewed: false
-        });
-
-        await nurse.setPassword(password);
-        await nurse.save();
-
-        return res.status(201).json({
-            message: "Nurse registration submitted successfully. Pending approval."
-        });
-    } catch (error) {
-        console.error("Nurse Registration Failed:", error);
-        return res.status(500).json({ message: "Registration Failed." });
-    }
-}
-
 export async function getMyProfile(req, res) {
     try {
         const userId = req.user?.id || req.user?._id

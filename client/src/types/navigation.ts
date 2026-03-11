@@ -10,4 +10,3 @@ export type AppPage =
   | 'forgot_password'
   | 'signup'
   | 'doctor_signup'
-  | 'nurse_signup'

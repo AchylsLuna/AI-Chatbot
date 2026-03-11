@@ -17,6 +17,8 @@ import { buildRouteFromCanonicalPath, normalizePath } from '../config/routing'
 import { getDoctorTabPath, resolveDoctorTabFromPath } from '../config/workspaceTabRoutes'
 import {
   api,
+  type DoctorScheduleDays,
+  type DoctorWeeklySchedule,
   type DoctorDashboardOverview,
   type DoctorPatientProfile,
   type DoctorQueueStatus,
@@ -25,6 +27,11 @@ import {
   type SoapNotePayload,
 } from '../services/api'
 import type { AuthSession, Reservation } from '../types'
+import {
+  formatPhilippineDateTime,
+  formatPhilippineMonthYear,
+  formatPhilippineTime,
+} from '../utils/dateTime'
 import { maskIdentifier, maskPersonName } from '../utils/privacy'
 import { getWorkspaceRoleLabel } from '../utils/roles'
 
@@ -37,10 +44,9 @@ type DoctorDashboardPageProps = {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   dataMaskingEnabled: boolean
-  onToggleDataMasking: () => void
 }
 
-type DoctorSection = 'appointments' | 'queue' | 'analytics' | 'settings'
+type DoctorSection = 'appointments' | 'calendar' | 'schedule' | 'queue' | 'analytics' | 'settings'
 
 type AppointmentListItem = {
   id: string
@@ -64,6 +70,18 @@ const primaryItems: SidebarItem[] = [
     key: 'appointments',
     label: 'Appointments',
     caption: 'Current appointment queue',
+    icon: 'book',
+  },
+  {
+    key: 'calendar',
+    label: 'Calendar',
+    caption: 'Monthly appointment view',
+    icon: 'calendar',
+  },
+  {
+    key: 'schedule',
+    label: 'Schedule',
+    caption: 'Weekly availability setup',
     icon: 'calendar',
   },
   {
@@ -85,16 +103,88 @@ const parseDate = (value: string) => {
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
+const parseDateForCalendar = (value: string) => {
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim())
+  if (dateOnlyMatch) {
+    const year = Number(dateOnlyMatch[1])
+    const monthIndex = Number(dateOnlyMatch[2]) - 1
+    const day = Number(dateOnlyMatch[3])
+    const localDate = new Date(year, monthIndex, day)
+    return Number.isNaN(localDate.getTime()) ? null : localDate
+  }
+
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 const formatDateTime = (value: string) => {
   const timestamp = parseDate(value)
   if (!timestamp) return 'Unknown'
-  return new Date(timestamp).toLocaleString()
+  return formatPhilippineDateTime(timestamp)
 }
 
 const formatTime = (value: string) => {
   const timestamp = parseDate(value)
   if (!timestamp) return 'Unknown'
-  return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return formatPhilippineTime(timestamp)
+}
+
+const formatMonthInputValue = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
+const scheduleDayOrder: Array<keyof DoctorScheduleDays> = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+]
+
+const scheduleDayLabels: Record<keyof DoctorScheduleDays, string> = {
+  monday: 'Monday',
+  tuesday: 'Tuesday',
+  wednesday: 'Wednesday',
+  thursday: 'Thursday',
+  friday: 'Friday',
+  saturday: 'Saturday',
+  sunday: 'Sunday',
+}
+
+const emptyDoctorScheduleDays = (): DoctorScheduleDays => ({
+  monday: { morning: false, afternoon: false },
+  tuesday: { morning: false, afternoon: false },
+  wednesday: { morning: false, afternoon: false },
+  thursday: { morning: false, afternoon: false },
+  friday: { morning: false, afternoon: false },
+  saturday: { morning: false, afternoon: false },
+  sunday: { morning: false, afternoon: false },
+})
+
+const toDateInputValue = (value: Date) => {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
+}
+
+const getMondayDate = (value: Date) => {
+  const base = new Date(value)
+  base.setHours(0, 0, 0, 0)
+  const day = base.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  base.setDate(base.getDate() + diff)
+  return base
+}
+
+const buildDefaultScheduleWeek = () => toDateInputValue(getMondayDate(new Date()))
+
+const normalizeWeekInputValue = (value: string) => {
+  const parsed = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return buildDefaultScheduleWeek()
+  return toDateInputValue(getMondayDate(parsed))
 }
 
 const queueStatusChipClass = (queueStatus: DoctorQueueStatus) => {
@@ -163,7 +253,6 @@ const DoctorDashboardPage = ({
   theme,
   onToggleTheme,
   dataMaskingEnabled,
-  onToggleDataMasking,
 }: DoctorDashboardPageProps) => {
   const [activeSection, setActiveSection] = useState<DoctorSection>(() => {
     if (typeof window === 'undefined') return 'appointments'
@@ -171,6 +260,10 @@ const DoctorDashboardPage = ({
   })
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [calendarViewDate, setCalendarViewDate] = useState(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  })
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentListItem | null>(null)
   const [showAppointmentDetail, setShowAppointmentDetail] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
@@ -215,12 +308,26 @@ const DoctorDashboardPage = ({
   const [patientProfile, setPatientProfile] = useState<DoctorPatientProfile | null>(null)
   const [isPatientProfileLoading, setIsPatientProfileLoading] = useState(false)
   const [patientProfileError, setPatientProfileError] = useState<string | null>(null)
+  const [doctorAppointments, setDoctorAppointments] = useState<Reservation[]>(reservations)
+  const [scheduleWeekStart, setScheduleWeekStart] = useState(buildDefaultScheduleWeek)
+  const [scheduleDraft, setScheduleDraft] = useState<DoctorScheduleDays>(emptyDoctorScheduleDays)
+  const [scheduleWeekSlots, setScheduleWeekSlots] = useState<DoctorWeeklySchedule['weeklySlots']>({})
+  const [scheduleHasPublishedWeek, setScheduleHasPublishedWeek] = useState(false)
+  const [scheduleHasEnabledSession, setScheduleHasEnabledSession] = useState(false)
+  const [isScheduleLoading, setIsScheduleLoading] = useState(false)
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false)
+  const [scheduleError, setScheduleError] = useState<string | null>(null)
+  const [scheduleMessage, setScheduleMessage] = useState<string | null>(null)
 
   useEffect(() => {
     const nextName = buildDoctorDisplayName(authUser)
     setProfileName(nextName)
     setProfileNameDraft(nextName)
   }, [authUser?.firstName, authUser?.lastName, authUser?.username])
+
+  useEffect(() => {
+    setDoctorAppointments(reservations)
+  }, [reservations])
 
   // Auto-logout after 15 minutes of inactivity (900000 ms)
   const INACTIVITY_MS = 15 * 60 * 1000
@@ -378,6 +485,13 @@ const DoctorDashboardPage = ({
       setDoctorOverview(overview)
       setQueueTimeline(timeline)
       setFrequentPrescriptions(frequent)
+
+      try {
+        const appointments = await api.getAppointments()
+        setDoctorAppointments(appointments)
+      } catch (error) {
+        console.warn('Unable to refresh doctor appointments list.', error)
+      }
     } catch (error) {
       setDoctorDataError(error instanceof Error ? error.message : 'Unable to load doctor workspace data.')
     } finally {
@@ -392,6 +506,11 @@ const DoctorDashboardPage = ({
     }, 30000)
     return () => window.clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    if (activeSection !== 'schedule') return
+    void loadDoctorScheduleForWeek(scheduleWeekStart)
+  }, [activeSection, scheduleWeekStart])
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockTick(Date.now()), 1000)
@@ -516,6 +635,72 @@ const DoctorDashboardPage = ({
     }
   }
 
+  const loadDoctorScheduleForWeek = async (weekStart: string) => {
+    setIsScheduleLoading(true)
+    setScheduleError(null)
+    try {
+      const schedule = await api.getDoctorWeeklySchedule(weekStart)
+      setScheduleDraft(schedule.days)
+      setScheduleWeekSlots(schedule.weeklySlots)
+      setScheduleHasPublishedWeek(schedule.hasSchedule)
+      setScheduleHasEnabledSession(schedule.hasEnabledSession)
+      setScheduleWeekStart(schedule.weekStart || weekStart)
+    } catch (error) {
+      setScheduleError(error instanceof Error ? error.message : 'Unable to load weekly schedule.')
+      setScheduleDraft(emptyDoctorScheduleDays())
+      setScheduleWeekSlots({})
+      setScheduleHasPublishedWeek(false)
+      setScheduleHasEnabledSession(false)
+    } finally {
+      setIsScheduleLoading(false)
+    }
+  }
+
+  const toggleScheduleSession = (
+    dayKey: keyof DoctorScheduleDays,
+    session: 'morning' | 'afternoon'
+  ) => {
+    setScheduleDraft((previous) => ({
+      ...previous,
+      [dayKey]: {
+        ...previous[dayKey],
+        [session]: !previous[dayKey][session],
+      },
+    }))
+    setScheduleMessage(null)
+    if (scheduleError) setScheduleError(null)
+  }
+
+  const shiftScheduleWeek = (deltaDays: number) => {
+    setScheduleWeekStart((previous) => {
+      const parsed = new Date(`${previous}T00:00:00`)
+      if (Number.isNaN(parsed.getTime())) return previous
+      parsed.setDate(parsed.getDate() + deltaDays)
+      return normalizeWeekInputValue(toDateInputValue(parsed))
+    })
+    setScheduleMessage(null)
+    if (scheduleError) setScheduleError(null)
+  }
+
+  const handleSaveWeeklySchedule = async () => {
+    setIsSavingSchedule(true)
+    setScheduleError(null)
+    setScheduleMessage(null)
+    try {
+      const saved = await api.saveDoctorWeeklySchedule(scheduleWeekStart, scheduleDraft)
+      setScheduleDraft(saved.days)
+      setScheduleWeekSlots(saved.weeklySlots)
+      setScheduleHasPublishedWeek(saved.hasSchedule)
+      setScheduleHasEnabledSession(saved.hasEnabledSession)
+      setScheduleWeekStart(saved.weekStart || scheduleWeekStart)
+      setScheduleMessage('Weekly schedule saved.')
+    } catch (error) {
+      setScheduleError(error instanceof Error ? error.message : 'Unable to save weekly schedule.')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
   const appointmentItems = useMemo<AppointmentListItem[]>(() => {
     if (queueTimeline.length > 0) {
       return [...queueTimeline]
@@ -540,7 +725,8 @@ const DoctorDashboardPage = ({
         }))
     }
 
-    const orderedReservations = [...reservations].sort(
+    const fallbackReservations = doctorAppointments.length > 0 ? doctorAppointments : reservations
+    const orderedReservations = [...fallbackReservations].sort(
       (a, b) => parseDate(a.requestedTime) - parseDate(b.requestedTime)
     )
 
@@ -563,7 +749,7 @@ const DoctorDashboardPage = ({
       flagged: reservation.status === 'Failed' || reservation.priority === 'High',
       checkupHistory: [],
     }))
-  }, [queueTimeline, reservations])
+  }, [doctorAppointments, queueTimeline, reservations])
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
 
@@ -579,6 +765,64 @@ const DoctorDashboardPage = ({
       )
     })
   }, [normalizedQuery, appointmentItems])
+
+  const pendingCalendarReservations = useMemo(() => {
+    const sourceReservations = doctorAppointments.length > 0 ? doctorAppointments : reservations
+    const pendingReservations = sourceReservations.filter((item) => item.status === 'Booked')
+    if (!normalizedQuery) return pendingReservations
+
+    return pendingReservations.filter((item) => {
+      return (
+        item.patientName.toLowerCase().includes(normalizedQuery) ||
+        item.id.toLowerCase().includes(normalizedQuery) ||
+        item.department.toLowerCase().includes(normalizedQuery) ||
+        item.symptoms.toLowerCase().includes(normalizedQuery) ||
+        item.priority.toLowerCase().includes(normalizedQuery)
+      )
+    })
+  }, [doctorAppointments, normalizedQuery, reservations])
+
+  const calendarView = useMemo(() => {
+    const year = calendarViewDate.getFullYear()
+    const month = calendarViewDate.getMonth()
+    const firstDayOfMonth = new Date(year, month, 1)
+    const startWeekday = firstDayOfMonth.getDay()
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const appointmentsByDay = new Map<number, Reservation[]>()
+
+    for (const item of pendingCalendarReservations) {
+      const date = parseDateForCalendar(item.requestedTime)
+      if (!date) continue
+      if (date.getFullYear() !== year || date.getMonth() !== month) continue
+      const day = date.getDate()
+      const bucket = appointmentsByDay.get(day) ?? []
+      bucket.push(item)
+      appointmentsByDay.set(day, bucket)
+    }
+
+    for (const bucket of appointmentsByDay.values()) {
+      bucket.sort((a, b) => {
+        const aDate = parseDateForCalendar(a.requestedTime)
+        const bDate = parseDateForCalendar(b.requestedTime)
+        const aTime = aDate ? aDate.getTime() : Number.POSITIVE_INFINITY
+        const bTime = bDate ? bDate.getTime() : Number.POSITIVE_INFINITY
+        return aTime - bTime
+      })
+    }
+
+    const cells: Array<{ day: number; appointments: Reservation[] } | null> = []
+    for (let index = 0; index < startWeekday; index += 1) cells.push(null)
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      cells.push({ day, appointments: appointmentsByDay.get(day) ?? [] })
+    }
+    while (cells.length % 7 !== 0) cells.push(null)
+
+    return {
+      monthLabel: formatPhilippineMonthYear(firstDayOfMonth),
+      appointmentsThisMonth: Array.from(appointmentsByDay.values()).reduce((sum, items) => sum + items.length, 0),
+      cells,
+    }
+  }, [calendarViewDate, pendingCalendarReservations])
 
   const queueItems = useMemo(() => {
     if (!normalizedQuery) return appointmentItems
@@ -642,6 +886,28 @@ const DoctorDashboardPage = ({
     ]
   }, [appointmentItems])
 
+  const scheduleMetrics = useMemo(() => {
+    const openDays = scheduleDayOrder.filter((dayKey) => {
+      const day = scheduleDraft[dayKey]
+      return Boolean(day?.morning || day?.afternoon)
+    }).length
+    const openSessions = scheduleDayOrder.reduce((sum, dayKey) => {
+      const day = scheduleDraft[dayKey]
+      return sum + (day?.morning ? 1 : 0) + (day?.afternoon ? 1 : 0)
+    }, 0)
+    const openSlots = scheduleDayOrder.reduce(
+      (sum, dayKey) => sum + (scheduleWeekSlots[dayKey]?.length || 0),
+      0
+    )
+
+    return [
+      { key: 'schedule-week', label: 'Week Start', value: scheduleWeekStart, caption: 'Monday-based week' },
+      { key: 'schedule-days', label: 'Open days', value: openDays, caption: 'Days with sessions enabled' },
+      { key: 'schedule-sessions', label: 'Open sessions', value: openSessions, caption: 'Morning + afternoon total' },
+      { key: 'schedule-slots', label: 'Slot count', value: openSlots, caption: scheduleHasPublishedWeek ? 'Published week slots' : 'Not published yet' },
+    ]
+  }, [scheduleDraft, scheduleHasPublishedWeek, scheduleWeekSlots, scheduleWeekStart])
+
   const settingsMetrics = useMemo(
     () => [
       { key: 'settings-name', label: 'Name', value: profileName, caption: 'Profile display name' },
@@ -658,6 +924,18 @@ const DoctorDashboardPage = ({
       description: 'View and manage the complete appointment queue with patient details and triage information.',
       searchPlaceholder: 'Search by patient name, ID, department, symptoms, or priority',
       metrics: appointmentMetrics,
+    },
+    calendar: {
+      title: 'Calendar',
+      description: 'View all pending appointments for the current month in a calendar table.',
+      searchPlaceholder: 'Search calendar appointments',
+      metrics: appointmentMetrics,
+    },
+    schedule: {
+      title: 'Schedule',
+      description: 'Configure your weekly morning and afternoon availability that controls patient booking slots.',
+      searchPlaceholder: 'Search schedules',
+      metrics: scheduleMetrics,
     },
     queue: {
       title: 'Queue Management',
@@ -676,7 +954,7 @@ const DoctorDashboardPage = ({
       description: 'Manage profile name, password security, and doctor workspace preferences.',
       searchPlaceholder: 'Search settings',
       metrics: settingsMetrics,
-    },
+    }
   } as const
 
   const activeMeta = sectionMeta[activeSection]
@@ -708,7 +986,7 @@ const DoctorDashboardPage = ({
               items={primaryItems}
               activeKey={activeSection}
               onSelect={(key) => {
-                if (key === 'appointments' || key === 'queue' || key === 'analytics') {
+                if (key === 'appointments' || key === 'calendar' || key === 'schedule' || key === 'queue' || key === 'analytics') {
                   setSection(key)
                 }
               }}
@@ -728,7 +1006,7 @@ const DoctorDashboardPage = ({
                 searchValue={searchQuery}
                 searchPlaceholder={activeMeta.searchPlaceholder}
                 onSearchChange={setSearchQuery}
-                showSearch={activeSection !== 'settings'}
+                showSearch={activeSection !== 'settings' && activeSection !== 'schedule'}
                 showAccountMenu={activeSection !== 'settings'}
                 profileName={profileName}
                 profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
@@ -883,6 +1161,101 @@ const DoctorDashboardPage = ({
                       })}
                     </div>
                   )}
+                </section>
+              ) : null}
+
+              {activeSection === 'calendar' ? (
+                <section className={`${workspacePanelClass} p-5`}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Monthly calendar</h2>
+                      <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>Pending appointments grouped by weekday and date.</p>
+                    </div>
+                    <p className={`text-xs font-semibold ${workspaceSubtleTextClass}`}>
+                      {calendarView.appointmentsThisMonth} appointment{calendarView.appointmentsThisMonth === 1 ? '' : 's'} this month
+                    </p>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-3">
+                    <p className={`text-base font-semibold ${workspaceHeadingTextClass}`}>
+                      Viewing: {calendarView.monthLabel}
+                    </p>
+                    <label className="flex items-center gap-2">
+                      <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${workspaceSubtleTextClass}`}>
+                        Month
+                      </span>
+                      <input
+                        type="month"
+                        value={formatMonthInputValue(calendarViewDate)}
+                        className={workspaceFieldClass}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          const match = /^(\d{4})-(\d{2})$/.exec(value)
+                          if (!match) return
+                          const year = Number(match[1])
+                          const monthIndex = Number(match[2]) - 1
+                          setCalendarViewDate(new Date(year, monthIndex, 1))
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="min-w-[760px] w-full table-fixed border-collapse">
+                      <thead>
+                        <tr>
+                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
+                            <th
+                              key={label}
+                              className={`border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}
+                            >
+                              {label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: calendarView.cells.length / 7 }, (_, rowIndex) => (
+                          <tr key={`week-${rowIndex}`}>
+                            {calendarView.cells.slice(rowIndex * 7, rowIndex * 7 + 7).map((cell, columnIndex) => (
+                              <td
+                                key={`cell-${rowIndex}-${columnIndex}`}
+                                className="h-32 align-top border border-[color:var(--card-border)] p-2"
+                              >
+                                {cell ? (
+                                  <div className="flex h-full min-h-0 flex-col">
+                                    <p className={`text-sm font-semibold ${workspaceHeadingTextClass}`}>{cell.day}</p>
+                                    {cell.appointments.length > 0 ? (
+                                      <div className="mt-2 max-h-20 space-y-1.5 overflow-y-auto pr-1">
+                                        {cell.appointments.slice(0, 3).map((apt) => (
+                                          <div
+                                            key={apt.id}
+                                            className="rounded-md border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-2 py-1"
+                                          >
+                                            <p className={`text-[11px] font-semibold ${workspaceHeadingTextClass}`}>
+                                              {formatTime(apt.requestedTime)}
+                                            </p>
+                                            <p className={`text-[11px] ${workspaceMutedTextClass}`}>
+                                              {dataMaskingEnabled ? maskPersonName(apt.patientName) : apt.patientName}
+                                            </p>
+                                          </div>
+                                        ))}
+                                        {cell.appointments.length > 3 ? (
+                                          <p className={`text-[11px] font-semibold ${workspaceSubtleTextClass}`}>
+                                            +{cell.appointments.length - 3} more
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </section>
               ) : null}
 
@@ -1084,6 +1457,153 @@ const DoctorDashboardPage = ({
                 </section>
               ) : null}
 
+              {activeSection === 'schedule' ? (
+                <section className={`${workspacePanelClass} p-5`}>
+                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Weekly availability schedule</h2>
+                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                    Publish your morning and afternoon sessions by week. Patients can only book available 1-hour slots from this schedule.
+                  </p>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-[auto_1fr_auto_auto] md:items-center">
+                    <button
+                      type="button"
+                      className={workspaceGhostButtonClass}
+                      onClick={() => shiftScheduleWeek(-7)}
+                      disabled={isScheduleLoading || isSavingSchedule}
+                    >
+                      Previous week
+                    </button>
+                    <input
+                      type="date"
+                      value={scheduleWeekStart}
+                      onChange={(event) => {
+                        setScheduleWeekStart(normalizeWeekInputValue(event.target.value))
+                        setScheduleMessage(null)
+                        if (scheduleError) setScheduleError(null)
+                      }}
+                      className={workspaceFieldClass}
+                      disabled={isScheduleLoading || isSavingSchedule}
+                    />
+                    <button
+                      type="button"
+                      className={workspaceGhostButtonClass}
+                      onClick={() => shiftScheduleWeek(7)}
+                      disabled={isScheduleLoading || isSavingSchedule}
+                    >
+                      Next week
+                    </button>
+                    <button
+                      type="button"
+                      className={workspaceGhostButtonClass}
+                      onClick={() => {
+                        setScheduleWeekStart(buildDefaultScheduleWeek())
+                        setScheduleMessage(null)
+                        if (scheduleError) setScheduleError(null)
+                      }}
+                      disabled={isScheduleLoading || isSavingSchedule}
+                    >
+                      This week
+                    </button>
+                  </div>
+
+                  <p className={`mt-2 text-xs ${workspaceSubtleTextClass}`}>
+                    Week starts on Monday. Morning session: 8:00 AM - 12:00 PM. Afternoon session: 1:30 PM - 5:00 PM.
+                  </p>
+                  <p className={`mt-1 text-xs ${workspaceSubtleTextClass}`}>
+                    Schedule status: {scheduleHasPublishedWeek ? 'Published' : 'Not published'} ·{' '}
+                    {scheduleHasEnabledSession ? 'Has open sessions' : 'All sessions closed'}
+                  </p>
+
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="min-w-[680px] w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] px-3 py-2 text-left text-xs uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+                            Day
+                          </th>
+                          <th className="border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] px-3 py-2 text-left text-xs uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+                            Morning
+                          </th>
+                          <th className="border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] px-3 py-2 text-left text-xs uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+                            Afternoon
+                          </th>
+                          <th className="border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] px-3 py-2 text-left text-xs uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+                            Slot preview
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {scheduleDayOrder.map((dayKey) => (
+                          <tr key={dayKey}>
+                            <td className="border border-[color:var(--card-border)] px-3 py-2 text-sm font-semibold text-[color:var(--agent-ink)]">
+                              {scheduleDayLabels[dayKey]}
+                            </td>
+                            <td className="border border-[color:var(--card-border)] px-3 py-2">
+                              <label className="inline-flex items-center gap-2 text-sm text-[color:var(--agent-ink)]">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(scheduleDraft[dayKey]?.morning)}
+                                  onChange={() => toggleScheduleSession(dayKey, 'morning')}
+                                  disabled={isScheduleLoading || isSavingSchedule}
+                                />
+                                Open
+                              </label>
+                            </td>
+                            <td className="border border-[color:var(--card-border)] px-3 py-2">
+                              <label className="inline-flex items-center gap-2 text-sm text-[color:var(--agent-ink)]">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(scheduleDraft[dayKey]?.afternoon)}
+                                  onChange={() => toggleScheduleSession(dayKey, 'afternoon')}
+                                  disabled={isScheduleLoading || isSavingSchedule}
+                                />
+                                Open
+                              </label>
+                            </td>
+                            <td className={`border border-[color:var(--card-border)] px-3 py-2 text-xs ${workspaceMutedTextClass}`}>
+                              {(scheduleWeekSlots[dayKey] || []).length > 0
+                                ? scheduleWeekSlots[dayKey].map((slot) => slot.label).join(', ')
+                                : 'No slots'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {scheduleError ? (
+                    <p className="mt-3 text-xs font-semibold text-rose-500">{scheduleError}</p>
+                  ) : null}
+                  {scheduleMessage ? (
+                    <p className="mt-3 text-xs font-semibold text-emerald-600">{scheduleMessage}</p>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className={workspacePrimaryButtonClass}
+                      onClick={() => {
+                        void handleSaveWeeklySchedule()
+                      }}
+                      disabled={isScheduleLoading || isSavingSchedule}
+                    >
+                      {isSavingSchedule ? 'Saving...' : 'Save weekly schedule'}
+                    </button>
+                    <button
+                      type="button"
+                      className={workspaceGhostButtonClass}
+                      onClick={() => {
+                        void loadDoctorScheduleForWeek(scheduleWeekStart)
+                        setScheduleMessage(null)
+                      }}
+                      disabled={isScheduleLoading || isSavingSchedule}
+                    >
+                      {isScheduleLoading ? 'Refreshing...' : 'Reload week'}
+                    </button>
+                  </div>
+                </section>
+              ) : null}
+
               {activeSection === 'settings' ? (
                 <section className="space-y-4">
                   <section className={`${workspacePanelClass} p-5`}>
@@ -1247,14 +1767,6 @@ const DoctorDashboardPage = ({
                         </p>
                       </div>
                       <div className="reference-card-soft p-3">
-                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
-                          Data masking
-                        </p>
-                        <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>
-                          {dataMaskingEnabled ? 'On' : 'Off'}
-                        </p>
-                      </div>
-                      <div className="reference-card-soft p-3">
                         <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Session</p>
                         <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{sessionStatus}</p>
                       </div>
@@ -1263,9 +1775,6 @@ const DoctorDashboardPage = ({
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
                         Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
-                      </button>
-                      <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
-                        Turn data masking {dataMaskingEnabled ? 'Off' : 'On'}
                       </button>
                     </div>
                   </section>

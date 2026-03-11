@@ -3,7 +3,7 @@ import type { UserRole } from '../types'
 
 const normalize = (value?: string | null) => String(value || '').trim().toLowerCase()
 
-const DOCTOR_ROLE_ALIASES = new Set(['nurse', 'doctor'])
+const DOCTOR_ROLE_ALIASES = new Set(['doctor'])
 const ADMIN_ROLE_ALIASES = new Set(['admin', 'system_admin'])
 const PATIENT_ROLE_ALIASES = new Set(['patient', 'user'])
 
@@ -20,7 +20,7 @@ const getNormalizedRole = (role?: string | null, accountType?: string | null) =>
   }
 
   if (DOCTOR_ROLE_ALIASES.has(normalizedRole) || DOCTOR_ROLE_ALIASES.has(normalizedAccountType)) {
-    return 'nurse'
+    return 'doctor'
   }
 
   if (PATIENT_ROLE_ALIASES.has(normalizedRole) || PATIENT_ROLE_ALIASES.has(normalizedAccountType)) {
@@ -38,7 +38,7 @@ export const normalizeRoleForSession = (
 }
 
 export const isDoctorRole = (role?: string | null, accountType?: string | null) => {
-  return getNormalizedRole(role, accountType) === 'nurse'
+  return getNormalizedRole(role, accountType) === 'doctor'
 }
 
 export const isAdminRole = (role?: string | null, accountType?: string | null) => {

@@ -227,12 +227,12 @@ Note: `decrypt_backup/decrypt_backup.js` currently has a hardcoded password; upd
   - `GET /access-requests`
   - `POST /audit/ai-alert-action`
   - `PATCH /appointments/:id`
-- Role mismatch (`doctor` vs client role enum `user|nurse|admin|system_admin`).
+- Role mismatch (`doctor` vs client role enum `user|doctor|admin|system_admin`).
 
 ### Fix
 1. Prefer currently implemented endpoints (`/appointments`, `/session`, auth routes, admin backup/archive routes).
 2. Align client schemas/routes with server outputs.
-3. Keep role mapping consistent (`verifyOTP` maps `doctor` to `admin` for client compatibility).
+3. Keep role mapping consistent across server responses and client schemas.
 
 ## Google OAuth Issues
 

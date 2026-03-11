@@ -41,7 +41,7 @@ const quickSupportPrompts = [
 const roleLabel = (role?: UserRole | null) => {
   if (role === 'system_admin') return 'Admin'
   if (role === 'admin') return 'Admin'
-  if (role === 'nurse') return 'Doctor'
+  if (role === 'doctor') return 'Doctor'
   if (role === 'user') return 'Patient'
   return 'Guest'
 }

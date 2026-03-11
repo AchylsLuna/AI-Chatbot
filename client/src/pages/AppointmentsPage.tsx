@@ -16,9 +16,15 @@ import {
 import type { AppPage } from '../types/navigation'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import type { AuthSession, Reservation, ReservationDraft } from '../types'
+import { formatPhilippineDateTime } from '../utils/dateTime'
 import { maskPersonName } from '../utils/privacy'
 import { getWorkspaceRoleLabel } from '../utils/roles'
-import { api, type DoctorAvailability } from '../services/api'
+import {
+  api,
+  type DoctorAvailability,
+  type DoctorAvailableSlot,
+  type DoctorScheduleDay,
+} from '../services/api'
 
 type AppointmentsPageProps = {
   reservations: Reservation[]
@@ -30,7 +36,6 @@ type AppointmentsPageProps = {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   dataMaskingEnabled: boolean
-  onToggleDataMasking: () => void
 }
 
 const USER_SIDEBAR_SECTIONS = [
@@ -122,14 +127,15 @@ const departmentOptions = [
 
 const formatDateInput = (value: Date) => {
   const local = new Date(value.getTime() - value.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 16)
+  return local.toISOString().slice(0, 10)
 }
 
-const buildDefaultRequestedTime = () => {
-  const nextHour = new Date(Date.now() + 60 * 60 * 1000)
-  nextHour.setMinutes(Math.ceil(nextHour.getMinutes() / 15) * 15, 0, 0)
-  return formatDateInput(nextHour)
+const buildDefaultBookingDate = () => {
+  const nextDay = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  return formatDateInput(nextDay)
 }
+
+const emptyDaySessions: DoctorScheduleDay = { morning: false, afternoon: false }
 
 const resolvePatientDisplayName = (user: AuthSession['user'] | null) => {
   const fullName = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim()
@@ -174,7 +180,6 @@ const AppointmentsPage = ({
   theme,
   onToggleTheme,
   dataMaskingEnabled,
-  onToggleDataMasking,
   onCreateReservation,
   onLogout,
 }: AppointmentsPageProps) => {
@@ -210,7 +215,14 @@ const AppointmentsPage = ({
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(false)
   const [doctorLoadError, setDoctorLoadError] = useState<string | null>(null)
   const [bookingPriority, setBookingPriority] = useState<Reservation['priority']>('Routine')
-  const [bookingRequestedTime, setBookingRequestedTime] = useState(buildDefaultRequestedTime)
+  const [bookingDate, setBookingDate] = useState(buildDefaultBookingDate)
+  const [availableSlots, setAvailableSlots] = useState<DoctorAvailableSlot[]>([])
+  const [selectedSlotStartIso, setSelectedSlotStartIso] = useState('')
+  const [selectedDaySessions, setSelectedDaySessions] = useState<DoctorScheduleDay>(emptyDaySessions)
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
+  const [slotLoadError, setSlotLoadError] = useState<string | null>(null)
+  const [slotStatusMessage, setSlotStatusMessage] = useState<string | null>(null)
+  const [slotReloadNonce, setSlotReloadNonce] = useState(0)
   const [bookingSymptoms, setBookingSymptoms] = useState('')
   const [bookingNote, setBookingNote] = useState('')
   const [bookingError, setBookingError] = useState<string | null>(null)
@@ -360,6 +372,63 @@ const AppointmentsPage = ({
     }
   }, [bookingDepartment])
 
+  useEffect(() => {
+    let isMounted = true
+
+    const resetSlotState = () => {
+      setAvailableSlots([])
+      setSelectedSlotStartIso('')
+      setSelectedDaySessions(emptyDaySessions)
+      setSlotStatusMessage(null)
+      setSlotLoadError(null)
+    }
+
+    const loadSlots = async () => {
+      if (!selectedDoctorId || !bookingDate) {
+        resetSlotState()
+        return
+      }
+
+      setIsLoadingSlots(true)
+      setSlotLoadError(null)
+      setSlotStatusMessage(null)
+      try {
+        const availability = await api.getDoctorAvailableSlots(selectedDoctorId, bookingDate)
+        if (!isMounted) return
+
+        const openSlots = availability.slots.filter((slot) => slot.isAvailable)
+        setAvailableSlots(openSlots)
+        setSelectedDaySessions(availability.daySessions)
+        setSelectedSlotStartIso((previous) =>
+          openSlots.some((slot) => slot.startIso === previous) ? previous : (openSlots[0]?.startIso || '')
+        )
+
+        if (!availability.hasWeekSchedule) {
+          setSlotStatusMessage('Doctor has no published schedule for this week.')
+        } else if (!availability.daySessions.morning && !availability.daySessions.afternoon) {
+          setSlotStatusMessage('Doctor is not scheduled for this day.')
+        } else if (openSlots.length === 0) {
+          setSlotStatusMessage('No available slots left for this date.')
+        } else {
+          setSlotStatusMessage(`${openSlots.length} available slot${openSlots.length === 1 ? '' : 's'} found.`)
+        }
+      } catch (error) {
+        if (!isMounted) return
+        setAvailableSlots([])
+        setSelectedSlotStartIso('')
+        setSelectedDaySessions(emptyDaySessions)
+        setSlotLoadError(error instanceof Error ? error.message : 'Failed to load schedule slots.')
+      } finally {
+        if (isMounted) setIsLoadingSlots(false)
+      }
+    }
+
+    void loadSlots()
+    return () => {
+      isMounted = false
+    }
+  }, [bookingDate, selectedDoctorId, slotReloadNonce])
+
   const isProfileComplete = useMemo(() => {
     return hasRequiredProfile(profileForm) && hasRequiredHealthInfo(healthForm)
   }, [healthForm, profileForm])
@@ -446,14 +515,24 @@ const AppointmentsPage = ({
       return
     }
 
-    const parsedTime = new Date(bookingRequestedTime)
+    if (!bookingDate) {
+      setBookingError('Select a preferred date.')
+      return
+    }
+
+    if (!selectedSlotStartIso) {
+      setBookingError('Select an available schedule slot before booking.')
+      return
+    }
+
+    const parsedTime = new Date(selectedSlotStartIso)
     if (Number.isNaN(parsedTime.getTime())) {
-      setBookingError('Select a valid preferred date and time.')
+      setBookingError('Selected slot is invalid. Please choose another slot.')
       return
     }
 
     if (parsedTime.getTime() <= Date.now()) {
-      setBookingError('Preferred date and time must be in the future.')
+      setBookingError('Selected slot must be in the future.')
       return
     }
 
@@ -488,7 +567,8 @@ const AppointmentsPage = ({
       setBookingMessage('Booking appointment submitted successfully.')
       setBookingSymptoms('')
       setBookingNote('')
-      setBookingRequestedTime(buildDefaultRequestedTime())
+      setSelectedSlotStartIso('')
+      setSlotReloadNonce((previous) => previous + 1)
       setSection('history')
     } catch (error) {
       setBookingError(error instanceof Error ? error.message : 'Unable to submit booking right now.')
@@ -929,18 +1009,58 @@ const AppointmentsPage = ({
           </label>
         </div>
 
-        <label className="mt-3 block space-y-1.5">
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-            Preferred Date and Time
-          </span>
-          <input
-            type="datetime-local"
-            value={bookingRequestedTime}
-            min={formatDateInput(new Date())}
-            onChange={(event) => setBookingRequestedTime(event.target.value)}
-            className={workspaceFieldClass}
-          />
-        </label>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+              Preferred Date
+            </span>
+            <input
+              type="date"
+              value={bookingDate}
+              min={formatDateInput(new Date())}
+              onChange={(event) => setBookingDate(event.target.value)}
+              className={workspaceFieldClass}
+            />
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
+              Available Slot
+            </span>
+            <select
+              value={selectedSlotStartIso}
+              onChange={(event) => setSelectedSlotStartIso(event.target.value)}
+              className={workspaceFieldClass}
+              disabled={!selectedDoctorId || isLoadingSlots || availableSlots.length === 0}
+            >
+              <option value="">
+                {!selectedDoctorId
+                  ? 'Select a doctor first'
+                  : isLoadingSlots
+                    ? 'Loading slots...'
+                    : availableSlots.length > 0
+                      ? 'Select an available slot'
+                      : 'No available slots'}
+              </option>
+              {availableSlots.map((slot) => (
+                <option key={slot.startIso} value={slot.startIso}>
+                  {slot.label} ({slot.session})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="mt-2 space-y-1">
+          <p className="text-xs text-[color:var(--agent-muted-soft)]">
+            Day sessions: Morning {selectedDaySessions.morning ? 'open' : 'closed'} · Afternoon{' '}
+            {selectedDaySessions.afternoon ? 'open' : 'closed'}
+          </p>
+          {slotStatusMessage ? (
+            <p className="text-xs font-semibold text-[color:var(--agent-muted)]">{slotStatusMessage}</p>
+          ) : null}
+          {slotLoadError ? <p className="text-xs font-semibold text-rose-600">{slotLoadError}</p> : null}
+        </div>
 
         <label className="mt-3 block space-y-1.5">
           <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
@@ -1006,7 +1126,7 @@ const AppointmentsPage = ({
           <ul className="mt-3 space-y-2 text-sm text-[color:var(--agent-muted)]">
             <li>Complete Profile and Personal Health Information first.</li>
             <li>Choose a department, then select an available doctor.</li>
-            <li>Pick a future date and time for the consultation.</li>
+            <li>Pick a date, then choose one available 1-hour schedule slot.</li>
             <li>Describe symptoms clearly for faster triage.</li>
           </ul>
         </article>
@@ -1018,7 +1138,7 @@ const AppointmentsPage = ({
               <p className="font-semibold text-[color:var(--agent-ink)]">
                 {activeBookedAppointment.department}
               </p>
-              <p>{new Date(activeBookedAppointment.requestedTime).toLocaleString()}</p>
+              <p>{formatPhilippineDateTime(activeBookedAppointment.requestedTime)}</p>
               <p>{activeBookedAppointment.summary}</p>
               <span
                 className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(activeBookedAppointment.status)}`}
@@ -1078,7 +1198,7 @@ const AppointmentsPage = ({
                   {dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName}
                 </h3>
                 <p className="mt-1 text-sm text-[color:var(--agent-muted)]">
-                  {item.department} · {item.requestedTime}
+                  {item.department} · {formatPhilippineDateTime(item.requestedTime)}
                 </p>
               </div>
               <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(item.status)}`}>
@@ -1233,9 +1353,6 @@ const AppointmentsPage = ({
           <div className="mt-3 grid gap-2">
             <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
               Theme: {theme === 'dark' ? 'Dark' : 'Light'}
-            </button>
-            <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
-              Data masking: {dataMaskingEnabled ? 'On' : 'Off'}
             </button>
           </div>
         </div>

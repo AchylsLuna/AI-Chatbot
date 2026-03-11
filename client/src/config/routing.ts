@@ -20,7 +20,6 @@ const PAGE_ROUTES: Record<AppPage, string> = {
   forgot_password: ROUTES.forgotPassword,
   signup: ROUTES.signup,
   doctor_signup: ROUTES.doctorSignup,
-  nurse_signup: ROUTES.nurseSignup,
 }
 
 const LEGACY_ROUTE_ALIASES: Record<string, AppPage> = {
@@ -60,7 +59,6 @@ const LEGACY_ROUTE_ALIASES: Record<string, AppPage> = {
   '/admin_login': 'admin_login',
   '/forgot_password': 'forgot_password',
   '/signup-doctor': 'doctor_signup',
-  '/signup-nurse': 'nurse_signup',
   '/dashboard/clinical_reports': 'doctor_dashboard',
   '/dashboard/care_alerts': 'doctor_dashboard',
   '/dashboard/care_support': 'doctor_dashboard',

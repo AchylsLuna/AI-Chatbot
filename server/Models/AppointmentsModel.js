@@ -85,4 +85,6 @@ AppointmentsSchema.add({
     ],
 })
 
+AppointmentsSchema.index({ doctor: 1, scheduledDate: 1, status: 1 })
+
 export default mongoose.model("Appointments", AppointmentsSchema)

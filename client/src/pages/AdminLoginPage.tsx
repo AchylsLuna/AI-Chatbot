@@ -36,10 +36,10 @@ const AdminLoginPage = ({
   const [formError, setFormError] = useState<string | null>(null)
 
   const hasAdminLoginAccess = authUser
-    ? authUser.role === 'nurse' || authUser.role === 'admin' || authUser.role === 'system_admin'
+    ? authUser.role === 'doctor' || authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
   const hasAdminWorkspaceAccess = authUser
-    ? authUser.role === 'nurse' || authUser.role === 'admin' || authUser.role === 'system_admin'
+    ? authUser.role === 'doctor' || authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
 
   return (

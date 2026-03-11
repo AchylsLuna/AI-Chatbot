@@ -29,7 +29,7 @@ const UserSchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ["user", "doctor", "nurse", "admin", "system_admin"],
+            enum: ["user", "doctor", "admin", "system_admin"],
             default: "user",
         },
         status: {
@@ -40,11 +40,11 @@ const UserSchema = new mongoose.Schema(
         department: {
             type: String,
             trim: true,
-            required: function() { return this.role === 'doctor' || this.role === 'nurse'; }
+            required: function() { return this.role === 'doctor'; }
         },
         licenseUrl: { // Or licensePath, depending on where you store it
             type: String,
-            required: function() { return this.role === 'doctor' || this.role === 'nurse'; }
+            required: function() { return this.role === 'doctor'; }
         },
         licenseUrls: {
             type: [{ type: String, trim: true }],
@@ -52,7 +52,7 @@ const UserSchema = new mongoose.Schema(
         },
         staffApplicationReviewed: {
             type: Boolean,
-            default: function() { return this.role !== 'doctor' && this.role !== 'nurse'; }
+            default: function() { return this.role !== 'doctor'; }
         },
         passwordHashed: {
             type: String,

@@ -11,7 +11,7 @@ const safeOptionalTextSchema = z
   .optional()
   .transform((value) => sanitizeOptionalText(value))
 
-const userRoleSchema = z.enum(['user', 'nurse', 'admin', 'system_admin'])
+const userRoleSchema = z.enum(['user', 'doctor', 'admin', 'system_admin'])
 const reservationStatusSchema = z.enum(['Booked', 'Recorded', 'Failed'])
 const triagePrioritySchema = z.enum(['Low', 'Routine', 'High'])
 const triageSummaryProofSchema = z.object({

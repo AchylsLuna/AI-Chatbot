@@ -21,7 +21,28 @@ async function resolveActorEmail(req) {
     }
 }
 
-const STAFF_ROLES = ['doctor', 'nurse'];
+const STAFF_ROLES = ['doctor'];
+
+const toIsoString = (value, fallback = new Date(0).toISOString()) => {
+    if (!value) return fallback;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+};
+
+const resolvePatientName = (patient) => {
+    if (!patient) return "Unknown Patient";
+    const fullName = `${String(patient.firstName || '').trim()} ${String(patient.lastName || '').trim()}`.trim();
+    if (fullName) return fullName;
+    if (patient.email) return String(patient.email);
+    return "Unknown Patient";
+};
+
+const resolveAppointmentBaseTimestamp = (appointment) => {
+    if (appointment?._id && typeof appointment._id.getTimestamp === "function") {
+        return toIsoString(appointment._id.getTimestamp());
+    }
+    return toIsoString(appointment?.scheduledDate);
+};
 
 const toStaffApplicationDto = (user) => ({
     id: String(user._id),
@@ -72,7 +93,7 @@ export async function approveStaffApplication(req, res) {
             return res.status(404).json({ message: "User not found." });
         }
         if (!STAFF_ROLES.includes(target.role)) {
-            return res.status(400).json({ message: "Only nurse and doctor applications can be approved." });
+            return res.status(400).json({ message: "Only doctor applications can be approved." });
         }
         const hasAnyLicense = Boolean(target.licenseUrl) || (Array.isArray(target.licenseUrls) && target.licenseUrls.length > 0);
         if (!hasAnyLicense) {
@@ -112,7 +133,7 @@ export async function rejectStaffApplication(req, res) {
             return res.status(404).json({ message: "User not found." });
         }
         if (!STAFF_ROLES.includes(target.role)) {
-            return res.status(400).json({ message: "Only nurse and doctor applications can be rejected." });
+            return res.status(400).json({ message: "Only doctor applications can be rejected." });
         }
 
         const removedEmail = target.email;
@@ -159,7 +180,7 @@ export async function viewStaffApplicationLicense(req, res) {
             return res.status(404).json({ message: "User not found." });
         }
         if (!STAFF_ROLES.includes(target.role)) {
-            return res.status(400).json({ message: "License is only available for nurse and doctor accounts." });
+            return res.status(400).json({ message: "License is only available for doctor accounts." });
         }
         const licensePaths = Array.from(new Set([
             ...(Array.isArray(target.licenseUrls) ? target.licenseUrls : []),
@@ -235,7 +256,7 @@ export async function updateUserByAdmin(req, res) {
         }
 
         const update = {};
-        const allowedRoles = ['user', 'doctor', 'nurse', 'admin', 'system_admin'];
+        const allowedRoles = ['user', 'doctor', 'admin', 'system_admin'];
         const allowedStatus = ['active', 'disabled'];
 
         if (role !== undefined) {
@@ -249,7 +270,7 @@ export async function updateUserByAdmin(req, res) {
                 return res.status(400).json({ message: "Invalid status value." });
             }
             update.status = status;
-            if (status === 'active' && ['doctor', 'nurse'].includes(target.role)) {
+            if (status === 'active' && ['doctor'].includes(target.role)) {
                 update.staffApplicationReviewed = true;
             }
         }
@@ -319,9 +340,88 @@ export async function getErrorLogs(req, res) {
 
 export async function getLedger(req, res) {
     try {
-        // Placeholder ledger endpoint for admin dashboard compatibility.
-        // Return an empty list until blockchain ledger persistence is wired.
-        return res.status(200).json({ ledger: [] });
+        const limit = Math.min(Math.max(Number(req.query?.limit) || 200, 1), 1000);
+        const chainId = String(process.env.CHAIN_ID || '').trim() || undefined;
+
+        const appointments = await Appointments.find({
+            $or: [
+                { blockchainTxHash: { $ne: '' } },
+                { soapNoteHashRecord: { $ne: '' } },
+                { prescriptionsHashRecord: { $ne: '' } },
+            ],
+        })
+            .select(
+                "_id patient department scheduledDate blockchainTxHash soapNoteHashRecord prescriptionsHashRecord soapNote prescriptions"
+            )
+            .populate('patient', 'firstName lastName email')
+            .sort({ _id: -1 })
+            .limit(limit)
+            .lean();
+
+        const ledger = [];
+
+        for (const appointment of appointments) {
+            const reservationId = String(appointment._id);
+            const patientName = resolvePatientName(appointment.patient);
+            const department = String(appointment.department || 'General Medicine');
+            const baseTimestamp = resolveAppointmentBaseTimestamp(appointment);
+            const txHash = String(appointment.blockchainTxHash || '').trim();
+            const soapHash = String(appointment.soapNoteHashRecord || '').trim();
+            const prescriptionsHash = String(appointment.prescriptionsHashRecord || '').trim();
+
+            if (txHash) {
+                ledger.push({
+                    id: `LEDGER-${reservationId}-appointment`,
+                    reservationId,
+                    patientName,
+                    department,
+                    timestamp: baseTimestamp,
+                    hash: txHash,
+                    txHash,
+                    txStatus: 'confirmed',
+                    chainId,
+                });
+            }
+
+            if (soapHash) {
+                ledger.push({
+                    id: `LEDGER-${reservationId}-soap`,
+                    reservationId,
+                    patientName,
+                    department,
+                    timestamp: toIsoString(appointment.soapNote?.updatedAt, baseTimestamp),
+                    hash: soapHash,
+                    txStatus: txHash ? 'confirmed' : 'skipped',
+                    chainId,
+                });
+            }
+
+            if (prescriptionsHash) {
+                const latestPrescriptionTimestamp = Array.isArray(appointment.prescriptions) && appointment.prescriptions.length > 0
+                    ? appointment.prescriptions.reduce((latest, item) => {
+                        const createdAt = item?.createdAt ? new Date(item.createdAt).getTime() : 0;
+                        return createdAt > latest ? createdAt : latest;
+                    }, 0)
+                    : 0;
+
+                ledger.push({
+                    id: `LEDGER-${reservationId}-prescriptions`,
+                    reservationId,
+                    patientName,
+                    department,
+                    timestamp: toIsoString(
+                        latestPrescriptionTimestamp ? new Date(latestPrescriptionTimestamp) : null,
+                        baseTimestamp
+                    ),
+                    hash: prescriptionsHash,
+                    txStatus: txHash ? 'confirmed' : 'skipped',
+                    chainId,
+                });
+            }
+        }
+
+        ledger.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        return res.status(200).json({ ledger: ledger.slice(0, limit) });
     } catch (error) {
         console.error("Failed to get ledger:", error);
         return res.status(500).json({ message: "Failed to retrieve ledger." });

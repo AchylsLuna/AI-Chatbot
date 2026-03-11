@@ -40,10 +40,10 @@ export const fallbackLedger: LedgerEntry[] = [
   },
 ]
 
-export const doctorNurseAssignments: Record<string, string> = {
-  'Dr. Mara Santos': 'Nurse Elena Cruz',
-  'Dr. Ian Clarke': 'Nurse Paolo Reyes',
-  'Dr. Liza Moreno': 'Nurse Mae Villanueva',
-  'Dr. Rafiq Noor': 'Nurse Andre Ramos',
-  'Dr. Mei Tan': 'Nurse Carla Mendoza',
-}
+export const fallbackDoctors = [
+  'Dr. Mara Santos',
+  'Dr. Ian Clarke',
+  'Dr. Liza Moreno',
+  'Dr. Rafiq Noor',
+  'Dr. Mei Tan',
+]

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import GlobalAssistantChat from './components/chat/GlobalAssistantChat'
 import AppHeader from './components/layout/AppHeader'
 import WorkspaceHeader from './components/layout/WorkspaceHeader'
@@ -26,7 +26,7 @@ type ProtectedPage = 'appointments' | 'doctor_dashboard'
 function App() {
   const { currentPage, navigateToPage, navigateBack, isLanding, isAuthPage } = useAppRouting()
   const { theme, toggleTheme } = useAppTheme(isLanding || isAuthPage)
-  const [dataMaskingEnabled, setDataMaskingEnabled] = useState(true)
+  const dataMaskingEnabled = false
 
   const {
     authProvider,
@@ -250,7 +250,6 @@ function App() {
                 theme={theme}
                 onToggleTheme={toggleTheme}
                 dataMaskingEnabled={dataMaskingEnabled}
-                onToggleDataMasking={() => setDataMaskingEnabled((prev) => !prev)}
               />,
               'Appointments workspace'
             )
@@ -280,7 +279,6 @@ function App() {
                 theme={theme}
                 onToggleTheme={toggleTheme}
                 dataMaskingEnabled={dataMaskingEnabled}
-                onToggleDataMasking={() => setDataMaskingEnabled((prev) => !prev)}
               />,
               "Doctor's dashboard"
             )
@@ -318,7 +316,6 @@ function App() {
             theme={theme}
             onToggleTheme={toggleTheme}
             dataMaskingEnabled={dataMaskingEnabled}
-            onToggleDataMasking={() => setDataMaskingEnabled((prev) => !prev)}
           />,
           'Admin dashboard'
         )
@@ -367,15 +364,6 @@ function App() {
       pageContent = (
         <SignupPage
           variant="doctor"
-          onNavigate={navigateToPage}
-          onGoBack={() => navigateBack('signup')}
-        />
-      )
-      break
-    case 'nurse_signup':
-      pageContent = (
-        <SignupPage
-          variant="nurse"
           onNavigate={navigateToPage}
           onGoBack={() => navigateBack('signup')}
         />

@@ -19,10 +19,8 @@ import type {
   AuthSession,
   LedgerEntry,
   LoginOtpChallenge,
-  Reservation,
   ReservationDraft,
 } from '../types'
-import { sanitizeText } from '../utils/sanitize'
 import {
   getDefaultDashboardPage,
   isAdminRole,
@@ -384,20 +382,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       setApiReady(true)
     } catch (error) {
       console.error('Failed to create reservation', error)
-      const fallback: Reservation = {
-        id: `RES-${Math.floor(1000 + Math.random() * 9000)}`,
-        patientName: sanitizeText(draft.patientName),
-        symptoms: sanitizeText(draft.symptoms),
-        department: sanitizeText(draft.summary.department),
-        priority: draft.summary.priority,
-        confidence: draft.summary.confidence,
-        requestedTime: sanitizeText(draft.requestedTime),
-        createdAt: new Date().toISOString(),
-        status: 'Booked',
-        summary: sanitizeText(draft.summary.summary),
-      }
-      prependReservation(fallback)
-      setStoreLatestReservationId(fallback.id)
+      throw (error instanceof Error ? error : new Error('Failed to create reservation'))
     }
   }
 

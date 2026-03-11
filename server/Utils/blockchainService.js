@@ -16,12 +16,27 @@ const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, contractABI, 
 
 export const blockchainService = {
     async logAppointmentToChain(mongoId, patientId, doctorId) {
-        try {
-            const tx = await contract.recordAppointment(String(mongoId), String(patientId), String(doctorId));
-            console.log(`[Blockchain] Appointment Logged: ${tx.hash}`);
-            return tx.hash;
-        } catch (error) { console.error("Blockchain Error:", error); }
-    },
+            try {
+                // 1. Check balance BEFORE the transaction
+                const balanceBefore = await provider.getBalance(wallet.address);
+                console.log(`[Gas Check] Balance Before: ${ethers.formatEther(balanceBefore)} ETH`);
+
+                // 2. Execute the transaction
+                const tx = await contract.recordAppointment(String(mongoId), String(patientId), String(doctorId));
+                
+                // Wait for it to actually mine so the fee is deducted
+                await tx.wait(); 
+                
+                // 3. Check balance AFTER the transaction
+                const balanceAfter = await provider.getBalance(wallet.address);
+                console.log(`[Gas Check] Balance After:  ${ethers.formatEther(balanceAfter)} ETH`);
+                
+                console.log(`[Blockchain] Appointment Logged: ${tx.hash}`);
+                return tx.hash;
+            } catch (error) { 
+                console.error("Blockchain Error:", error); 
+            }
+        },
     async updateStatusOnChain(mongoId, statusString) {
         try {
             const statusMap = { 'Pending': 0, 'Confirmed': 1, 'Completed': 2, 'Cancelled': 3 };

@@ -8,7 +8,7 @@ const verifyToken = async (req, res, next) => {
         const authHeader = req.headers.authorization;
         if (authHeader && authHeader.startsWith('Bearer ')) {
             token = authHeader.substring(7);
-        }e
+        }
     }
     if (!token) {
         return res.status(401).json({ message: "Authentication required." });

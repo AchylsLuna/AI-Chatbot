@@ -8,7 +8,6 @@ export type Reservation = {
   patientName: string
   doctorId?: string
   doctorName?: string
-  nurseName?: string
   symptoms: string
   department: string
   priority: 'Low' | 'Routine' | 'High'

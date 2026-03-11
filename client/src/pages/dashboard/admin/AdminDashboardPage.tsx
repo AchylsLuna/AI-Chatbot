@@ -5,6 +5,7 @@ import WorkspaceCanvas from '../../../components/layout/WorkspaceCanvas'
 import WorkspaceSidebarShell from '../../../components/layout/WorkspaceSidebarShell'
 import type { AuthSession, Reservation } from '../../../types'
 import type { AppPage } from '../../../types/navigation'
+import { formatPhilippineDateTime } from '../../../utils/dateTime'
 import { maskIdentifier, maskPersonName } from '../../../utils/privacy'
 import { buildDashboardLogItems } from '../shared/dashboardEvents'
 import {
@@ -22,7 +23,7 @@ import AdminUserManagementSection, {
   type AdminUserManagementItem,
   type AdminUserManagementTab,
 } from './sections/AdminUserManagementSection'
-import { doctorNurseAssignments } from '../../../config/fallbackData'
+import { fallbackDoctors } from '../../../config/fallbackData'
 
 type AdminDashboardPageProps = {
   authUser: AuthSession['user'] | null
@@ -33,7 +34,6 @@ type AdminDashboardPageProps = {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   dataMaskingEnabled: boolean
-  onToggleDataMasking: () => void
 }
 
 type AdminSidebarSection =
@@ -73,7 +73,6 @@ const utilityItems: SidebarItem[] = [
 const notificationPrefKey = 'pulse-ledger-admin-notification-preferences'
 const userMetaKey = 'pulse-ledger-admin-user-management-meta'
 const doctorMetaKey = 'pulse-ledger-admin-doctor-management-meta'
-const nurseMetaKey = 'pulse-ledger-admin-nurse-management-meta'
 const migrationFlagKey = 'pulse-ledger-admin-management-migrated-v1'
 const legacyUserMetaKey = 'pulse-ledger-staff-user-management-meta'
 const legacyStaffRosterKey = 'pulse-ledger-staff-management-roster'
@@ -187,7 +186,6 @@ const migrateLegacyManagementStorage = () => {
 
   const hasUserMeta = Boolean(window.localStorage.getItem(userMetaKey))
   const hasDoctorMeta = Boolean(window.localStorage.getItem(doctorMetaKey))
-  const hasNurseMeta = Boolean(window.localStorage.getItem(nurseMetaKey))
 
   if (!hasUserMeta) {
     const legacyUsers = parseStoredMeta(window.localStorage.getItem(legacyUserMetaKey))
@@ -196,10 +194,9 @@ const migrateLegacyManagementStorage = () => {
     }
   }
 
-  const shouldMigrateStaff = !hasDoctorMeta || !hasNurseMeta
+  const shouldMigrateStaff = !hasDoctorMeta
   if (shouldMigrateStaff) {
     const doctorMeta: Record<string, ManagementMeta> = {}
-    const nurseMeta: Record<string, ManagementMeta> = {}
 
     try {
       const raw = window.localStorage.getItem(legacyStaffRosterKey)
@@ -208,7 +205,7 @@ const migrateLegacyManagementStorage = () => {
       for (const row of parsed) {
         const name = typeof row.name === 'string' ? row.name.trim() : ''
         if (!name) continue
-        const key = normalizeKey(name, `legacy-${Object.keys(doctorMeta).length + Object.keys(nurseMeta).length + 1}`)
+        const key = normalizeKey(name, `legacy-${Object.keys(doctorMeta).length + 1}`)
         const accountStatus: ManagementMeta['accountStatus'] = row.status === 'Offline' ? 'Disabled' : 'Active'
         const base: ManagementMeta = {
           displayName: name,
@@ -220,8 +217,6 @@ const migrateLegacyManagementStorage = () => {
         const role = typeof row.role === 'string' ? row.role.toLowerCase() : ''
         if (role.includes('doctor')) {
           doctorMeta[key] = base
-        } else if (role.includes('nurse')) {
-          nurseMeta[key] = base
         }
       }
     } catch {
@@ -230,10 +225,6 @@ const migrateLegacyManagementStorage = () => {
 
     if (!hasDoctorMeta && Object.keys(doctorMeta).length > 0) {
       window.localStorage.setItem(doctorMetaKey, JSON.stringify(doctorMeta))
-    }
-
-    if (!hasNurseMeta && Object.keys(nurseMeta).length > 0) {
-      window.localStorage.setItem(nurseMetaKey, JSON.stringify(nurseMeta))
     }
   }
 
@@ -301,23 +292,22 @@ const buildUserItems = (
     .sort((a, b) => parseDate(b.latestActivity) - parseDate(a.latestActivity))
 }
 
-const buildStaffItems = (
+const buildDoctorItems = (
   reservations: Reservation[],
-  meta: Record<string, ManagementMeta>,
-  role: 'doctor' | 'nurse'
+  meta: Record<string, ManagementMeta>
 ): AdminUserManagementItem[] => {
   const byStaff = new Map<string, AdminUserManagementItem>()
 
   for (const reservation of reservations) {
-    const sourceName = role === 'doctor' ? reservation.doctorName : reservation.nurseName
+    const sourceName = reservation.doctorName
     if (!sourceName) continue
 
-    const identity = normalizeKey(sourceName, `${role}-${reservation.id.toLowerCase()}`)
+    const identity = normalizeKey(sourceName, `doctor-${reservation.id.toLowerCase()}`)
     const existing = byStaff.get(identity)
 
     if (!existing) {
       byStaff.set(identity, {
-        key: `${role}s:${identity}`,
+        key: `doctors:${identity}`,
         displayName: sourceName,
         referenceId: reservation.id,
         bookingCount: 1,
@@ -340,17 +330,12 @@ const buildStaffItems = (
   }
 
   if (byStaff.size === 0) {
-    const fallbackRoster =
-      role === 'doctor'
-        ? Object.keys(doctorNurseAssignments)
-        : Array.from(new Set(Object.values(doctorNurseAssignments)))
-
-    fallbackRoster.forEach((name, index) => {
-      const identity = normalizeKey(name, `${role}-${index + 1}`)
+    fallbackDoctors.forEach((name, index) => {
+      const identity = normalizeKey(name, `doctor-${index + 1}`)
       byStaff.set(identity, {
-        key: `${role}s:${identity}`,
+        key: `doctors:${identity}`,
         displayName: name,
-        referenceId: `${role.toUpperCase()}-${String(index + 1).padStart(3, '0')}`,
+        referenceId: `DOCTOR-${String(index + 1).padStart(3, '0')}`,
         bookingCount: 0,
         latestActivity: new Date(0).toISOString(),
         latestStatus: 'None',
@@ -387,7 +372,6 @@ const AdminDashboardPage = ({
   theme,
   onToggleTheme,
   dataMaskingEnabled,
-  onToggleDataMasking,
 }: AdminDashboardPageProps) => {
   const [activeSection, setActiveSection] = useState<AdminSidebarSection>('dashboard')
   const [searchQuery, setSearchQuery] = useState('')
@@ -509,7 +493,7 @@ const AdminDashboardPage = ({
       id: item.id,
       title: dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName,
       detail: `${item.department} · ${item.status}`,
-      meta: new Date(item.createdAt).toLocaleString(),
+      meta: formatPhilippineDateTime(item.createdAt),
     }))
 
     if (items.length > 0) return items
@@ -528,7 +512,7 @@ const AdminDashboardPage = ({
     const items = searchableReservations.slice(0, 6).map((item) => ({
       id: item.id,
       title: `${item.department} queue item`,
-      subtitle: `${dataMaskingEnabled ? maskIdentifier(item.id) : item.id} · ${item.requestedTime}`,
+      subtitle: `${dataMaskingEnabled ? maskIdentifier(item.id) : item.id} · ${formatPhilippineDateTime(item.requestedTime)}`,
       detail: item.summary,
       badge: item.status,
     }))
@@ -585,7 +569,7 @@ const AdminDashboardPage = ({
   const itemsByTab = useMemo<Record<AdminUserManagementTab, AdminUserManagementItem[]>>(
     () => ({
       users: buildUserItems(reservations, userManagementMeta),
-      doctors: buildStaffItems(reservations, doctorManagementMeta, 'doctor'),
+      doctors: buildDoctorItems(reservations, doctorManagementMeta),
     }),
     [reservations, userManagementMeta, doctorManagementMeta]
   )
@@ -869,8 +853,6 @@ const AdminDashboardPage = ({
                 sessionStatus={sessionStatus}
                 theme={theme}
                 onToggleTheme={onToggleTheme}
-                dataMaskingEnabled={dataMaskingEnabled}
-                onToggleDataMasking={onToggleDataMasking}
                 notificationPrefs={notificationPrefs}
                 onToggleNotificationPref={(key) => {
                   setNotificationPrefs((previous) => ({ ...previous, [key]: !previous[key] }))

@@ -4,7 +4,7 @@ import { api } from '../services/api'
 import type { AppPage } from '../types/navigation'
 import type { AuthSession, SignupDraft } from '../types'
 
-type SignupVariant = 'user' | 'doctor' | 'nurse'
+type SignupVariant = 'user' | 'doctor'
 
 type SignupPageProps = {
   variant?: SignupVariant
@@ -60,8 +60,8 @@ const getPasswordStrength = (value: string): { label: 'Weak' | 'Medium' | 'Stron
 }
 
 const SignupPage = ({ variant = 'user', onNavigate, onSignupSuccess, onGoBack }: SignupPageProps) => {
-  const isStaffSignup = variant === 'doctor' || variant === 'nurse'
-  const roleLabel = variant === 'doctor' ? 'Doctor' : variant === 'nurse' ? 'Nurse' : 'Patient'
+  const isStaffSignup = variant === 'doctor'
+  const roleLabel = variant === 'doctor' ? 'Doctor' : 'Patient'
 
   const [fullName, setFullName] = useState('')
   const [department, setDepartment] = useState('')
@@ -165,20 +165,13 @@ const SignupPage = ({ variant = 'user', onNavigate, onSignupSuccess, onGoBack }:
           {!isStaffSignup && (
             <div className="mt-4 rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3">
               <p className="text-xs text-[color:var(--agent-muted)]">Need a staff account?</p>
-              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="mt-2 grid grid-cols-1 gap-2">
                 <button
                   type="button"
                   onClick={() => onNavigate?.('doctor_signup')}
                   className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
                 >
                   Sign up as Doctor
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigate?.('nurse_signup')}
-                  className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
-                >
-                  Sign up as Nurse
                 </button>
               </div>
             </div>
@@ -245,19 +238,6 @@ const SignupPage = ({ variant = 'user', onNavigate, onSignupSuccess, onGoBack }:
               try {
                 if (variant === 'doctor' && licenseFiles.length > 0) {
                   await api.signupDoctor({
-                    email: cleanedEmail,
-                    password: cleanedPassword,
-                    fullName: cleanedFullName,
-                    department: cleanedDepartment,
-                    licenseFiles,
-                  })
-                  const session = { user: { username: cleanedEmail, role: 'user' } } as unknown as AuthSession
-                  setSignupSession(session)
-                  return
-                }
-
-                if (variant === 'nurse' && licenseFiles.length > 0) {
-                  await api.signupNurse({
                     email: cleanedEmail,
                     password: cleanedPassword,
                     fullName: cleanedFullName,
@@ -656,8 +636,7 @@ const SignupPage = ({ variant = 'user', onNavigate, onSignupSuccess, onGoBack }:
                   <div className="mt-3 space-y-2 text-xs text-[color:var(--agent-ink)]/75">
                     <p>1. We process account and booking data for clinical workflow support.</p>
                     <p>2. Access is protected through role controls and session security checks.</p>
-                    <p>3. Sensitive identifiers may be masked depending on security settings.</p>
-                    <p>4. Audit events are recorded for integrity and compliance operations.</p>
+                    <p>3. Audit events are recorded for integrity and compliance operations.</p>
                   </div>
                 )}
               </div>

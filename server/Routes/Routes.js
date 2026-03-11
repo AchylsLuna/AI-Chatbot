@@ -2,7 +2,6 @@ import { Router } from 'express';
 import {
     register,
     registerDoctor,
-    registerNurse,
     login,
     logout,
     verifyOTP,
@@ -31,7 +30,10 @@ import {
 } from '../Controllers/adminController.js';
 import {
     createAppointment,
+    getDoctorAvailableSlots,
+    getDoctorWeeklySchedule,
     getAvailableDoctorsByDepartment,
+    upsertDoctorWeeklySchedule,
     updateAppointmentStatus,
 } from '../Controllers/AppointmentsController.js';
 import {
@@ -120,19 +122,6 @@ router.post('/register/doctor',
     validate,
     registerDoctor
 );
-router.post('/register/nurse',
-    uploadStaffLicenses,
-    handleUploadError,
-    [
-        body('firstName').trim().notEmpty().escape().withMessage('First name is required'),
-        body('lastName').trim().notEmpty().escape().withMessage('Last name is required'),
-        body('email').isEmail().normalizeEmail().withMessage('Invalid email'),
-        body('password').isLength({ min: 8 }).withMessage('Password too short'),
-        body('department').trim().notEmpty().escape().withMessage('Department is required')
-    ],
-    validate,
-    registerNurse
-);
 
 router.post('/login',
     loginLimiter,
@@ -206,7 +195,7 @@ router.put('/users/me/profile',
 )
 router.put('/users/me/personal-health-info',
     authMiddleware,
-    authorizeRoles('user', 'doctor', 'admin', 'system_admin', 'nurse'),
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin'),
     [
         body('personalHealthInfo').optional().isObject(),
         body('bloodType').optional().trim().isLength({ max: 10 }).escape(),
@@ -241,19 +230,38 @@ router.post('/appointments',
 );
 router.get('/appointments/doctors/available',
     authMiddleware,
-    authorizeRoles('user', 'doctor', 'admin', 'system_admin', 'nurse'),
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin'),
     getAvailableDoctorsByDepartment
+)
+router.get('/appointments/doctors/:doctorId/slots',
+    authMiddleware,
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin'),
+    getDoctorAvailableSlots
 )
 // Backward-compatible aliases for doctor availability lookup.
 router.get('/appointments/available-doctors',
     authMiddleware,
-    authorizeRoles('user', 'doctor', 'admin', 'system_admin', 'nurse'),
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin'),
     getAvailableDoctorsByDepartment
 )
 router.get('/doctor/appointments/doctors/available',
     authMiddleware,
-    authorizeRoles('user', 'doctor', 'admin', 'system_admin', 'nurse'),
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin'),
     getAvailableDoctorsByDepartment
+)
+router.get('/doctor/schedules/:weekStart',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    getDoctorWeeklySchedule
+)
+router.put('/doctor/schedules/:weekStart',
+    authMiddleware,
+    authorizeRoles('doctor', 'admin', 'system_admin'),
+    [
+        body('days').optional().isObject().withMessage('days must be an object'),
+    ],
+    validate,
+    upsertDoctorWeeklySchedule
 )
 router.patch('/appointments/:appointmentId/status',
     authMiddleware,
@@ -268,7 +276,7 @@ router.patch('/appointments/:appointmentId/status',
 // User Appointment History
 router.get('/users/me/appointments/history',
     authMiddleware,
-    authorizeRoles('user', 'doctor', 'admin', 'system_admin', 'nurse'),
+    authorizeRoles('user', 'doctor', 'admin', 'system_admin'),
     async (req, res, next) => {
         try {
             const controllerModule = await import('../Controllers/AppointmentsController.js')
@@ -314,7 +322,7 @@ router.put('/admin/users/:userId',
     authMiddleware,
     authorizeRoles('admin', 'system_admin'),
     [
-        body('role').optional().isIn(['user', 'doctor', 'nurse', 'admin', 'system_admin']),
+        body('role').optional().isIn(['user', 'doctor', 'admin', 'system_admin']),
         body('status').optional().isIn(['active', 'disabled']),
         body('department').optional().trim().isLength({ max: 120 }).escape(),
     ],

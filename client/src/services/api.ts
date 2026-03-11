@@ -80,6 +80,33 @@ const handleResponse = async (response: Response): Promise<unknown> => {
   return response.json() as Promise<unknown>
 }
 
+const emptyDoctorScheduleDays = (): DoctorScheduleDays => ({
+  monday: { morning: false, afternoon: false },
+  tuesday: { morning: false, afternoon: false },
+  wednesday: { morning: false, afternoon: false },
+  thursday: { morning: false, afternoon: false },
+  friday: { morning: false, afternoon: false },
+  saturday: { morning: false, afternoon: false },
+  sunday: { morning: false, afternoon: false },
+})
+
+const normalizeDoctorScheduleDays = (value: unknown): DoctorScheduleDays => {
+  const source = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const normalized = emptyDoctorScheduleDays()
+
+  for (const dayKey of Object.keys(normalized) as Array<keyof DoctorScheduleDays>) {
+    const raw = source[dayKey] && typeof source[dayKey] === 'object'
+      ? (source[dayKey] as Record<string, unknown>)
+      : {}
+    normalized[dayKey] = {
+      morning: Boolean(raw.morning),
+      afternoon: Boolean(raw.afternoon),
+    }
+  }
+
+  return normalized
+}
+
 const withAuth = (init?: RequestInit): RequestInit => {
   const headers = new Headers(init?.headers)
   if (authToken) {
@@ -273,12 +300,65 @@ export type DoctorAvailability = {
   department: string
 }
 
+export type DoctorScheduleDay = {
+  morning: boolean
+  afternoon: boolean
+}
+
+export type DoctorScheduleDays = {
+  monday: DoctorScheduleDay
+  tuesday: DoctorScheduleDay
+  wednesday: DoctorScheduleDay
+  thursday: DoctorScheduleDay
+  friday: DoctorScheduleDay
+  saturday: DoctorScheduleDay
+  sunday: DoctorScheduleDay
+}
+
+export type DoctorWeeklySchedule = {
+  id?: string
+  doctorId: string
+  weekStart: string
+  timezone: string
+  hasSchedule: boolean
+  hasEnabledSession: boolean
+  days: DoctorScheduleDays
+  weeklySlots: Record<string, Array<{
+    startIso: string
+    endIso: string
+    label: string
+    session: 'morning' | 'afternoon'
+  }>>
+}
+
+export type DoctorAvailableSlot = {
+  startIso: string
+  endIso: string
+  label: string
+  session: 'morning' | 'afternoon'
+  isBooked: boolean
+  isPast: boolean
+  isAvailable: boolean
+}
+
+export type DoctorDaySlotAvailability = {
+  doctorId: string
+  date: string
+  weekStart: string
+  dayKey: keyof DoctorScheduleDays
+  timezone: string
+  hasWeekSchedule: boolean
+  daySessions: DoctorScheduleDay
+  slots: DoctorAvailableSlot[]
+  availableCount: number
+}
+
 export type AdminUserRecord = {
   id: string
   email: string
   firstName: string
   lastName: string
-  role: 'user' | 'doctor' | 'nurse' | 'admin' | 'system_admin'
+  role: 'user' | 'doctor' | 'admin' | 'system_admin'
   status: 'active' | 'disabled'
   department?: string
   profile?: {
@@ -294,7 +374,7 @@ export type AdminStaffApplicationRecord = {
   email: string
   firstName: string
   lastName: string
-  role: 'doctor' | 'nurse'
+  role: 'doctor'
   status: 'active' | 'disabled'
   department?: string
   hasLicenseFile: boolean
@@ -561,27 +641,6 @@ export const api = {
     })
     await handleResponse(response)
   },
-  signupNurse: async (payload: StaffSignupPayload): Promise<void> => {
-    const [firstNameRaw, ...rest] = payload.fullName.trim().split(' ')
-    const firstName = firstNameRaw || payload.email.split('@')[0] || ''
-    const lastName = rest.join(' ') || 'User'
-
-    const body = new FormData()
-    body.append('email', payload.email)
-    body.append('password', payload.password)
-    body.append('firstName', firstName)
-    body.append('lastName', lastName)
-    body.append('department', payload.department)
-    for (const file of payload.licenseFiles) {
-      body.append('licenses', file)
-    }
-
-    const response = await request(`${API_BASE}/register/nurse`, {
-      method: 'POST',
-      body,
-    })
-    await handleResponse(response)
-  },
   getSession: async (): Promise<AuthSession['user']> => {
     const response = await request(`${API_BASE}/session`, withAuth())
     const payload = await handleResponse(response)
@@ -797,7 +856,7 @@ export const api = {
     })
   },
   getPendingStaffApplications: async (
-    role: 'all' | 'doctor' | 'nurse' = 'all'
+    role: 'all' | 'doctor' = 'all'
   ): Promise<AdminStaffApplicationRecord[]> => {
     const payload = (await handleResponse(
       await request(
@@ -813,7 +872,7 @@ export const api = {
         email: String(raw.email || ''),
         firstName: String(raw.firstName || ''),
         lastName: String(raw.lastName || ''),
-        role: String(raw.role || 'doctor') === 'nurse' ? 'nurse' : 'doctor',
+        role: 'doctor',
         status: raw.status === 'active' ? 'active' : 'disabled',
         department: raw.department ? String(raw.department) : undefined,
         hasLicenseFile: Boolean(raw.hasLicenseFile),
@@ -1178,6 +1237,170 @@ export const api = {
         department: String(raw.department || ''),
       }
     }).filter((doctor) => doctor.id)
+  },
+  getDoctorAvailableSlots: async (
+    doctorId: string,
+    date: string
+  ): Promise<DoctorDaySlotAvailability> => {
+    const payload = (await handleResponse(
+      await request(
+        `${API_BASE}/appointments/doctors/${encodeURIComponent(doctorId)}/slots?date=${encodeURIComponent(date)}`,
+        withAuth()
+      )
+    )) as Record<string, unknown>
+
+    const daySessionsRaw =
+      payload.daySessions && typeof payload.daySessions === 'object'
+        ? (payload.daySessions as Record<string, unknown>)
+        : {}
+    const dayKeyRaw = String(payload.dayKey || 'monday').toLowerCase()
+    const validDayKeys: Array<keyof DoctorScheduleDays> = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ]
+    const dayKey: keyof DoctorScheduleDays = validDayKeys.includes(dayKeyRaw as keyof DoctorScheduleDays)
+      ? (dayKeyRaw as keyof DoctorScheduleDays)
+      : 'monday'
+
+    const slotsRaw = Array.isArray(payload.slots) ? payload.slots : []
+    const slots = slotsRaw.map((item) => {
+      const raw = (item ?? {}) as Record<string, unknown>
+      const sessionRaw = String(raw.session || 'morning').toLowerCase()
+      return {
+        startIso: String(raw.startIso || ''),
+        endIso: String(raw.endIso || ''),
+        label: String(raw.label || ''),
+        session: sessionRaw === 'afternoon' ? 'afternoon' : 'morning',
+        isBooked: Boolean(raw.isBooked),
+        isPast: Boolean(raw.isPast),
+        isAvailable: Boolean(raw.isAvailable),
+      } as DoctorAvailableSlot
+    }).filter((slot) => slot.startIso && slot.endIso && slot.label)
+
+    return {
+      doctorId: String(payload.doctorId || doctorId),
+      date: String(payload.date || date),
+      weekStart: String(payload.weekStart || ''),
+      dayKey,
+      timezone: String(payload.timezone || 'Asia/Manila'),
+      hasWeekSchedule: Boolean(payload.hasWeekSchedule),
+      daySessions: {
+        morning: Boolean(daySessionsRaw.morning),
+        afternoon: Boolean(daySessionsRaw.afternoon),
+      },
+      slots,
+      availableCount: Number(payload.availableCount) || 0,
+    }
+  },
+  getDoctorWeeklySchedule: async (
+    weekStart: string,
+    options?: { doctorId?: string }
+  ): Promise<DoctorWeeklySchedule> => {
+    const query = options?.doctorId
+      ? `?doctorId=${encodeURIComponent(options.doctorId)}`
+      : ''
+    const payload = (await handleResponse(
+      await request(
+        `${API_BASE}/doctor/schedules/${encodeURIComponent(weekStart)}${query}`,
+        withAuth()
+      )
+    )) as Record<string, unknown>
+
+    const scheduleRaw =
+      payload.schedule && typeof payload.schedule === 'object'
+        ? (payload.schedule as Record<string, unknown>)
+        : {}
+    const weeklySlotsRaw =
+      payload.weeklySlots && typeof payload.weeklySlots === 'object'
+        ? (payload.weeklySlots as Record<string, unknown>)
+        : {}
+    const days = normalizeDoctorScheduleDays(scheduleRaw.days)
+    const weeklySlots: DoctorWeeklySchedule['weeklySlots'] = {}
+
+    for (const dayKey of Object.keys(days) as Array<keyof DoctorScheduleDays>) {
+      const daySlotsRaw = Array.isArray(weeklySlotsRaw[dayKey]) ? weeklySlotsRaw[dayKey] : []
+      weeklySlots[dayKey] = daySlotsRaw.map((item) => {
+        const raw = (item ?? {}) as Record<string, unknown>
+        const sessionRaw = String(raw.session || 'morning').toLowerCase()
+        return {
+          startIso: String(raw.startIso || ''),
+          endIso: String(raw.endIso || ''),
+          label: String(raw.label || ''),
+          session: sessionRaw === 'afternoon' ? 'afternoon' : 'morning',
+        }
+      }).filter((slot) => slot.startIso && slot.endIso && slot.label)
+    }
+
+    return {
+      id: scheduleRaw.id ? String(scheduleRaw.id) : undefined,
+      doctorId: String(scheduleRaw.doctorId || options?.doctorId || ''),
+      weekStart: String(scheduleRaw.weekStart || weekStart),
+      timezone: String(scheduleRaw.timezone || 'Asia/Manila'),
+      hasSchedule: Boolean(scheduleRaw.hasSchedule),
+      hasEnabledSession: Boolean(scheduleRaw.hasEnabledSession),
+      days,
+      weeklySlots,
+    }
+  },
+  saveDoctorWeeklySchedule: async (
+    weekStart: string,
+    days: DoctorScheduleDays,
+    options?: { doctorId?: string }
+  ): Promise<DoctorWeeklySchedule> => {
+    const payload = (await handleResponse(
+      await request(
+        `${API_BASE}/doctor/schedules/${encodeURIComponent(weekStart)}`,
+        withAuth({
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            days,
+            ...(options?.doctorId ? { doctorId: options.doctorId } : {}),
+          }),
+        })
+      )
+    )) as Record<string, unknown>
+
+    const scheduleRaw =
+      payload.schedule && typeof payload.schedule === 'object'
+        ? (payload.schedule as Record<string, unknown>)
+        : {}
+    const weeklySlotsRaw =
+      payload.weeklySlots && typeof payload.weeklySlots === 'object'
+        ? (payload.weeklySlots as Record<string, unknown>)
+        : {}
+    const normalizedDays = normalizeDoctorScheduleDays(scheduleRaw.days)
+    const weeklySlots: DoctorWeeklySchedule['weeklySlots'] = {}
+
+    for (const dayKey of Object.keys(normalizedDays) as Array<keyof DoctorScheduleDays>) {
+      const daySlotsRaw = Array.isArray(weeklySlotsRaw[dayKey]) ? weeklySlotsRaw[dayKey] : []
+      weeklySlots[dayKey] = daySlotsRaw.map((item) => {
+        const raw = (item ?? {}) as Record<string, unknown>
+        const sessionRaw = String(raw.session || 'morning').toLowerCase()
+        return {
+          startIso: String(raw.startIso || ''),
+          endIso: String(raw.endIso || ''),
+          label: String(raw.label || ''),
+          session: sessionRaw === 'afternoon' ? 'afternoon' : 'morning',
+        }
+      }).filter((slot) => slot.startIso && slot.endIso && slot.label)
+    }
+
+    return {
+      id: scheduleRaw.id ? String(scheduleRaw.id) : undefined,
+      doctorId: String(scheduleRaw.doctorId || options?.doctorId || ''),
+      weekStart: String(scheduleRaw.weekStart || weekStart),
+      timezone: String(scheduleRaw.timezone || 'Asia/Manila'),
+      hasSchedule: Boolean(scheduleRaw.hasSchedule),
+      hasEnabledSession: Boolean(scheduleRaw.hasEnabledSession),
+      days: normalizedDays,
+      weeklySlots,
+    }
   },
   getDoctorPatientProfile: async (patientId: string): Promise<DoctorPatientProfile> => {
     const payload = (await handleResponse(

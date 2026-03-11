@@ -12,6 +12,8 @@ export const APPOINTMENTS_TAB_PATHS = {
 
 export const DOCTOR_TAB_PATHS = {
   appointments: ROUTES.doctor.dashboard,
+  calendar: `${ROUTES.doctor.root}/calendar`,
+  schedule: `${ROUTES.doctor.root}/schedule`,
   queue: `${ROUTES.doctor.root}/queue`,
   analytics: `${ROUTES.doctor.root}/analytics`,
   settings: `${ROUTES.doctor.root}/settings`,

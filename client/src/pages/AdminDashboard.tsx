@@ -15,6 +15,7 @@ import { buildRouteFromCanonicalPath, normalizePath } from '../config/routing'
 import { getAdminTabPath, resolveAdminTabFromPath } from '../config/workspaceTabRoutes'
 import type { AppPage } from '../types/navigation'
 import type { AuthSession, Reservation } from '../types'
+import { formatPhilippineDateTime } from '../utils/dateTime'
 import { maskIdentifier, maskPersonName } from '../utils/privacy'
 import { formatRoleLabel, getWorkspaceRoleLabel } from '../utils/roles'
 import {
@@ -34,7 +35,6 @@ type AdminDashboardProps = {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   dataMaskingEnabled: boolean
-  onToggleDataMasking: () => void
 }
 
 type AdminSection =
@@ -115,7 +115,7 @@ const parseDate = (value: string | null | undefined) => {
 const formatDateTime = (value: string | null | undefined) => {
   const timestamp = parseDate(value)
   if (!timestamp) return 'Unknown'
-  return new Date(timestamp).toLocaleString()
+  return formatPhilippineDateTime(timestamp)
 }
 
 const statusChipClass = (status: Reservation['status'] | 'None') => {
@@ -196,7 +196,6 @@ const AdminDashboard = ({
   theme,
   onToggleTheme,
   dataMaskingEnabled,
-  onToggleDataMasking,
 }: AdminDashboardProps) => {
   const [activeSection, setActiveSection] = useState<AdminSection>(() => {
     if (typeof window === 'undefined') return 'user_management'
@@ -218,7 +217,7 @@ const AdminDashboard = ({
 
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
   const [expandedStaffId, setExpandedStaffId] = useState<string | null>(null)
-  const [staffApplicationRoleFilter, setStaffApplicationRoleFilter] = useState<'all' | 'doctor' | 'nurse'>('all')
+  const [staffApplicationRoleFilter, setStaffApplicationRoleFilter] = useState<'all' | 'doctor'>('all')
   const [selectedStaffApplication, setSelectedStaffApplication] = useState<AdminStaffApplicationRecord | null>(null)
   const [isReviewActionPending, setIsReviewActionPending] = useState(false)
 
@@ -348,7 +347,7 @@ const AdminDashboard = ({
 
   const staffWithBookings = useMemo(() => {
     return users
-      .filter((item) => item.role === 'doctor' || item.role === 'nurse')
+      .filter((item) => item.role === 'doctor')
       .map((item) => {
         const fullName = `${item.firstName} ${item.lastName}`.trim()
         const summary = buildBookingSummary(reservations, (reservation) => {
@@ -615,7 +614,6 @@ const AdminDashboard = ({
         { key: 'settings-account', label: 'Account', value: authUser?.username ?? 'Unknown', caption: 'Signed in user' },
         { key: 'settings-role', label: 'Role', value: getWorkspaceRoleLabel(authUser?.role), caption: 'Workspace role' },
         { key: 'settings-theme', label: 'Theme', value: theme === 'dark' ? 'Dark' : 'Light', caption: 'Current theme' },
-        { key: 'settings-masking', label: 'Masking', value: dataMaskingEnabled ? 'On' : 'Off', caption: 'Data protection' },
       ],
     },
   } as const
@@ -659,7 +657,7 @@ const AdminDashboard = ({
       )
       setPendingStaffApplications((previous) => previous.filter((item) => item.id !== application.id))
       setSelectedStaffApplication(null)
-      setActionMessage(`${application.role === 'doctor' ? 'Doctor' : 'Nurse'} application approved.`)
+      setActionMessage('Doctor application approved.')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to approve staff application.'
       setActionError(message)
@@ -677,7 +675,7 @@ const AdminDashboard = ({
       setUsers((previous) => previous.filter((item) => item.id !== application.id))
       setPendingStaffApplications((previous) => previous.filter((item) => item.id !== application.id))
       setSelectedStaffApplication(null)
-      setActionMessage(`${application.role === 'doctor' ? 'Doctor' : 'Nurse'} application rejected and removed.`)
+      setActionMessage('Doctor application rejected and removed.')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to reject staff application.'
       setActionError(message)
@@ -1045,14 +1043,6 @@ const AdminDashboard = ({
                       New doctor applications (
                       {pendingStaffApplications.filter((item) => item.role === 'doctor').length})
                     </button>
-                    <button
-                      type="button"
-                      className={workspaceGhostButtonClass}
-                      onClick={() => setStaffApplicationRoleFilter('nurse')}
-                    >
-                      New nurse applications (
-                      {pendingStaffApplications.filter((item) => item.role === 'nurse').length})
-                    </button>
                   </div>
 
                   <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
@@ -1379,18 +1369,11 @@ const AdminDashboard = ({
                       <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Theme</p>
                       <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{theme === 'dark' ? 'Dark' : 'Light'}</p>
                     </div>
-                    <div className="reference-card-soft p-3">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Data masking</p>
-                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{dataMaskingEnabled ? 'On' : 'Off'}</p>
-                    </div>
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
                       Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
-                    </button>
-                    <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
-                      Turn data masking {dataMaskingEnabled ? 'Off' : 'On'}
                     </button>
                   </div>
 

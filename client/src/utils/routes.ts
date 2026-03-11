@@ -7,7 +7,6 @@ export const ROUTES = {
   forgotPassword: '/forgot-password',
   signup: '/signup',
   doctorSignup: '/signup/doctor',
-  nurseSignup: '/signup/nurse',
   appointments: '/appointments',
   admin: {
     root: '/admin',

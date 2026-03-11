@@ -8,6 +8,7 @@ import mongoSanitize from 'express-mongo-sanitize'; //Anti-NoSQL injection
 import passport from 'passport'; 
 import './Config/passport.js';
 import ErrorLog from './Models/ErrorLogModel.js';
+import User from './Models/UserModel.js';
 
 import router from './Routes/Routes.js';
 
@@ -26,7 +27,18 @@ if (!config.MONGO_URI) {
 }
 
 // Security headers
-app.use(helmet());
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'none'"],
+                baseUri: ["'none'"],
+                formAction: ["'none'"],
+                frameAncestors: ["'none'"],
+            },
+        },
+    })
+);
 
 app.use(
     cors({
@@ -74,6 +86,15 @@ const startServer = async () => {
     try {
         await mongoose.connect(config.MONGO_URI, { dbName: config.DB_NAME });
         console.log('Connected to DB');
+
+        // Migrate legacy nurse roles to doctor to keep auth flows consistent.
+        const migrationResult = await User.updateMany(
+            { role: 'nurse' },
+            { $set: { role: 'doctor' } }
+        );
+        if (migrationResult?.modifiedCount) {
+            console.log(`Migrated ${migrationResult.modifiedCount} nurse accounts to doctor.`);
+        }
 
         app.listen(config.PORT, '0.0.0.0', () => {
             console.log(`Server is running on http://localhost:${config.PORT}`);
