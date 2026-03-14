@@ -3,7 +3,7 @@ import type { UserRole } from '../types'
 
 export const requiresAuth: Partial<Record<AppPage, UserRole[]>> = {
   appointments: ['user'],
-  doctor_dashboard: ['nurse'],
+  doctor_dashboard: ['doctor'],
   admin: ['admin', 'system_admin'],
 }
 

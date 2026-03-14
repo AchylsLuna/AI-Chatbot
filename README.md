@@ -1,64 +1,36 @@
-# AI Healthcare Backend + Database (Frontend UI Unchanged)
+# Hospital AI & Blockchain Server
 
-This repository keeps your existing UI intact and stabilizes the backend/database layer that powers it.
+A secure backend and UI for appointment booking, staff dashboards, and audit-backed operations.
 
-## Scope of this phase
-- Backend: Node.js + Express (`server/`)
-- Database: MongoDB + Mongoose
-- UI: **untouched** (no redesign/replacement)
+**Highlights**
+- Auth: Local login, OTP (email) and role-based access (User, Doctor, Admin, Super Admin). See controllers: [server/Controllers/UserController.js].
+- Role-based dashboards: User appointments, Doctor/Admin dashboard, Admin workspace. Client routing and access control in [client/src/config/accessControl.ts].
+- Audit logging and encrypted backups: admin download implemented in [server/Controllers/adminController.js]. Decrypt helper in [decrypt_backup/decrypt_backup.js].
+- Appointment archival service: [server/Utils/archiveService.js] with a script at [server/scripts/runArchiveAppointments.js].
 
-## Core decisions implemented
-- Internal doctor role is `nurse`
-- OTP verification is required for login completion
-- API base path is `/api`
-- Ledger is DB-backed (no blockchain write dependency)
+**Quickstart (development)**
+1. MongoDB: provide a running MongoDB and set `MONGO_URI`.
+2. Server
+   - cd server
+   - npm install
+   - copy `.env` values
+   - npm run dev
+3. Client
+   - cd client
+   - npm install
+   - npm run dev
 
-## Quick start
-0. Node.js baseline:
-   - Use Node `>=22.13` (recommended via `.nvmrc`: `22.13.0`)
-1. Install dependencies:
-   - `npm run install-all`
-2. Start MongoDB (Docker):
-   - `npm run db:up`
-3. Configure backend env:
-   - Copy `server/.env.example` to `server/.env` and set secrets
-4. Run backend:
-   - `npm run dev:server`
-5. (Optional) Run frontend:
-   - `npm run dev:client`
+**Important files**
+- API routes: [server/Routes/Routes.js]
+- Server entry: [server/server.js]
+- Client API helpers: [client/src/services/api.ts]
 
-## Backend scripts
-- Start backend (dev): `npm run dev:server`
-- Start backend (prod mode): `npm run start:server`
-- Run data migration: `npm run backend:migrate`
-- Seed core users: `npm run backend:seed`
-- Stop DB container: `npm run db:down`
+**Scripts**
+- Start server (dev): `npm run dev` (server/)
+- Start client (dev): `npm run dev` (client/)
 
-## Backend API coverage
-Implemented and active under `/api`:
-- Auth: register, login, OTP challenge/verify/resend, logout, session
-- Appointments: list/create/update + reservations alias
-- Settings: get/update current user settings
-- Admin/support: users, ledger, access requests, AI alert audit action, encrypted audit backup
-- Health check: `GET /api/health`
-
-Full endpoint details: `server/docs/API.md`
-
-## Documentation
-- API reference: `server/docs/API.md`
-- Deployment/runtime: `server/docs/DEPLOYMENT.md`
-- Maintenance runbook: `server/docs/MAINTENANCE.md`
-- Security notes: `server/docs/SECURITY.md`
-- DB schema: `server/docs/DB_SCHEMA.md`
-
-## GitHub Desktop troubleshooting
-- If GitHub Desktop shows no patch, verify tracked file changes with `git status`.
-- Changes in ignored paths like `node_modules/` and `dist/` do not appear as Git patches.
-- For diagnosis, run `git status --short --ignored` to see ignored-folder churn.
-
-## Dependency audit notes (February 22, 2026)
-- `npm run audit:prod` is clean (`0` vulnerabilities for client/server production dependencies).
-- `npm run audit:all` still reports dev-only advisories in the client lint/tooling chain (`eslint`/`minimatch`/`ajv` transitive advisories).
-- Current npm remediation guidance proposes unsafe/breaking changes (including `eslint@4` downgrade), so those findings are tracked for upstream toolchain resolution.
-- Follow-up owner: repository maintainers.
-- Next review target: on the next dependency refresh cycle or when npm advisory data for ESLint v9+ is updated.
+**Docs**
+- API: [docs/API.md] 
+- Deployment: [docs/DEPLOYMENT.md]
+- Maintenance: [docs/MAINTENANCE.md]
+- Security: [docs/SECURITY.md]

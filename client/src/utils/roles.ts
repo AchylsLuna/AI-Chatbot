@@ -4,7 +4,7 @@ import { getDefaultDashboardPage } from './dashboardRoutes'
 
 const roleLabels: Record<UserRole, string> = {
   user: 'Patient',
-  nurse: 'Doctor',
+  doctor: 'Doctor',
   admin: 'Admin',
   system_admin: 'Admin',
 }
@@ -19,7 +19,7 @@ export const formatRoleLabel = (role?: string | null) => {
 export const getWorkspaceRoleLabel = (role?: UserRole | null) => {
   if (!role) return 'Unknown'
   if (role === 'user') return 'Patient'
-  if (role === 'nurse') return 'Doctor'
+  if (role === 'doctor') return 'Doctor'
   return 'Admin'
 }
 

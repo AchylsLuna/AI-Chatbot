@@ -1,0 +1,167 @@
+{
+  "id": "ai-health-care-triage-v2",
+  "start": "q0",
+  "nodes": {
+    "q0": {
+      "type": "single",
+      "question": "Symptom Check (Decision Tree): Choose one, or use dataset search.",
+      "options": [
+        { "value": "dataset_search", "label": "Search symptoms (Dataset)", "next": "q_dataset_search" },
+        { "value": "chest", "label": "Chest pain / pressure", "next": "q1_chest_redflags" },
+        { "value": "breathing", "label": "Shortness of breath / difficulty breathing", "next": "q1_breathing_redflags" },
+        { "value": "fever", "label": "Fever / chills", "next": "q1_fever" },
+        { "value": "headache", "label": "Severe headache / dizziness", "next": "q1_headache_redflags" },
+        { "value": "stomach", "label": "Stomach/abdominal pain / vomiting / diarrhea", "next": "q1_abdomen_redflags" },
+        { "value": "injury", "label": "Injury / bleeding / accident", "next": "q1_injury_redflags" },
+        { "value": "other", "label": "Other / not sure", "next": "q_other" }
+      ]
+    },
+
+    "q_dataset_search": {
+      "type": "text",
+      "question": "Type your symptoms (example: 'fever and cough for 2 days', 'chest tightness', 'vomiting and diarrhea'). I will search the dataset and suggest the best path."
+    },
+
+    "q1_chest_redflags": {
+      "type": "single",
+      "question": "Is the chest pain severe OR with shortness of breath, sweating, nausea, fainting, or pain spreading to arm/jaw/back?",
+      "options": [
+        { "value": "yes", "label": "Yes", "next": "OUT_EMERGENCY" },
+        { "value": "no", "label": "No", "next": "q_chest_duration" }
+      ]
+    },
+    "q_chest_duration": {
+      "type": "single",
+      "question": "How long has it been happening?",
+      "options": [
+        { "value": "minutes", "label": "Minutes to hours", "next": "OUT_URGENT_TODAY" },
+        { "value": "days", "label": "More than 1 day", "next": "OUT_APPOINTMENT_SOON" },
+        { "value": "weeks", "label": "On and off for weeks", "next": "OUT_APPOINTMENT_ROUTINE" }
+      ]
+    },
+
+    "q1_breathing_redflags": {
+      "type": "single",
+      "question": "Is breathing difficulty severe (cannot speak full sentences), with bluish lips, confusion, or worsening rapidly?",
+      "options": [
+        { "value": "yes", "label": "Yes", "next": "OUT_EMERGENCY" },
+        { "value": "no", "label": "No", "next": "q_breathing_with_fever" }
+      ]
+    },
+    "q_breathing_with_fever": {
+      "type": "single",
+      "question": "Do you also have fever or chest tightness?",
+      "options": [
+        { "value": "yes", "label": "Yes", "next": "OUT_URGENT_TODAY" },
+        { "value": "no", "label": "No", "next": "OUT_APPOINTMENT_SOON" }
+      ]
+    },
+
+    "q1_fever": {
+      "type": "single",
+      "question": "How high is the fever (if you know)?",
+      "options": [
+        { "value": "unknown", "label": "Not sure / no thermometer", "next": "q_fever_duration" },
+        { "value": "mild", "label": "Below 38.5°C", "next": "q_fever_duration" },
+        { "value": "high", "label": "38.5°C or higher", "next": "q_fever_redflags" }
+      ]
+    },
+    "q_fever_redflags": {
+      "type": "single",
+      "question": "Any of these: stiff neck, severe headache, rash, dehydration (very dry mouth/no urination), confusion, seizures, or persistent vomiting?",
+      "options": [
+        { "value": "yes", "label": "Yes", "next": "OUT_URGENT_TODAY" },
+        { "value": "no", "label": "No", "next": "q_fever_duration" }
+      ]
+    },
+    "q_fever_duration": {
+      "type": "single",
+      "question": "How long has the fever been present?",
+      "options": [
+        { "value": "lt24", "label": "Less than 24 hours", "next": "OUT_SELFCARE_MONITOR" },
+        { "value": "1to3", "label": "1–3 days", "next": "OUT_APPOINTMENT_SOON" },
+        { "value": "gt3", "label": "More than 3 days", "next": "OUT_URGENT_TODAY" }
+      ]
+    },
+
+    "q1_headache_redflags": {
+      "type": "single",
+      "question": "Is it the worst headache of your life OR with weakness/numbness, trouble speaking, vision loss, fainting, or confusion?",
+      "options": [
+        { "value": "yes", "label": "Yes", "next": "OUT_EMERGENCY" },
+        { "value": "no", "label": "No", "next": "q_headache_duration" }
+      ]
+    },
+    "q_headache_duration": {
+      "type": "single",
+      "question": "How long has it been happening?",
+      "options": [
+        { "value": "new", "label": "New today", "next": "OUT_APPOINTMENT_SOON" },
+        { "value": "days", "label": "Several days", "next": "OUT_APPOINTMENT_SOON" },
+        { "value": "weeks", "label": "On and off for weeks", "next": "OUT_APPOINTMENT_ROUTINE" }
+      ]
+    },
+
+    "q1_abdomen_redflags": {
+      "type": "single",
+      "question": "Any of these: severe belly pain, blood in stool/vomit, black tarry stool, severe dehydration, or pain with fainting?",
+      "options": [
+        { "value": "yes", "label": "Yes", "next": "OUT_URGENT_TODAY" },
+        { "value": "no", "label": "No", "next": "q_abdomen_main" }
+      ]
+    },
+    "q_abdomen_main": {
+      "type": "single",
+      "question": "Which is closest?",
+      "options": [
+        { "value": "vomit", "label": "Vomiting a lot", "next": "OUT_APPOINTMENT_SOON" },
+        { "value": "diarrhea", "label": "Diarrhea", "next": "OUT_SELFCARE_MONITOR" },
+        { "value": "pain", "label": "Mild/moderate abdominal pain", "next": "OUT_APPOINTMENT_SOON" }
+      ]
+    },
+
+    "q1_injury_redflags": {
+      "type": "single",
+      "question": "Is there heavy bleeding, deep wound, head injury with vomiting/confusion, suspected fracture, or severe pain?",
+      "options": [
+        { "value": "yes", "label": "Yes", "next": "OUT_EMERGENCY" },
+        { "value": "no", "label": "No", "next": "OUT_APPOINTMENT_SOON" }
+      ]
+    },
+
+    "q_other": {
+      "type": "single",
+      "question": "Do you feel the problem is severe, rapidly worsening, or you feel unsafe right now?",
+      "options": [
+        { "value": "yes", "label": "Yes", "next": "OUT_URGENT_TODAY" },
+        { "value": "no", "label": "No", "next": "OUT_GENERAL_GUIDANCE" }
+      ]
+    }
+  },
+  "outcomes": {
+    "OUT_EMERGENCY": {
+      "title": "Emergency",
+      "text": "This could be serious. Please go to the nearest ER or call local emergency services immediately. Do not delay."
+    },
+    "OUT_URGENT_TODAY": {
+      "title": "Urgent (Today)",
+      "text": "You should seek urgent medical care today (urgent care/ER depending on severity). If symptoms worsen, treat as emergency."
+    },
+    "OUT_APPOINTMENT_SOON": {
+      "title": "Appointment (Soon)",
+      "text": "Book an appointment soon (within 24–72 hours). If symptoms worsen rapidly, seek urgent care."
+    },
+    "OUT_APPOINTMENT_ROUTINE": {
+      "title": "Routine Appointment",
+      "text": "Book a routine appointment. Track symptoms and seek urgent care if any red flags appear."
+    },
+    "OUT_SELFCARE_MONITOR": {
+      "title": "Self-care + Monitor",
+      "text": "Monitor symptoms, rest, hydrate, and consider booking if it persists or worsens. If red flags appear, seek urgent care."
+    },
+    "OUT_GENERAL_GUIDANCE": {
+      "title": "General Guidance",
+      "text": "Please describe your symptoms (what you feel, when it started, severity, fever yes/no). I can guide next steps and help you book an appointment."
+    }
+  }
+}

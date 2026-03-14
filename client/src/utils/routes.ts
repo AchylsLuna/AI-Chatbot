@@ -6,8 +6,7 @@ export const ROUTES = {
   otp: '/otp',
   forgotPassword: '/forgot-password',
   signup: '/signup',
-  terms: '/terms',
-  privacyPolicy: '/privacy-policy',
+  doctorSignup: '/signup/doctor',
   appointments: '/appointments',
   admin: {
     root: '/admin',

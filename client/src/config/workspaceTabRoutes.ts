@@ -4,6 +4,7 @@ import { ROUTES } from '../utils/routes'
 
 export const APPOINTMENTS_TAB_PATHS = {
   booking_appointments: ROUTES.appointments,
+  profile: `${ROUTES.appointments}/profile`,
   history: `${ROUTES.appointments}/history`,
   notifications: `${ROUTES.appointments}/notifications`,
   settings: `${ROUTES.appointments}/settings`,
@@ -11,6 +12,8 @@ export const APPOINTMENTS_TAB_PATHS = {
 
 export const DOCTOR_TAB_PATHS = {
   appointments: ROUTES.doctor.dashboard,
+  calendar: `${ROUTES.doctor.root}/calendar`,
+  schedule: `${ROUTES.doctor.root}/schedule`,
   queue: `${ROUTES.doctor.root}/queue`,
   analytics: `${ROUTES.doctor.root}/analytics`,
   settings: `${ROUTES.doctor.root}/settings`,
@@ -19,7 +22,8 @@ export const DOCTOR_TAB_PATHS = {
 export const ADMIN_TAB_PATHS = {
   user_management: ROUTES.admin.dashboard,
   staff_management: `${ROUTES.admin.root}/staff-management`,
-  history: `${ROUTES.admin.root}/history`,
+  audit_log: `${ROUTES.admin.root}/audit-log`,
+  error_log: `${ROUTES.admin.root}/error-log`,
   notifications: `${ROUTES.admin.root}/notifications`,
   settings: `${ROUTES.admin.root}/settings`,
 } as const
@@ -48,6 +52,9 @@ const ADMIN_DEFAULT_COMPAT_PATHS: ReadonlySet<string> = new Set([
   ROUTES.legacyDashboard.admin.root,
   ROUTES.legacyDashboard.admin.dashboard,
 ])
+const ADMIN_COMPAT_TAB_MAP: Readonly<Record<string, AdminTab>> = {
+  [`${ROUTES.admin.root}/history`]: 'audit_log',
+}
 
 const DOCTOR_NAMESPACE_ROOTS = [ROUTES.doctor.root, ROUTES.legacyDashboard.doctor.root]
 const ADMIN_NAMESPACE_ROOTS = [ROUTES.admin.root, ROUTES.legacyDashboard.admin.root]
@@ -93,6 +100,7 @@ export const resolveAdminTabFromPath = (path: string): AdminTab | null => {
   const normalized = normalizePath(path)
   const direct = findTabForPath(ADMIN_TAB_PATHS, normalized)
   if (direct) return direct
+  if (normalized in ADMIN_COMPAT_TAB_MAP) return ADMIN_COMPAT_TAB_MAP[normalized]
   if (ADMIN_DEFAULT_COMPAT_PATHS.has(normalized)) return 'user_management'
   return null
 }

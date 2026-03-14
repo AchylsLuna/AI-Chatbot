@@ -15,8 +15,6 @@ type AdminSettingsSectionProps = {
   sessionStatus: string
   theme: 'light' | 'dark'
   onToggleTheme: () => void
-  dataMaskingEnabled: boolean
-  onToggleDataMasking: () => void
   notificationPrefs: NotificationPreferences
   onToggleNotificationPref: (key: keyof NotificationPreferences) => void
   currentPassword: string
@@ -35,8 +33,6 @@ const AdminSettingsSection = ({
   sessionStatus,
   theme,
   onToggleTheme,
-  dataMaskingEnabled,
-  onToggleDataMasking,
   notificationPrefs,
   onToggleNotificationPref,
   currentPassword,
@@ -73,9 +69,6 @@ const AdminSettingsSection = ({
           <div className="mt-3 grid gap-2">
             <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
               Theme: {theme === 'dark' ? 'Dark' : 'Light'}
-            </button>
-            <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
-              Data masking: {dataMaskingEnabled ? 'On' : 'Off'}
             </button>
           </div>
         </div>

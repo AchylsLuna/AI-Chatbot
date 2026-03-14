@@ -19,10 +19,8 @@ import type {
   AuthSession,
   LedgerEntry,
   LoginOtpChallenge,
-  Reservation,
   ReservationDraft,
 } from '../types'
-import { sanitizeText } from '../utils/sanitize'
 import {
   getDefaultDashboardPage,
   isAdminRole,
@@ -384,20 +382,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       setApiReady(true)
     } catch (error) {
       console.error('Failed to create reservation', error)
-      const fallback: Reservation = {
-        id: `RES-${Math.floor(1000 + Math.random() * 9000)}`,
-        patientName: sanitizeText(draft.patientName),
-        symptoms: sanitizeText(draft.symptoms),
-        department: sanitizeText(draft.summary.department),
-        priority: draft.summary.priority,
-        confidence: draft.summary.confidence,
-        requestedTime: sanitizeText(draft.requestedTime),
-        createdAt: new Date().toISOString(),
-        status: 'Booked',
-        summary: sanitizeText(draft.summary.summary),
-      }
-      prependReservation(fallback)
-      setStoreLatestReservationId(fallback.id)
+      throw (error instanceof Error ? error : new Error('Failed to create reservation'))
     }
   }
 
@@ -430,19 +415,6 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     if (!canonical) return null
     if (!isWorkspacePathForPage(canonical, page)) return null
     return canonical
-  }
-
-  const resolveAuthPageForTarget = (
-    targetPage?: AppPage | null
-  ): Extract<AppPage, 'login' | 'doctor_login' | 'admin_login'> => {
-    if (targetPage === 'admin') return 'admin_login'
-    if (targetPage === 'doctor_dashboard') return 'doctor_login'
-    return 'login'
-  }
-
-  const resolveOtpFallbackAuthPage = () => {
-    const targetPage = pendingOtpChallenge?.targetPage ?? postLoginPage ?? null
-    return resolveAuthPageForTarget(targetPage)
   }
 
   const finalizeAuthenticatedSession = (
@@ -547,7 +519,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const handleVerifyOtp = async (code: string) => {
     if (!pendingOtpChallenge) {
       setAuthError('No active OTP challenge. Start login again.')
-      navigateToPage(resolveOtpFallbackAuthPage())
+      navigateToPage('login')
       return
     }
 
@@ -570,15 +542,14 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   }
 
   const handleCancelOtp = () => {
-    const fallbackAuthPage = resolveOtpFallbackAuthPage()
     setPendingOtpChallenge(null)
-    navigateToPage(fallbackAuthPage)
+    navigateToPage('login')
   }
 
   const handleResendOtp = async () => {
     if (!pendingOtpChallenge) {
       setAuthError('No active OTP challenge. Start login again.')
-      navigateToPage(resolveOtpFallbackAuthPage())
+      navigateToPage('login')
       return
     }
 

@@ -10,7 +10,7 @@ const AppointmentsSchema = new mongoose.Schema(
         doctor: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            required: false,
+            required: true,
         },
         scheduledDate: {
             type: Date,
@@ -18,45 +18,73 @@ const AppointmentsSchema = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ["Booked", "Recorded", "Failed"],
-            default: "Booked",
+            enum: ["Pending", "Confirmed", "Completed", "Cancelled"],
+            default: "Pending",
         },
         department: {
             type: String,
             required: true,
-            trim: true,
         },
         reason: {
             type: String,
-            default: "",
-            trim: true,
-        },
-        symptoms: {
-            type: String,
             required: true,
-            trim: true,
         },
-        priority: {
+        blockchainTxHash: {
+        type: String,
+        default: ""
+        },
+        soapNoteHashRecord: {
             type: String,
-            enum: ["Low", "Routine", "High"],
-            default: "Routine",
+            default: ""
         },
-        confidence: {
-            type: Number,
-            min: 0,
-            max: 1,
-            default: 0.75,
-        },
-        summary: {
+        prescriptionsHashRecord: {
             type: String,
-            required: true,
-            trim: true,
+            default: ""
         },
     },
-    { timestamps: true }
 );
 
-AppointmentsSchema.index({ patient: 1, createdAt: -1 });
-AppointmentsSchema.index({ doctor: 1, createdAt: -1 });
+// Doctor workspace extensions appended for dashboard queue/triage/clinical actions.
+AppointmentsSchema.add({
+    queueStatus: {
+        type: String,
+        enum: ["Waiting", "Arrived", "In-Consultation", "Checked-Out", "No-Show"],
+        default: "Waiting",
+    },
+    triageLevel: {
+        type: String,
+        enum: ["Low", "Routine", "High"],
+        default: "Routine",
+    },
+    urgentFollowUp: {
+        type: Boolean,
+        default: false,
+    },
+    chiefComplaint: {
+        type: String,
+        default: "",
+    },
+    soapNote: {
+        subjective: { type: String, default: "" },
+        objective: { type: String, default: "" },
+        assessment: { type: String, default: "" },
+        plan: { type: String, default: "" },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        updatedAt: { type: Date },
+    },
+    prescriptions: [
+        {
+            medication: { type: String, required: true },
+            dosage: { type: String, required: true },
+            frequency: { type: String, default: "" },
+            durationDays: { type: Number, min: 1, max: 365 },
+            instructions: { type: String, default: "" },
+            prescribedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            createdAt: { type: Date, default: Date.now },
+        }
+    ],
+})
+
+AppointmentsSchema.index({ doctor: 1, scheduledDate: 1, status: 1 })
 
 export default mongoose.model("Appointments", AppointmentsSchema)

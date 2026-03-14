@@ -1,0 +1,28 @@
+# AI-Chatbot Project Guidelines
+
+## Project Architecture
+- **Monorepo** containing three main workspaces: `client`, `server`, and `blockchain`.
+- **Client**: React + TypeScript + Vite + TailwindCSS (`client/`).
+- **Server**: Node.js + Express + MongoDB (`server/`).
+- **Blockchain**: Hardhat + TypeScript + Ethers.js (`blockchain/`).
+
+## Key Features & Constraints
+1. **Authentication & Roles**:
+   - Implements local login, OTP (email), and multi-role access (User, Doctor, Admin, Super Admin).
+   - Modifications must respect existing guards in `server/Controllers/UserController.js` and `client/src/config/accessControl.ts`.
+2. **Security & Auditing**:
+   - Audit logging and encrypted backups are key features (`server/Controllers/adminController.js`, `decrypt_backup/decrypt_backup.js`). Keep security a top priority.
+3. **Services**:
+   - Backend has scheduled tasks / manual jobs like appointment archival (`server/Utils/archiveService.js`).
+   - Frontend API integration is centralized at `client/src/services/api.ts`.
+4. **Smart Contracts**:
+   - Hardhat used for testing, ignition for deployment. All scripts and tests should be written in TypeScript.
+
+## Coding Standards
+- **TypeScript**: Always use strict typing in `client` and `blockchain`.
+- **Server Organization**: Keep the MVC-like structure strict (`Controllers`, `Routes`, `Models`, `Middleware`, `Utils`).
+- **Dependencies**: Use `npm` across all packages.
+
+## Scripts & Operations
+- `npm run dev`: Start server and client concurrently from the root.
+- `npm run install-all`: Install dependencies across all packages.

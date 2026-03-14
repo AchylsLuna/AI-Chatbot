@@ -5,6 +5,7 @@ import {
   workspacePrimaryButtonClass,
 } from '../../../../styles/workspaceUi'
 import type { Reservation } from '../../../../types'
+import { formatPhilippineDateTime } from '../../../../utils/dateTime'
 import { maskIdentifier, maskPersonName } from '../../../../utils/privacy'
 
 type ReservationFilterStatus = 'all' | Reservation['status']
@@ -40,12 +41,6 @@ const statusBadgeClass = (status: Reservation['status']) => {
   if (status === 'Recorded') return 'bg-emerald-100 text-emerald-700 border-emerald-300/70'
   if (status === 'Failed') return 'bg-rose-100 text-rose-700 border-rose-300/70'
   return 'bg-sky-100 text-sky-700 border-sky-300/70'
-}
-
-const formatDateTime = (value: string) => {
-  const timestamp = new Date(value).getTime()
-  if (Number.isNaN(timestamp)) return 'Unknown'
-  return new Date(timestamp).toLocaleString()
 }
 
 const DoctorAppointmentSection = ({
@@ -159,7 +154,7 @@ const DoctorAppointmentSection = ({
                     {dataMaskingEnabled ? maskPersonName(reservation.patientName) : reservation.patientName}
                   </h3>
                   <p className="mt-1 text-sm text-[color:var(--agent-muted)]">
-                    {reservation.department} · {reservation.requestedTime}
+                    {reservation.department} · {formatPhilippineDateTime(reservation.requestedTime)}
                   </p>
                 </div>
                 <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(reservation.status)}`}>
@@ -171,7 +166,7 @@ const DoctorAppointmentSection = ({
                 <p className="text-sm text-[color:var(--agent-muted)]">{reservation.summary}</p>
                 <div className="space-y-1 text-xs text-[color:var(--agent-muted-soft)] md:text-right">
                   <p>Doctor: {reservation.doctorName ?? 'Unassigned'}</p>
-                  <p>Logged {formatDateTime(reservation.createdAt)}</p>
+                  <p>Logged {formatPhilippineDateTime(reservation.createdAt)}</p>
                 </div>
               </div>
 

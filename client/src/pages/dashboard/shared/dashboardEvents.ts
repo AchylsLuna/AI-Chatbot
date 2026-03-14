@@ -1,5 +1,6 @@
 import type { AuthSession, Reservation } from '../../../types'
 import type { DashboardLogItem, DashboardNotificationItem } from './types'
+import { formatPhilippineDateTime } from '../../../utils/dateTime'
 
 const parseDate = (value: string) => {
   const timestamp = new Date(value).getTime()
@@ -68,7 +69,7 @@ export const buildDashboardLogItems = (params: {
             ? 'Warning'
             : 'Info'
 
-      const detail = `${reservation.department} appointment is ${reservation.status.toLowerCase()} at ${reservation.requestedTime}.`
+      const detail = `${reservation.department} appointment is ${reservation.status.toLowerCase()} at ${formatPhilippineDateTime(reservation.requestedTime)}.`
 
       return {
         id: `RES-LOG-${reservation.id}-${reservation.createdAt}`,
@@ -127,7 +128,7 @@ export const buildDashboardNotificationItems = (
       return {
         id: `ALERT-${reservation.id}-${reservation.createdAt}`,
         title: `${reservation.patientName} status update`,
-        detail: `${reservation.department} appointment moved to ${reservation.status}. Requested time: ${reservation.requestedTime}.`,
+        detail: `${reservation.department} appointment moved to ${reservation.status}. Requested time: ${formatPhilippineDateTime(reservation.requestedTime)}.`,
         createdAt: reservation.createdAt,
         reservationId: reservation.id,
         status: reservation.status,
@@ -151,5 +152,5 @@ export const buildDashboardNotificationItems = (
 export const formatDashboardDateTime = (value: string) => {
   const timestamp = parseDate(value)
   if (!timestamp) return 'Unknown'
-  return new Date(timestamp).toLocaleString()
+  return formatPhilippineDateTime(timestamp)
 }

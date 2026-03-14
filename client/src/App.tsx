@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import GlobalAssistantChat from './components/chat/GlobalAssistantChat'
 import AppHeader from './components/layout/AppHeader'
 import WorkspaceHeader from './components/layout/WorkspaceHeader'
@@ -18,31 +18,14 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import OtpPage from './pages/OtpPage'
-import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
 import SignupPage from './pages/SignupPage'
-import TermsPage from './pages/TermsPage'
 import ConfirmModal from './components/ui/ConfirmModal'
-import type { AppPage } from './types/navigation'
 
-type ProtectedPage = 'appointments' | 'doctor_dashboard' | 'admin'
-
-const resolveAuthRouteForProtectedPage = (
-  page: ProtectedPage
-): Extract<AppPage, 'login' | 'doctor_login' | 'admin_login'> => {
-  if (page === 'doctor_dashboard') return 'doctor_login'
-  if (page === 'admin') return 'admin_login'
-  return 'login'
-}
-
-const resolveAuthRedirectLabel = (page: ProtectedPage) => {
-  if (page === 'doctor_dashboard') return "Redirecting to doctor's login..."
-  if (page === 'admin') return 'Redirecting to admin login...'
-  return 'Redirecting to patient login...'
-}
+type ProtectedPage = 'appointments' | 'doctor_dashboard'
 
 function App() {
   const { currentPage, navigateToPage, navigateBack, isLanding, isAuthPage } = useAppRouting()
-  const [dataMaskingEnabled, setDataMaskingEnabled] = useState(true)
+  const dataMaskingEnabled = false
 
   const {
     authProvider,
@@ -201,7 +184,7 @@ function App() {
     }
 
     if (!authUser) {
-      return <AuthLoadingCard label={resolveAuthRedirectLabel(page)} />
+      return page === 'doctor_dashboard' ? doctorLoginPage : loginPage
     }
 
     if (!canAccessPage(page, authUser.role)) {
@@ -210,7 +193,7 @@ function App() {
           title={options.deniedTitle}
           detail={options.deniedDetail}
           onSwitchAccount={() =>
-            navigateToPage(resolveAuthRouteForProtectedPage(page))
+            navigateToPage(page === 'doctor_dashboard' ? 'doctor_login' : 'login')
           }
           onBackToOverview={() => navigateToPage('landing')}
         />
@@ -237,6 +220,8 @@ function App() {
           onNavigate={navigateToPage}
           latestReservation={latestReservation}
           isAuthenticated={Boolean(authUser)}
+          authRole={authUser?.role ?? null}
+          authAccountType={authUser?.accountType ?? null}
           onLogout={handleLogout}
         />
       )
@@ -267,7 +252,6 @@ function App() {
                 theme={theme}
                 onToggleTheme={toggleTheme}
                 dataMaskingEnabled={dataMaskingEnabled}
-                onToggleDataMasking={() => setDataMaskingEnabled((prev) => !prev)}
               />,
               'Appointments workspace'
             )
@@ -297,7 +281,6 @@ function App() {
                 theme={theme}
                 onToggleTheme={toggleTheme}
                 dataMaskingEnabled={dataMaskingEnabled}
-                onToggleDataMasking={() => setDataMaskingEnabled((prev) => !prev)}
               />,
               "Doctor's dashboard"
             )
@@ -311,26 +294,33 @@ function App() {
         pageContent = <AuthLoadingCard label="Redirecting to appointments..." />
       } else if (isDoctorAuthenticated) {
         pageContent = <AuthLoadingCard label="Redirecting to doctor's dashboard..." />
+      } else if (isCheckingSession) {
+        pageContent = <AuthLoadingCard label="Checking admin access..." />
+      } else if (!authUser) {
+        pageContent = adminLoginPage
+      } else if (!canAccessPage('admin', authUser.role)) {
+        pageContent = (
+          <AccessDeniedCard
+            title="Admin access required"
+            detail="This section is limited to Admin accounts. Sign in with an authorized account."
+            onSwitchAccount={() => navigateToPage('admin_login')}
+            onBackToOverview={() => navigateToPage('landing')}
+          />
+        )
       } else {
-        pageContent = renderProtectedPage('admin', {
-          loadingLabel: 'Checking admin access...',
-          deniedTitle: 'Admin access required',
-          deniedDetail: 'This section is limited to Admin accounts. Sign in with an authorized account.',
-          allowedContent: withWorkspaceBoundary(
-            <AdminDashboard
-              authUser={authUser}
-              reservations={reservations}
-              onNavigate={navigateToPage}
-              onLogout={handleLogout}
-              sessionStatus={sessionStatus}
-              theme={theme}
-              onToggleTheme={toggleTheme}
-              dataMaskingEnabled={dataMaskingEnabled}
-              onToggleDataMasking={() => setDataMaskingEnabled((prev) => !prev)}
-            />,
-            'Admin dashboard'
-          ),
-        })
+        pageContent = withWorkspaceBoundary(
+          <AdminDashboard
+            authUser={authUser}
+            reservations={reservations}
+            onNavigate={navigateToPage}
+            onLogout={handleLogout}
+            sessionStatus={sessionStatus}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            dataMaskingEnabled={dataMaskingEnabled}
+          />,
+          'Admin dashboard'
+        )
       }
       break
 
@@ -372,16 +362,13 @@ function App() {
         />
       )
       break
-
-    case 'terms':
+    case 'doctor_signup':
       pageContent = (
-        <TermsPage onNavigate={navigateToPage} onGoBack={() => navigateBack('signup')} />
-      )
-      break
-
-    case 'privacy_policy':
-      pageContent = (
-        <PrivacyPolicyPage onNavigate={navigateToPage} onGoBack={() => navigateBack('signup')} />
+        <SignupPage
+          variant="doctor"
+          onNavigate={navigateToPage}
+          onGoBack={() => navigateBack('signup')}
+        />
       )
       break
 
@@ -399,6 +386,13 @@ function App() {
     <div
       className={`${theme === 'dark' ? 'theme-dark' : 'theme-light'} relative min-h-screen bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)]`}
     >
+      {!isLanding && !authUser && (
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0 agent-grid opacity-15" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.08),transparent_55%)]" />
+        </div>
+      )}
+
       <div className="relative z-10">
         <ConfirmModal
           open={Boolean(idleWarningOpen)}

@@ -18,6 +18,24 @@ type NavigateOptions = {
 export type NavigateToPage = (page: AppPage, options?: NavigateOptions) => void
 type NavigateBack = (fallback?: AppPage) => void
 
+const stripSensitiveSearchParams = (search: string) => {
+  if (!search) return search
+  const params = new URLSearchParams(search)
+  const sensitiveKeys = ['token', 'access_token', 'id_token']
+  let changed = false
+
+  for (const key of sensitiveKeys) {
+    if (params.has(key)) {
+      params.delete(key)
+      changed = true
+    }
+  }
+
+  if (!changed) return search
+  const next = params.toString()
+  return next ? `?${next}` : ''
+}
+
 const useAppRouting = () => {
   const [currentPage, setCurrentPage] = useState<AppPage>(() => {
     if (typeof window === 'undefined') return 'landing'
@@ -102,11 +120,12 @@ const useAppRouting = () => {
       const resolved = resolvePageFromPath(window.location.pathname)
       const canonicalPath = resolveCanonicalPath(window.location.pathname)
       const currentPath = normalizePath(window.location.pathname)
-      if (canonicalPath !== currentPath) {
+      const sanitizedSearch = stripSensitiveSearchParams(window.location.search)
+      if (canonicalPath !== currentPath || sanitizedSearch !== window.location.search) {
         window.history.replaceState(
           { ...(window.history.state ?? {}), appRoute: true, appPage: resolved },
           '',
-          buildRouteFromCanonicalPath(canonicalPath, window.location.search, window.location.hash)
+          buildRouteFromCanonicalPath(canonicalPath, sanitizedSearch, window.location.hash)
         )
       }
       setCurrentPage(resolved)
@@ -143,10 +162,11 @@ const useAppRouting = () => {
       return
     }
 
+    const sanitizedSearch = stripSensitiveSearchParams(window.location.search)
     window.history.replaceState(
       { ...(window.history.state ?? {}), appRoute: true, appPage: resolvedPage },
       '',
-      buildRouteFromCanonicalPath(canonicalPath, window.location.search, window.location.hash)
+      buildRouteFromCanonicalPath(canonicalPath, sanitizedSearch, window.location.hash)
     )
     routeStackRef.current = [resolvedPage]
   }, [])
@@ -158,9 +178,8 @@ const useAppRouting = () => {
     currentPage === 'login' ||
     currentPage === 'otp' ||
     currentPage === 'signup' ||
-    currentPage === 'forgot_password' ||
-    currentPage === 'terms' ||
-    currentPage === 'privacy_policy'
+    currentPage === 'doctor_signup' ||
+    currentPage === 'forgot_password'
 
   return { currentPage, navigateToPage, navigateBack, isLanding, isAuthPage }
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
 import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
@@ -15,8 +15,16 @@ import { buildRouteFromCanonicalPath, normalizePath } from '../config/routing'
 import { getAdminTabPath, resolveAdminTabFromPath } from '../config/workspaceTabRoutes'
 import type { AppPage } from '../types/navigation'
 import type { AuthSession, Reservation } from '../types'
+import { formatPhilippineDateTime } from '../utils/dateTime'
 import { maskIdentifier, maskPersonName } from '../utils/privacy'
 import { formatRoleLabel, getWorkspaceRoleLabel } from '../utils/roles'
+import {
+  api,
+  type AdminAuditLogRecord,
+  type AdminErrorLogRecord,
+  type AdminStaffApplicationRecord,
+  type AdminUserRecord,
+} from '../services/api'
 
 type AdminDashboardProps = {
   authUser: AuthSession['user'] | null
@@ -27,42 +35,23 @@ type AdminDashboardProps = {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   dataMaskingEnabled: boolean
-  onToggleDataMasking: () => void
 }
 
 type AdminSection =
   | 'user_management'
   | 'staff_management'
-  | 'history'
+  | 'audit_log'
+  | 'error_log'
   | 'notifications'
   | 'settings'
 
-type AdminUserSummaryItem = {
-  id: string
-  displayName: string
-  bookingCount: number
-  latestActivity: string
+type BookingSummary = {
+  total: number
+  current: number
+  future: number
   latestStatus: Reservation['status'] | 'None'
-  flagged: boolean
-}
-
-type AdminStaffSummaryItem = {
-  id: string
-  name: string
-  role: string
-  workspace: string
-  status: 'Online' | 'Idle' | 'Offline'
-  lastAction: string
-}
-
-type AdminHistoryItem = {
-  id: string
-  actor: string
-  type: 'Auth' | 'Reservation' | 'System'
-  subject: string
-  detail: string
-  createdAt: string
-  severity: 'Info' | 'Warning' | 'Critical'
+  latestActivity: string | null
+  history: Reservation[]
 }
 
 type AdminNotificationItem = {
@@ -70,8 +59,8 @@ type AdminNotificationItem = {
   title: string
   detail: string
   createdAt: string
-  severity: AdminHistoryItem['severity']
-  category: 'Security' | 'Reservation' | 'System'
+  severity: 'Info' | 'Warning' | 'Critical'
+  category: 'Audit' | 'Error' | 'System'
   read: boolean
 }
 
@@ -79,20 +68,26 @@ const primaryItems: SidebarItem[] = [
   {
     key: 'user_management',
     label: 'User Management',
-    caption: 'User activity and booking health',
+    caption: 'Users, profiles, booking history, account status',
     icon: 'user',
   },
   {
     key: 'staff_management',
     label: 'Staff Management',
-    caption: 'Staff roles and workspace status',
+    caption: 'Staff profiles and current/future bookings',
     icon: 'hospital',
   },
   {
-    key: 'history',
-    label: 'History',
-    caption: 'Recent privileged activity log',
+    key: 'audit_log',
+    label: 'Audit Log',
+    caption: 'Server audit trail',
     icon: 'report',
+  },
+  {
+    key: 'error_log',
+    label: 'Error Log',
+    caption: 'Server error records',
+    icon: 'alert',
   },
 ]
 
@@ -111,152 +106,86 @@ const utilityItems: SidebarItem[] = [
   },
 ]
 
-const FALLBACK_USERS: AdminUserSummaryItem[] = [
-  {
-    id: 'RES-10021',
-    displayName: 'Alyssa Howard',
-    bookingCount: 3,
-    latestActivity: '2026-02-17T16:20:00.000Z',
-    latestStatus: 'Recorded',
-    flagged: false,
-  },
-  {
-    id: 'RES-10043',
-    displayName: 'Marco Velez',
-    bookingCount: 2,
-    latestActivity: '2026-02-15T11:10:00.000Z',
-    latestStatus: 'Booked',
-    flagged: false,
-  },
-  {
-    id: 'RES-10078',
-    displayName: 'Sofia Levin',
-    bookingCount: 1,
-    latestActivity: '2026-02-14T08:40:00.000Z',
-    latestStatus: 'Failed',
-    flagged: true,
-  },
-]
-
-const FALLBACK_STAFF: AdminStaffSummaryItem[] = [
-  {
-    id: 'STF-001',
-    name: 'Dr. Mara Santos',
-    role: 'Admin / Doctor',
-    workspace: 'Doctor dashboard + Admin',
-    status: 'Online',
-    lastAction: 'Reviewed morning appointment queue',
-  },
-  {
-    id: 'STF-002',
-    name: 'Dr. Kim Perez',
-    role: 'Doctor',
-    workspace: 'Doctor dashboard + Admin',
-    status: 'Idle',
-    lastAction: 'Updated booking status for triage handoff',
-  },
-  {
-    id: 'STF-003',
-    name: 'Samuel Rhodes',
-    role: 'Admin',
-    workspace: 'Admin',
-    status: 'Offline',
-    lastAction: 'Completed access-policy review',
-  },
-]
-
-const FALLBACK_HISTORY: AdminHistoryItem[] = [
-  {
-    id: 'HIS-901',
-    actor: 'System',
-    type: 'System',
-    subject: 'Privilege audit',
-    detail: 'Daily privileged access snapshot was generated.',
-    createdAt: '2026-02-17T15:00:00.000Z',
-    severity: 'Info',
-  },
-  {
-    id: 'HIS-902',
-    actor: 'Admin / Doctor',
-    type: 'Reservation',
-    subject: 'Booking queue',
-    detail: 'Two booking records were marked for follow-up.',
-    createdAt: '2026-02-16T10:25:00.000Z',
-    severity: 'Warning',
-  },
-  {
-    id: 'HIS-903',
-    actor: 'Security',
-    type: 'Auth',
-    subject: 'Session policy',
-    detail: 'Session policy checks passed with no elevated-risk findings.',
-    createdAt: '2026-02-15T13:40:00.000Z',
-    severity: 'Info',
-  },
-]
-
-const FALLBACK_NOTIFICATIONS: AdminNotificationItem[] = [
-  {
-    id: 'NTF-901',
-    title: 'Security policy check completed',
-    detail: 'Daily privileged access policy checks completed with no critical findings.',
-    createdAt: '2026-02-17T15:12:00.000Z',
-    severity: 'Info',
-    category: 'Security',
-    read: false,
-  },
-  {
-    id: 'NTF-902',
-    title: 'Booking queue needs review',
-    detail: 'Two reservations were flagged for manual doctor follow-up.',
-    createdAt: '2026-02-16T10:35:00.000Z',
-    severity: 'Warning',
-    category: 'Reservation',
-    read: false,
-  },
-  {
-    id: 'NTF-903',
-    title: 'System snapshot generated',
-    detail: 'The daily operations snapshot is available for admin review.',
-    createdAt: '2026-02-15T09:10:00.000Z',
-    severity: 'Info',
-    category: 'System',
-    read: true,
-  },
-]
-
-const parseDate = (value: string) => {
+const parseDate = (value: string | null | undefined) => {
+  if (!value) return 0
   const timestamp = new Date(value).getTime()
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
-const formatDateTime = (value: string) => {
+const formatDateTime = (value: string | null | undefined) => {
   const timestamp = parseDate(value)
   if (!timestamp) return 'Unknown'
-  return new Date(timestamp).toLocaleString()
+  return formatPhilippineDateTime(timestamp)
 }
 
-const statusChipClass = (status: AdminUserSummaryItem['latestStatus']) => {
-  if (status === 'Recorded') return 'agent-status-badge agent-status-badge--success'
-  if (status === 'Failed') return 'agent-status-badge agent-status-badge--danger'
-  if (status === 'Booked') return 'agent-status-badge agent-status-badge--info'
-  return 'agent-status-badge agent-status-badge--neutral'
+const statusChipClass = (status: Reservation['status'] | 'None') => {
+  if (status === 'Recorded') return 'border-emerald-300/70 bg-emerald-100 text-emerald-700'
+  if (status === 'Failed') return 'border-rose-300/70 bg-rose-100 text-rose-700'
+  if (status === 'Booked') return 'border-sky-300/70 bg-sky-100 text-sky-700'
+  return 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]'
 }
 
-const staffStatusChipClass = (status: AdminStaffSummaryItem['status']) => {
-  if (status === 'Online') return 'agent-status-badge agent-status-badge--success'
-  if (status === 'Idle') return 'agent-status-badge agent-status-badge--warning'
-  return 'agent-status-badge agent-status-badge--neutral'
+const accountChipClass = (status: AdminUserRecord['status']) =>
+  status === 'disabled'
+    ? 'border-rose-300/70 bg-rose-100 text-rose-700'
+    : 'border-emerald-300/70 bg-emerald-100 text-emerald-700'
+
+const severityChipClass = (severity: 'Info' | 'Warning' | 'Critical') => {
+  if (severity === 'Critical') return 'border-rose-300/70 bg-rose-100 text-rose-700'
+  if (severity === 'Warning') return 'border-amber-300/70 bg-amber-100 text-amber-700'
+  return 'border-sky-300/70 bg-sky-100 text-sky-700'
 }
 
-const historySeverityChipClass = (severity: AdminHistoryItem['severity']) => {
-  if (severity === 'Critical') return 'agent-status-badge agent-status-badge--danger'
-  if (severity === 'Warning') return 'agent-status-badge agent-status-badge--warning'
-  return 'agent-status-badge agent-status-badge--info'
+const buildBookingSummary = (
+  reservations: Reservation[],
+  matcher: (item: Reservation) => boolean
+): BookingSummary => {
+  const matched = reservations.filter(matcher).sort((a, b) => parseDate(b.createdAt) - parseDate(a.createdAt))
+
+  if (matched.length === 0) {
+    return {
+      total: 0,
+      current: 0,
+      future: 0,
+      latestStatus: 'None',
+      latestActivity: null,
+      history: [],
+    }
+  }
+
+  const now = Date.now()
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const endOfToday = new Date(startOfToday)
+  endOfToday.setDate(endOfToday.getDate() + 1)
+
+  const current = matched.filter((item) => {
+    if (item.status !== 'Booked') return false
+    const ts = parseDate(item.requestedTime)
+    return ts >= startOfToday.getTime() && ts < endOfToday.getTime()
+  }).length
+
+  const future = matched.filter((item) => {
+    if (item.status !== 'Booked') return false
+    const ts = parseDate(item.requestedTime)
+    return ts >= now
+  }).length
+
+  return {
+    total: matched.length,
+    current,
+    future,
+    latestStatus: matched[0]?.status ?? 'None',
+    latestActivity: matched[0]?.createdAt ?? null,
+    history: matched,
+  }
 }
 
-const isStaffRole = (role?: AuthSession['user']['role'] | null) =>
-  role === 'nurse' || role === 'admin' || role === 'system_admin'
+const resolveAdminDisplayName = (user: AuthSession['user'] | null) => {
+  const fullName = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim()
+  if (fullName) return fullName
+  return 'Admin'
+}
 
 const AdminDashboard = ({
   authUser,
@@ -267,7 +196,6 @@ const AdminDashboard = ({
   theme,
   onToggleTheme,
   dataMaskingEnabled,
-  onToggleDataMasking,
 }: AdminDashboardProps) => {
   const [activeSection, setActiveSection] = useState<AdminSection>(() => {
     if (typeof window === 'undefined') return 'user_management'
@@ -275,17 +203,32 @@ const AdminDashboard = ({
   })
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  // Auto-logout after 15 minutes of inactivity (900000 ms)
+
+  const [users, setUsers] = useState<AdminUserRecord[]>([])
+  const [pendingStaffApplications, setPendingStaffApplications] = useState<AdminStaffApplicationRecord[]>([])
+  const [auditLogs, setAuditLogs] = useState<AdminAuditLogRecord[]>([])
+  const [errorLogs, setErrorLogs] = useState<AdminErrorLogRecord[]>([])
+  const [loadingData, setLoadingData] = useState(false)
+  const [dataError, setDataError] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [isDownloadingAuditBackup, setIsDownloadingAuditBackup] = useState(false)
+  const [isDownloadingErrorBackup, setIsDownloadingErrorBackup] = useState(false)
+
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
+  const [expandedStaffId, setExpandedStaffId] = useState<string | null>(null)
+  const [staffApplicationRoleFilter, setStaffApplicationRoleFilter] = useState<'all' | 'doctor'>('all')
+  const [selectedStaffApplication, setSelectedStaffApplication] = useState<AdminStaffApplicationRecord | null>(null)
+  const [isReviewActionPending, setIsReviewActionPending] = useState(false)
+
   const INACTIVITY_MS = 15 * 60 * 1000
   const timerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
-
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   const resetInactivityTimer = () => {
     if (timerRef.current) window.clearTimeout(timerRef.current)
     timerRef.current = window.setTimeout(() => {
       setShowLogoutConfirm(false)
-      // auto logout after inactivity
       onLogout()
     }, INACTIVITY_MS)
   }
@@ -301,11 +244,65 @@ const AdminDashboard = ({
     }
   }, [onLogout])
 
-  const confirmAndLogout = () => {
-    setShowLogoutConfirm(true)
+  const fetchAdminData = async () => {
+    setLoadingData(true)
+    setDataError(null)
+    try {
+      const [usersResult, pendingApplicationsResult, auditResult, errorResult] = await Promise.allSettled([
+        api.getAdminUsers(),
+        api.getPendingStaffApplications('all'),
+        api.getAdminAuditLogs(300),
+        api.getAdminErrorLogs(300),
+      ])
+
+      if (usersResult.status === 'fulfilled') {
+        setUsers(usersResult.value)
+      } else {
+        setUsers([])
+      }
+
+      if (auditResult.status === 'fulfilled') {
+        setAuditLogs(auditResult.value)
+      } else {
+        setAuditLogs([])
+      }
+
+      if (pendingApplicationsResult.status === 'fulfilled') {
+        setPendingStaffApplications(pendingApplicationsResult.value)
+      } else {
+        setPendingStaffApplications([])
+      }
+
+      if (errorResult.status === 'fulfilled') {
+        setErrorLogs(errorResult.value)
+      } else {
+        setErrorLogs([])
+      }
+
+      const failures = [usersResult, pendingApplicationsResult, auditResult, errorResult].filter(
+        (item) => item.status === 'rejected'
+      )
+      if (failures.length > 0) {
+        const firstError = failures[0] as PromiseRejectedResult
+        const message =
+          firstError.reason instanceof Error
+            ? firstError.reason.message
+            : 'Some admin records could not be loaded.'
+        setDataError(message)
+      }
+    } finally {
+      setLoadingData(false)
+    }
   }
 
+  useEffect(() => {
+    void fetchAdminData()
+  }, [])
+
   const setSection = (next: AdminSection) => {
+    setSearchQuery('')
+    setActionError(null)
+    setActionMessage(null)
     setActiveSection(next)
     if (typeof window === 'undefined') return
 
@@ -332,175 +329,132 @@ const AdminDashboard = ({
     }
   }, [])
 
-  const userItems = useMemo<AdminUserSummaryItem[]>(() => {
-    const orderedReservations = [...reservations].sort(
-      (a, b) => parseDate(b.createdAt) - parseDate(a.createdAt)
-    )
-
-    if (!orderedReservations.length) {
-      return FALLBACK_USERS
-    }
-
-    const perUser = new Map<string, AdminUserSummaryItem>()
-
-    for (const reservation of orderedReservations) {
-      const normalizedName = reservation.patientName.trim().toLowerCase()
-      const key = normalizedName || reservation.id.toLowerCase()
-      const existing = perUser.get(key)
-
-      if (!existing) {
-        perUser.set(key, {
-          id: reservation.id,
-          displayName: reservation.patientName,
-          bookingCount: 1,
-          latestActivity: reservation.createdAt,
-          latestStatus: reservation.status,
-          flagged: reservation.status === 'Failed',
-        })
-        continue
-      }
-
-      existing.bookingCount += 1
-      existing.flagged = existing.flagged || reservation.status === 'Failed'
-
-      if (parseDate(reservation.createdAt) > parseDate(existing.latestActivity)) {
-        existing.id = reservation.id
-        existing.latestActivity = reservation.createdAt
-        existing.latestStatus = reservation.status
-      }
-    }
-
-    return [...perUser.values()].sort(
-      (a, b) => parseDate(b.latestActivity) - parseDate(a.latestActivity)
-    )
-  }, [reservations])
-
-  const staffItems = useMemo<AdminStaffSummaryItem[]>(() => {
-    const items = [...FALLBACK_STAFF]
-
-    if (authUser && isStaffRole(authUser.role)) {
-      const statusText: AdminStaffSummaryItem['status'] =
-        sessionStatus.toLowerCase().includes('active') ? 'Online' : 'Idle'
-
-      items.unshift({
-        id: `STAFF-${authUser.username}`,
-        name: authUser.username,
-        role: formatRoleLabel(authUser.role),
-        workspace:
-          authUser.role === 'system_admin' ? 'Admin + Doctor dashboard' : 'Doctor dashboard + Admin',
-        status: statusText,
-        lastAction: 'Current privileged session active',
-      })
-    }
-
-    const unique = new Map<string, AdminStaffSummaryItem>()
-    for (const item of items) {
-      const key = item.name.trim().toLowerCase()
-      if (!unique.has(key)) {
-        unique.set(key, item)
-      }
-    }
-
-    return [...unique.values()]
-  }, [authUser, sessionStatus])
-
-  const historyItems = useMemo<AdminHistoryItem[]>(() => {
-    const sortedReservations = [...reservations]
-      .sort((a, b) => parseDate(b.createdAt) - parseDate(a.createdAt))
-      .slice(0, 12)
-
-    const reservationEvents = sortedReservations.map((item) => {
-      const patientLabel = dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName
-      const appointmentId = dataMaskingEnabled ? maskIdentifier(item.id) : item.id
-      const severity: AdminHistoryItem['severity'] =
-        item.status === 'Failed' ? 'Critical' : item.status === 'Booked' ? 'Warning' : 'Info'
-
-      return {
-        id: `RES-EVT-${item.id}`,
-        actor: 'Booking engine',
-        type: 'Reservation' as const,
-        subject: `${patientLabel} (${appointmentId})`,
-        detail: `${item.department} reservation is now ${item.status.toLowerCase()} at ${item.requestedTime}.`,
-        createdAt: item.createdAt,
-        severity,
-      }
-    })
-
-    const authEvent: AdminHistoryItem = {
-      id: 'AUTH-SESSION',
-      actor: authUser?.username ?? 'Unknown user',
-      type: 'Auth',
-      subject: `${getWorkspaceRoleLabel(authUser?.role)} workspace session`,
-      detail: `Session status: ${sessionStatus}.`,
-      createdAt: new Date().toISOString(),
-      severity: 'Info',
-    }
-
-    const merged = reservationEvents.length > 0
-      ? [authEvent, ...reservationEvents, ...FALLBACK_HISTORY]
-      : [authEvent, ...FALLBACK_HISTORY]
-
-    return merged
-      .sort((a, b) => parseDate(b.createdAt) - parseDate(a.createdAt))
-      .slice(0, 20)
-  }, [authUser, dataMaskingEnabled, reservations, sessionStatus])
-
   const normalizedQuery = searchQuery.trim().toLowerCase()
 
+  const usersWithBookings = useMemo(() => {
+    return users
+      .filter((item) => item.role === 'user')
+      .map((item) => {
+        const fullName = `${item.firstName} ${item.lastName}`.trim()
+        const summary = buildBookingSummary(reservations, (reservation) => {
+          const patientName = reservation.patientName.trim().toLowerCase()
+          return patientName === fullName.toLowerCase()
+        })
+        return { user: item, fullName, summary }
+      })
+      .sort((a, b) => parseDate(b.summary.latestActivity) - parseDate(a.summary.latestActivity))
+  }, [reservations, users])
+
+  const staffWithBookings = useMemo(() => {
+    return users
+      .filter((item) => item.role === 'doctor')
+      .map((item) => {
+        const fullName = `${item.firstName} ${item.lastName}`.trim()
+        const summary = buildBookingSummary(reservations, (reservation) => {
+          const doctorName = (reservation.doctorName ?? '').trim().toLowerCase()
+          return doctorName === fullName.toLowerCase()
+        })
+        return { user: item, fullName, summary }
+      })
+      .sort((a, b) => parseDate(b.summary.latestActivity) - parseDate(a.summary.latestActivity))
+  }, [reservations, users])
+
   const filteredUsers = useMemo(() => {
-    if (!normalizedQuery) return userItems
-    return userItems.filter((item) => {
+    if (!normalizedQuery) return usersWithBookings
+    return usersWithBookings.filter(({ user, fullName, summary }) => {
       return (
-        item.displayName.toLowerCase().includes(normalizedQuery) ||
-        item.id.toLowerCase().includes(normalizedQuery) ||
-        item.latestStatus.toLowerCase().includes(normalizedQuery)
+        fullName.toLowerCase().includes(normalizedQuery) ||
+        user.email.toLowerCase().includes(normalizedQuery) ||
+        user.status.toLowerCase().includes(normalizedQuery) ||
+        (user.profile?.phoneNumber ?? '').toLowerCase().includes(normalizedQuery) ||
+        String(summary.total).includes(normalizedQuery)
       )
     })
-  }, [normalizedQuery, userItems])
+  }, [normalizedQuery, usersWithBookings])
 
   const filteredStaff = useMemo(() => {
-    if (!normalizedQuery) return staffItems
-    return staffItems.filter((item) => {
+    if (!normalizedQuery) return staffWithBookings
+    return staffWithBookings.filter(({ user, fullName, summary }) => {
       return (
-        item.name.toLowerCase().includes(normalizedQuery) ||
-        item.role.toLowerCase().includes(normalizedQuery) ||
-        item.status.toLowerCase().includes(normalizedQuery) ||
-        item.workspace.toLowerCase().includes(normalizedQuery)
+        fullName.toLowerCase().includes(normalizedQuery) ||
+        user.email.toLowerCase().includes(normalizedQuery) ||
+        user.role.toLowerCase().includes(normalizedQuery) ||
+        (user.department ?? '').toLowerCase().includes(normalizedQuery) ||
+        String(summary.current).includes(normalizedQuery) ||
+        String(summary.future).includes(normalizedQuery)
       )
     })
-  }, [normalizedQuery, staffItems])
+  }, [normalizedQuery, staffWithBookings])
 
-  const filteredHistory = useMemo(() => {
-    if (!normalizedQuery) return historyItems
-    return historyItems.filter((item) => {
+  const filteredPendingStaffApplications = useMemo(() => {
+    const roleFiltered =
+      staffApplicationRoleFilter === 'all'
+        ? pendingStaffApplications
+        : pendingStaffApplications.filter((item) => item.role === staffApplicationRoleFilter)
+
+    if (!normalizedQuery) return roleFiltered
+
+    return roleFiltered.filter((item) => {
+      const fullName = `${item.firstName} ${item.lastName}`.trim().toLowerCase()
       return (
-        item.actor.toLowerCase().includes(normalizedQuery) ||
-        item.type.toLowerCase().includes(normalizedQuery) ||
-        item.subject.toLowerCase().includes(normalizedQuery) ||
-        item.detail.toLowerCase().includes(normalizedQuery) ||
-        item.severity.toLowerCase().includes(normalizedQuery)
+        fullName.includes(normalizedQuery) ||
+        item.email.toLowerCase().includes(normalizedQuery) ||
+        item.role.toLowerCase().includes(normalizedQuery) ||
+        (item.department ?? '').toLowerCase().includes(normalizedQuery)
       )
     })
-  }, [historyItems, normalizedQuery])
+  }, [normalizedQuery, pendingStaffApplications, staffApplicationRoleFilter])
+
+  const filteredAuditLogs = useMemo(() => {
+    if (!normalizedQuery) return auditLogs
+    return auditLogs.filter((item) => {
+      return (
+        item.action.toLowerCase().includes(normalizedQuery) ||
+        (item.details ?? '').toLowerCase().includes(normalizedQuery) ||
+        (item.userId ?? '').toLowerCase().includes(normalizedQuery) ||
+        (item.ipAddress ?? '').toLowerCase().includes(normalizedQuery)
+      )
+    })
+  }, [auditLogs, normalizedQuery])
+
+  const filteredErrorLogs = useMemo(() => {
+    if (!normalizedQuery) return errorLogs
+    return errorLogs.filter((item) => {
+      return (
+        item.message.toLowerCase().includes(normalizedQuery) ||
+        (item.route ?? '').toLowerCase().includes(normalizedQuery) ||
+        (item.method ?? '').toLowerCase().includes(normalizedQuery) ||
+        (item.userId ?? '').toLowerCase().includes(normalizedQuery) ||
+        (item.ipAddress ?? '').toLowerCase().includes(normalizedQuery)
+      )
+    })
+  }, [errorLogs, normalizedQuery])
 
   const notificationItems = useMemo<AdminNotificationItem[]>(() => {
-    if (!historyItems.length) return FALLBACK_NOTIFICATIONS
-
-    return historyItems.slice(0, 12).map((item, index) => ({
-      id: `NTF-${item.id}`,
-      title: `${item.type} update`,
-      detail: `${item.subject}: ${item.detail}`,
-      createdAt: item.createdAt,
-      severity: item.severity,
-      category:
-        item.type === 'Auth'
-          ? 'Security'
-          : item.type === 'Reservation'
-            ? 'Reservation'
-            : 'System',
+    const auditNotifications = auditLogs.slice(0, 10).map((item, index) => ({
+      id: `audit-${item.id}`,
+      title: item.action,
+      detail: item.details ?? 'No details',
+      createdAt: item.timestamp,
+      severity: item.action.includes('DENIED') ? ('Warning' as const) : ('Info' as const),
+      category: 'Audit' as const,
       read: index > 3,
     }))
-  }, [historyItems])
+
+    const errorNotifications = errorLogs.slice(0, 10).map((item, index) => ({
+      id: `error-${item.id}`,
+      title: item.message,
+      detail: `${item.method ?? 'N/A'} ${item.route ?? ''}`.trim(),
+      createdAt: item.timestamp,
+      severity: 'Critical' as const,
+      category: 'Error' as const,
+      read: index > 1,
+    }))
+
+    return [...errorNotifications, ...auditNotifications]
+      .sort((a, b) => parseDate(b.createdAt) - parseDate(a.createdAt))
+      .slice(0, 20)
+  }, [auditLogs, errorLogs])
 
   const filteredNotifications = useMemo(() => {
     if (!normalizedQuery) return notificationItems
@@ -514,136 +468,255 @@ const AdminDashboard = ({
     })
   }, [normalizedQuery, notificationItems])
 
-  const userMetrics = useMemo(() => {
-    const activeUsers = userItems.filter(
-      (item) => item.latestStatus === 'Booked' || item.latestStatus === 'Recorded'
-    ).length
-    const bookedUsers = userItems.filter(
-      (item) => item.latestStatus === 'Booked' || item.latestStatus === 'Recorded'
-    ).length
-    const flaggedUsers = userItems.filter((item) => item.flagged).length
-
-    return [
-      { key: 'users-total', label: 'Total patients', value: userItems.length, caption: `${filteredUsers.length} matching` },
-      { key: 'users-active', label: 'Active patients', value: activeUsers, caption: 'Booked or recorded' },
-      { key: 'users-booked', label: 'Booked patients', value: bookedUsers, caption: 'Booked or recorded' },
-      { key: 'users-flagged', label: 'Flagged', value: flaggedUsers, caption: 'Failed latest status' },
-    ]
-  }, [filteredUsers.length, userItems])
-
-  const staffMetrics = useMemo(() => {
-    const onlineStaff = staffItems.filter((item) => item.status === 'Online').length
-    const adminStaff = staffItems.filter((item) => item.role.toLowerCase().includes('admin')).length
-    const doctorStaff = staffItems.filter((item) => {
-      const normalizedRole = item.role.toLowerCase()
-      return normalizedRole.includes('doctor') || normalizedRole.includes('nurse')
-    }).length
-
-    return [
-      { key: 'staff-total', label: 'Total staff', value: staffItems.length, caption: `${filteredStaff.length} matching` },
-      { key: 'staff-online', label: 'Online', value: onlineStaff, caption: 'Current session visibility' },
-      { key: 'staff-admin', label: 'Admin roles', value: adminStaff, caption: 'Admin workspace operators' },
-      { key: 'staff-doctor', label: 'Doctors', value: doctorStaff, caption: 'Doctor workspace operators' },
-    ]
-  }, [filteredStaff.length, staffItems])
-
-  const historyMetrics = useMemo(() => {
-    const mostRecentEventDay =
-      historyItems.length > 0 ? new Date(historyItems[0].createdAt).toDateString() : null
-    const eventsInLatestWindow = mostRecentEventDay
-      ? historyItems.filter((item) => new Date(item.createdAt).toDateString() === mostRecentEventDay).length
-      : 0
-    const authEvents = historyItems.filter((item) => item.type === 'Auth').length
-    const reservationEvents = historyItems.filter((item) => item.type === 'Reservation').length
-
-    return [
-      { key: 'history-total', label: 'Events', value: historyItems.length, caption: `${filteredHistory.length} matching` },
-      { key: 'history-latest', label: 'Latest window', value: eventsInLatestWindow, caption: 'Most recent event day' },
-      { key: 'history-auth', label: 'Auth events', value: authEvents, caption: 'Session and role access' },
-      { key: 'history-res', label: 'Reservation events', value: reservationEvents, caption: 'Booking activity flow' },
-    ]
-  }, [filteredHistory.length, historyItems])
-
-  const notificationsMetrics = useMemo(() => {
-    const unread = notificationItems.filter((item) => !item.read).length
-    const critical = notificationItems.filter((item) => item.severity === 'Critical').length
-    const reservationUpdates = notificationItems.filter((item) => item.category === 'Reservation').length
-
-    return [
-      {
-        key: 'notifications-total',
-        label: 'Total alerts',
-        value: notificationItems.length,
-        caption: `${filteredNotifications.length} matching`,
-      },
-      {
-        key: 'notifications-unread',
-        label: 'Unread',
-        value: unread,
-        caption: 'Needs review',
-      },
-      {
-        key: 'notifications-critical',
-        label: 'Critical',
-        value: critical,
-        caption: 'High priority alerts',
-      },
-      {
-        key: 'notifications-reservation',
-        label: 'Reservation updates',
-        value: reservationUpdates,
-        caption: 'Queue activity signals',
-      },
-    ]
-  }, [filteredNotifications.length, notificationItems])
-
-  const settingsMetrics = useMemo(
-    () => [
-      { key: 'settings-account', label: 'Account', value: authUser?.username ?? 'Unknown', caption: 'Signed in user' },
-      { key: 'settings-role', label: 'Role', value: getWorkspaceRoleLabel(authUser?.role), caption: 'Workspace role' },
-      { key: 'settings-theme', label: 'Theme', value: theme === 'dark' ? 'Dark' : 'Light', caption: 'Current theme' },
-      { key: 'settings-masking', label: 'Masking', value: dataMaskingEnabled ? 'On' : 'Off', caption: 'Data protection' },
-    ],
-    [authUser?.role, authUser?.username, dataMaskingEnabled, theme]
-  )
-
   const sectionMeta = {
     user_management: {
       title: 'User Management',
       description:
-        'Monitor user booking activity and health-record flow with a focused operational summary.',
-      searchPlaceholder: 'Search users by name, reservation id, or status',
-      metrics: userMetrics,
+        'View user accounts from the server, including profile details and booking history. Disable accounts directly.',
+      searchPlaceholder: 'Search users by name, email, profile, status, or bookings',
+      metrics: [
+        { key: 'users-total', label: 'Total users', value: usersWithBookings.length, caption: `${filteredUsers.length} matching` },
+        {
+          key: 'users-disabled',
+          label: 'Disabled',
+          value: usersWithBookings.filter((item) => item.user.status === 'disabled').length,
+          caption: 'Server account status',
+        },
+        {
+          key: 'users-bookings',
+          label: 'Total bookings',
+          value: usersWithBookings.reduce((sum, item) => sum + item.summary.total, 0),
+          caption: 'All booking history records',
+        },
+        {
+          key: 'users-current',
+          label: 'Current bookings',
+          value: usersWithBookings.reduce((sum, item) => sum + item.summary.current, 0),
+          caption: 'Booked for today',
+        },
+      ],
     },
     staff_management: {
       title: 'Staff Management',
       description:
-        'Track staff access posture and workspace readiness for doctor and admin roles.',
-      searchPlaceholder: 'Search staff by name, role, workspace, or status',
-      metrics: staffMetrics,
+        'View staff accounts, profile information, and booking workload with current and future booking visibility.',
+      searchPlaceholder: 'Search staff by name, role, department, email, or booking counts',
+      metrics: [
+        { key: 'staff-total', label: 'Total staff', value: staffWithBookings.length, caption: `${filteredStaff.length} matching` },
+        {
+          key: 'staff-pending',
+          label: 'Pending applications',
+          value: pendingStaffApplications.length,
+          caption: 'Awaiting license review',
+        },
+        {
+          key: 'staff-current',
+          label: 'Current bookings',
+          value: staffWithBookings.reduce((sum, item) => sum + item.summary.current, 0),
+          caption: 'Booked for today',
+        },
+        {
+          key: 'staff-future',
+          label: 'Future bookings',
+          value: staffWithBookings.reduce((sum, item) => sum + item.summary.future, 0),
+          caption: 'Booked ahead',
+        },
+      ],
     },
-    history: {
-      title: 'History',
-      description:
-        'Review recent privileged activity across sessions, reservation operations, and system checks.',
-      searchPlaceholder: 'Search history by actor, type, subject, or severity',
-      metrics: historyMetrics,
+    audit_log: {
+      title: 'Audit Log',
+      description: 'Server audit records from AuditLog model. Separate from error logs.',
+      searchPlaceholder: 'Search audit log by action, details, user id, or IP',
+      metrics: [
+        { key: 'audit-total', label: 'Audit events', value: auditLogs.length, caption: `${filteredAuditLogs.length} matching` },
+        {
+          key: 'audit-actions',
+          label: 'Unique actions',
+          value: new Set(auditLogs.map((item) => item.action)).size,
+          caption: 'Distinct action names',
+        },
+        {
+          key: 'audit-latest',
+          label: 'Latest event',
+          value: formatDateTime(auditLogs[0]?.timestamp),
+          caption: 'Most recent timestamp',
+        },
+        {
+          key: 'audit-users',
+          label: 'Users logged',
+          value: new Set(auditLogs.map((item) => item.userId).filter(Boolean)).size,
+          caption: 'Distinct user ids',
+        },
+      ],
+    },
+    error_log: {
+      title: 'Error Log',
+      description: 'Server error records from ErrorLog model. Separate from audit logs.',
+      searchPlaceholder: 'Search error log by message, route, method, user id, or IP',
+      metrics: [
+        { key: 'error-total', label: 'Error events', value: errorLogs.length, caption: `${filteredErrorLogs.length} matching` },
+        {
+          key: 'error-routes',
+          label: 'Routes affected',
+          value: new Set(errorLogs.map((item) => item.route).filter(Boolean)).size,
+          caption: 'Distinct routes',
+        },
+        {
+          key: 'error-latest',
+          label: 'Latest error',
+          value: formatDateTime(errorLogs[0]?.timestamp),
+          caption: 'Most recent timestamp',
+        },
+        {
+          key: 'error-users',
+          label: 'Users involved',
+          value: new Set(errorLogs.map((item) => item.userId).filter(Boolean)).size,
+          caption: 'Distinct user ids',
+        },
+      ],
     },
     notifications: {
       title: 'Notifications',
-      description: 'Track operational alerts and security updates across admin and doctor workflows.',
-      searchPlaceholder: 'Search notifications by title, category, or severity',
-      metrics: notificationsMetrics,
+      description: 'Operational and security notifications generated from audit and error events.',
+      searchPlaceholder: 'Search notifications by title, category, severity, or detail',
+      metrics: [
+        {
+          key: 'notifications-total',
+          label: 'Total alerts',
+          value: notificationItems.length,
+          caption: `${filteredNotifications.length} matching`,
+        },
+        {
+          key: 'notifications-unread',
+          label: 'Unread',
+          value: notificationItems.filter((item) => !item.read).length,
+          caption: 'Needs review',
+        },
+        {
+          key: 'notifications-critical',
+          label: 'Critical',
+          value: notificationItems.filter((item) => item.severity === 'Critical').length,
+          caption: 'High priority alerts',
+        },
+        {
+          key: 'notifications-errors',
+          label: 'Error alerts',
+          value: notificationItems.filter((item) => item.category === 'Error').length,
+          caption: 'From error logs',
+        },
+      ],
     },
     settings: {
       title: 'Account Settings',
       description: 'Manage admin workspace preferences and session details.',
       searchPlaceholder: 'Search settings',
-      metrics: settingsMetrics,
+      metrics: [
+        { key: 'settings-account', label: 'Account', value: authUser?.username ?? 'Unknown', caption: 'Signed in user' },
+        { key: 'settings-role', label: 'Role', value: getWorkspaceRoleLabel(authUser?.role), caption: 'Workspace role' },
+        { key: 'settings-theme', label: 'Theme', value: theme === 'dark' ? 'Dark' : 'Light', caption: 'Current theme' },
+      ],
     },
   } as const
 
   const activeMeta = sectionMeta[activeSection]
+  const profileName = resolveAdminDisplayName(authUser)
+
+  const handleUpdateUserStatus = async (userId: string, status: AdminUserRecord['status']) => {
+    setActionMessage(null)
+    setActionError(null)
+    try {
+      const updated = await api.updateAdminUser(userId, { status })
+      setUsers((previous) => previous.map((item) => (item.id === userId ? updated : item)))
+      setActionMessage(`Account updated to ${status}.`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update account status.'
+      setActionError(message)
+    }
+  }
+
+  const handleOpenStaffLicense = (application: AdminStaffApplicationRecord) => {
+    if (typeof window === 'undefined') return
+    if (!application.hasLicenseFile) {
+      setActionError('No license file is available for this application.')
+      return
+    }
+    const licenseUrl = api.getStaffApplicationLicenseUrl(application.id)
+    window.open(licenseUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleApproveStaffApplication = async (application: AdminStaffApplicationRecord) => {
+    setIsReviewActionPending(true)
+    setActionMessage(null)
+    setActionError(null)
+    try {
+      const approved = await api.approveStaffApplication(application.id)
+      setUsers((previous) =>
+        previous.some((item) => item.id === approved.id)
+          ? previous.map((item) => (item.id === approved.id ? approved : item))
+          : [approved, ...previous]
+      )
+      setPendingStaffApplications((previous) => previous.filter((item) => item.id !== application.id))
+      setSelectedStaffApplication(null)
+      setActionMessage('Doctor application approved.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to approve staff application.'
+      setActionError(message)
+    } finally {
+      setIsReviewActionPending(false)
+    }
+  }
+
+  const handleRejectStaffApplication = async (application: AdminStaffApplicationRecord) => {
+    setIsReviewActionPending(true)
+    setActionMessage(null)
+    setActionError(null)
+    try {
+      await api.rejectStaffApplication(application.id)
+      setUsers((previous) => previous.filter((item) => item.id !== application.id))
+      setPendingStaffApplications((previous) => previous.filter((item) => item.id !== application.id))
+      setSelectedStaffApplication(null)
+      setActionMessage('Doctor application rejected and removed.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to reject staff application.'
+      setActionError(message)
+    } finally {
+      setIsReviewActionPending(false)
+    }
+  }
+
+  const handleDownloadAuditBackup = async () => {
+    setActionMessage(null)
+    setActionError(null)
+    setIsDownloadingAuditBackup(true)
+    try {
+      await api.downloadAdminAuditBackup()
+      setActionMessage('Encrypted audit-log backup downloaded.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to download audit backup.'
+      setActionError(message)
+    } finally {
+      setIsDownloadingAuditBackup(false)
+    }
+  }
+
+  const handleDownloadErrorBackup = async () => {
+    setActionMessage(null)
+    setActionError(null)
+    setIsDownloadingErrorBackup(true)
+    try {
+      await api.downloadAdminErrorBackup()
+      setActionMessage('Encrypted error-log backup downloaded.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to download error backup.'
+      setActionError(message)
+    } finally {
+      setIsDownloadingErrorBackup(false)
+    }
+  }
+
+  const confirmAndLogout = () => {
+    setShowLogoutConfirm(true)
+  }
 
   return (
     <WorkspaceCanvas>
@@ -666,7 +739,7 @@ const AdminDashboard = ({
               items={primaryItems}
               activeKey={activeSection}
               onSelect={(key) => {
-                if (key === 'user_management' || key === 'staff_management' || key === 'history') {
+                if (key === 'user_management' || key === 'staff_management' || key === 'audit_log' || key === 'error_log') {
                   setSection(key)
                 }
               }}
@@ -686,7 +759,7 @@ const AdminDashboard = ({
                 }
               }}
               footerProfile={{
-                name: authUser?.username ?? 'Admin',
+                name: profileName,
                 subtitle: 'Admin workspace',
                 onClick: () => setSection('settings'),
               }}
@@ -701,7 +774,7 @@ const AdminDashboard = ({
                 searchValue={searchQuery}
                 searchPlaceholder={activeMeta.searchPlaceholder}
                 onSearchChange={setSearchQuery}
-                profileName={authUser?.username ?? 'Admin'}
+                profileName={profileName}
                 profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
                 showNotifications
                 notificationCount={Math.min(notificationItems.filter((item) => !item.read).length, 99)}
@@ -722,18 +795,123 @@ const AdminDashboard = ({
                 onCancel={() => setShowLogoutConfirm(false)}
               />
 
+              {selectedStaffApplication ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
+                  <div className={`${workspacePanelClass} w-full max-w-2xl p-5`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                          New {selectedStaffApplication.role} application
+                        </p>
+                        <h3 className={`mt-1 text-lg font-semibold ${workspaceHeadingTextClass}`}>
+                          Review staff account request
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        className={workspaceGhostButtonClass}
+                        disabled={isReviewActionPending}
+                        onClick={() => setSelectedStaffApplication(null)}
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    <div className={`mt-4 grid gap-3 text-sm ${workspaceMutedTextClass} sm:grid-cols-2`}>
+                      <p>
+                        Name:{' '}
+                        <span className={workspaceHeadingTextClass}>
+                          {dataMaskingEnabled
+                            ? maskPersonName(`${selectedStaffApplication.firstName} ${selectedStaffApplication.lastName}`.trim())
+                            : `${selectedStaffApplication.firstName} ${selectedStaffApplication.lastName}`.trim()}
+                        </span>
+                      </p>
+                      <p>
+                        Email:{' '}
+                        <span className={workspaceHeadingTextClass}>
+                          {dataMaskingEnabled
+                            ? maskIdentifier(selectedStaffApplication.email)
+                            : selectedStaffApplication.email}
+                        </span>
+                      </p>
+                      <p>
+                        Role:{' '}
+                        <span className={workspaceHeadingTextClass}>{formatRoleLabel(selectedStaffApplication.role)}</span>
+                      </p>
+                      <p>
+                        Department:{' '}
+                        <span className={workspaceHeadingTextClass}>
+                          {selectedStaffApplication.department || 'N/A'}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className={workspaceGhostButtonClass}
+                        onClick={() => handleOpenStaffLicense(selectedStaffApplication)}
+                      >
+                        Open uploaded license
+                      </button>
+                      <button
+                        type="button"
+                        className={workspaceGhostButtonClass}
+                        disabled={isReviewActionPending}
+                        onClick={() => void handleApproveStaffApplication(selectedStaffApplication)}
+                      >
+                        Approve (Enable)
+                      </button>
+                      <button
+                        type="button"
+                        className={workspaceGhostButtonClass}
+                        disabled={isReviewActionPending}
+                        onClick={() => void handleRejectStaffApplication(selectedStaffApplication)}
+                      >
+                        Reject (Remove)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {loadingData ? (
+                <section className={`${workspacePanelClass} p-5`}>
+                  <p className={`text-sm ${workspaceMutedTextClass}`}>Loading admin data from server...</p>
+                </section>
+              ) : null}
+
+              {dataError ? (
+                <section className={`${workspacePanelClass} p-5`}>
+                  <p className="text-sm font-semibold text-rose-600">{dataError}</p>
+                  <button type="button" className={`${workspaceGhostButtonClass} mt-3`} onClick={() => void fetchAdminData()}>
+                    Retry
+                  </button>
+                </section>
+              ) : null}
+
+              {actionMessage ? (
+                <section className={`${workspacePanelClass} p-4`}>
+                  <p className="text-sm font-semibold text-emerald-600">{actionMessage}</p>
+                </section>
+              ) : null}
+
+              {actionError ? (
+                <section className={`${workspacePanelClass} p-4`}>
+                  <p className="text-sm font-semibold text-rose-600">{actionError}</p>
+                </section>
+              ) : null}
+
               {activeSection === 'user_management' ? (
                 <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className="agent-section-title agent-section-title--compact">User directory</h2>
+                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>User directory</h2>
                   <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Frontend-derived user booking visibility with fallback records when activity is empty.
+                    Users with profile details and booking history from server data.
                   </p>
 
                   {filteredUsers.length === 0 ? (
                     <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>
-                        No users match your search query.
-                      </p>
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>No users match your search query.</p>
                     </div>
                   ) : (
                     <div className="mt-4 overflow-x-auto">
@@ -741,30 +919,98 @@ const AdminDashboard = ({
                         <thead>
                           <tr>
                             <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>User</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Bookings</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Latest activity</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Status</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Profile</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Booking history</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Account</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[color:var(--card-border)]">
-                          {filteredUsers.map((item) => {
-                            const displayName = dataMaskingEnabled
-                              ? maskPersonName(item.displayName)
-                              : item.displayName
-                            const displayId = dataMaskingEnabled ? maskIdentifier(item.id) : item.id
+                          {filteredUsers.map(({ user, fullName, summary }) => {
+                            const displayName = dataMaskingEnabled ? maskPersonName(fullName) : fullName
+                            const displayEmail = dataMaskingEnabled ? maskIdentifier(user.email) : user.email
+                            const isExpanded = expandedUserId === user.id
 
                             return (
-                              <tr key={`${item.id}-${item.displayName}`}>
-                                <td className="px-3 py-3 align-top">
-                                  <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
-                                  <p className={`text-xs ${workspaceMutedTextClass}`}>{displayId}</p>
-                                </td>
-                                <td className={`px-3 py-3 ${workspaceHeadingTextClass}`}>{item.bookingCount}</td>
-                                <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{formatDateTime(item.latestActivity)}</td>
-                                <td className="px-3 py-3">
-                                  <span className={statusChipClass(item.latestStatus)}>{item.latestStatus}</span>
-                                </td>
-                              </tr>
+                              <Fragment key={user.id}>
+                                <tr key={user.id}>
+                                  <td className="px-3 py-3 align-top">
+                                    <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
+                                    <p className={`text-xs ${workspaceMutedTextClass}`}>{displayEmail}</p>
+                                  </td>
+                                  <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>
+                                    <p>Phone: {user.profile?.phoneNumber ?? 'N/A'}</p>
+                                    <p>Gender: {user.profile?.gender ?? 'N/A'}</p>
+                                    <p>DOB: {formatDateTime(user.profile?.dateOfBirth)}</p>
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <p className={`${workspaceHeadingTextClass}`}>Total: {summary.total}</p>
+                                    <p className={`${workspaceMutedTextClass}`}>Current: {summary.current}</p>
+                                    <p className={`${workspaceMutedTextClass}`}>Future: {summary.future}</p>
+                                    <span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChipClass(summary.latestStatus)}`}>
+                                      {summary.latestStatus}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${accountChipClass(user.status)}`}>
+                                      {user.status}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <div className="flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        className={workspaceGhostButtonClass}
+                                        onClick={() => setExpandedUserId(isExpanded ? null : user.id)}
+                                      >
+                                        {isExpanded ? 'Hide history' : 'View history'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={workspaceGhostButtonClass}
+                                        disabled={user.status === 'disabled'}
+                                        onClick={() => void handleUpdateUserStatus(user.id, 'disabled')}
+                                      >
+                                        Disable
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={workspaceGhostButtonClass}
+                                        disabled={user.status === 'active'}
+                                        onClick={() => void handleUpdateUserStatus(user.id, 'active')}
+                                      >
+                                        Activate
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isExpanded ? (
+                                  <tr>
+                                    <td colSpan={5} className="px-3 pb-3">
+                                      <div className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3">
+                                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Booking history</p>
+                                        {summary.history.length === 0 ? (
+                                          <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>No booking history found.</p>
+                                        ) : (
+                                          <div className="mt-2 space-y-2">
+                                            {summary.history.slice(0, 8).map((booking) => (
+                                              <div key={`${user.id}-${booking.id}`} className="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-2 text-xs">
+                                                <p className={`${workspaceHeadingTextClass}`}>
+                                                  {dataMaskingEnabled ? maskIdentifier(booking.id) : booking.id} · {booking.department}
+                                                </p>
+                                                <p className={workspaceMutedTextClass}>
+                                                  Requested: {formatDateTime(booking.requestedTime)}
+                                                </p>
+                                                <p className={workspaceMutedTextClass}>Status: {booking.status}</p>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ) : null}
+                              </Fragment>
                             )
                           })}
                         </tbody>
@@ -776,16 +1022,90 @@ const AdminDashboard = ({
 
               {activeSection === 'staff_management' ? (
                 <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className="agent-section-title agent-section-title--compact">Staff directory</h2>
+                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Staff directory</h2>
                   <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Staff role visibility for doctor and admin workflows.
+                    Staff profile visibility with current and future booking workload.
                   </p>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className={workspaceGhostButtonClass}
+                      onClick={() => setStaffApplicationRoleFilter('all')}
+                    >
+                      All new applications ({pendingStaffApplications.length})
+                    </button>
+                    <button
+                      type="button"
+                      className={workspaceGhostButtonClass}
+                      onClick={() => setStaffApplicationRoleFilter('doctor')}
+                    >
+                      New doctor applications (
+                      {pendingStaffApplications.filter((item) => item.role === 'doctor').length})
+                    </button>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
+                    <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                      Staff applications pending review
+                    </p>
+                    {filteredPendingStaffApplications.length === 0 ? (
+                      <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>
+                        No pending applications for this filter.
+                      </p>
+                    ) : (
+                      <div className="mt-3 overflow-x-auto">
+                        <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
+                          <thead>
+                            <tr>
+                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Applicant</th>
+                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Details</th>
+                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>License</th>
+                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[color:var(--card-border)]">
+                            {filteredPendingStaffApplications.map((application) => {
+                              const fullName = `${application.firstName} ${application.lastName}`.trim()
+                              return (
+                                <tr key={application.id}>
+                                  <td className="px-3 py-3 align-top">
+                                    <p className={`font-semibold ${workspaceHeadingTextClass}`}>
+                                      {dataMaskingEnabled ? maskPersonName(fullName) : fullName}
+                                    </p>
+                                    <p className={`text-xs ${workspaceMutedTextClass}`}>
+                                      {dataMaskingEnabled ? maskIdentifier(application.email) : application.email}
+                                    </p>
+                                  </td>
+                                  <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>
+                                    <p>Role: {formatRoleLabel(application.role)}</p>
+                                    <p>Department: {application.department || 'N/A'}</p>
+                                    <p>Status: Pending review</p>
+                                  </td>
+                                  <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>
+                                    {application.hasLicenseFile ? 'Uploaded' : 'Missing'}
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <button
+                                      type="button"
+                                      className={workspaceGhostButtonClass}
+                                      onClick={() => setSelectedStaffApplication(application)}
+                                    >
+                                      Open review window
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
 
                   {filteredStaff.length === 0 ? (
                     <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>
-                        No staff records match your search query.
-                      </p>
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>No staff records match your search query.</p>
                     </div>
                   ) : (
                     <div className="mt-4 overflow-x-auto">
@@ -793,27 +1113,101 @@ const AdminDashboard = ({
                         <thead>
                           <tr>
                             <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Staff member</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Role</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Workspace</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Last action</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Status</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Profile</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Bookings</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Account</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[color:var(--card-border)]">
-                          {filteredStaff.map((item) => (
-                            <tr key={item.id}>
-                              <td className="px-3 py-3 align-top">
-                                <p className={`font-semibold ${workspaceHeadingTextClass}`}>{item.name}</p>
-                                <p className={`text-xs ${workspaceMutedTextClass}`}>{item.id}</p>
-                              </td>
-                              <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.role}</td>
-                              <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.workspace}</td>
-                              <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.lastAction}</td>
-                              <td className="px-3 py-3">
-                                <span className={staffStatusChipClass(item.status)}>{item.status}</span>
-                              </td>
-                            </tr>
-                          ))}
+                          {filteredStaff.map(({ user, fullName, summary }) => {
+                            const displayName = dataMaskingEnabled ? maskPersonName(fullName) : fullName
+                            const displayEmail = dataMaskingEnabled ? maskIdentifier(user.email) : user.email
+                            const isExpanded = expandedStaffId === user.id
+
+                            return (
+                              <Fragment key={user.id}>
+                                <tr key={user.id}>
+                                  <td className="px-3 py-3 align-top">
+                                    <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
+                                    <p className={`text-xs ${workspaceMutedTextClass}`}>{displayEmail}</p>
+                                  </td>
+                                  <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>
+                                    <p>Role: {formatRoleLabel(user.role)}</p>
+                                    <p>Department: {user.department ?? 'N/A'}</p>
+                                    <p>Phone: {user.profile?.phoneNumber ?? 'N/A'}</p>
+                                  </td>
+                                  <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>
+                                    <p className={workspaceHeadingTextClass}>Total: {summary.total}</p>
+                                    <p>Current: {summary.current}</p>
+                                    <p>Future: {summary.future}</p>
+                                    <span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChipClass(summary.latestStatus)}`}>
+                                      {summary.latestStatus}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${accountChipClass(user.status)}`}>
+                                      {user.status}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <div className="flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        className={workspaceGhostButtonClass}
+                                        onClick={() => setExpandedStaffId(isExpanded ? null : user.id)}
+                                      >
+                                        {isExpanded ? 'Hide bookings' : 'View bookings'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={workspaceGhostButtonClass}
+                                        disabled={user.status === 'disabled'}
+                                        onClick={() => void handleUpdateUserStatus(user.id, 'disabled')}
+                                      >
+                                        Disable
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={workspaceGhostButtonClass}
+                                        disabled={user.status === 'active'}
+                                        onClick={() => void handleUpdateUserStatus(user.id, 'active')}
+                                      >
+                                        Activate
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isExpanded ? (
+                                  <tr>
+                                    <td colSpan={5} className="px-3 pb-3">
+                                      <div className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3">
+                                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Current and future booking list</p>
+                                        {summary.history.length === 0 ? (
+                                          <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>No bookings assigned.</p>
+                                        ) : (
+                                          <div className="mt-2 space-y-2">
+                                            {summary.history
+                                              .filter((booking) => booking.status === 'Booked')
+                                              .slice(0, 10)
+                                              .map((booking) => (
+                                                <div key={`${user.id}-${booking.id}`} className="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-2 text-xs">
+                                                  <p className={`${workspaceHeadingTextClass}`}>
+                                                    {dataMaskingEnabled ? maskIdentifier(booking.id) : booking.id} · {booking.department}
+                                                  </p>
+                                                  <p className={workspaceMutedTextClass}>Patient: {dataMaskingEnabled ? maskPersonName(booking.patientName) : booking.patientName}</p>
+                                                  <p className={workspaceMutedTextClass}>Scheduled: {formatDateTime(booking.requestedTime)}</p>
+                                                </div>
+                                              ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ) : null}
+                              </Fragment>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -821,30 +1215,97 @@ const AdminDashboard = ({
                 </section>
               ) : null}
 
-              {activeSection === 'history' ? (
+              {activeSection === 'audit_log' ? (
                 <section className="space-y-3">
-                  {filteredHistory.length === 0 ? (
-                    <article className={`${workspacePanelClass} p-5`}>
+                  <article className={`${workspacePanelClass} p-5`}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <p className={`text-sm ${workspaceMutedTextClass}`}>
-                        No history events match your search query.
+                        Download an encrypted backup of audit logs.
                       </p>
+                      <button
+                        type="button"
+                        className={workspaceGhostButtonClass}
+                        onClick={() => void handleDownloadAuditBackup()}
+                        disabled={isDownloadingAuditBackup}
+                      >
+                        {isDownloadingAuditBackup ? 'Downloading...' : 'Download Encrypted Backup'}
+                      </button>
+                    </div>
+                  </article>
+                  {filteredAuditLogs.length === 0 ? (
+                    <article className={`${workspacePanelClass} p-5`}>
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>No audit log records match your search query.</p>
                     </article>
                   ) : (
-                    filteredHistory.map((item) => (
+                    filteredAuditLogs.map((item) => (
                       <article key={item.id} className={`${workspacePanelClass} p-5`}>
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
-                            <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>{item.type}</p>
-                            <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>{item.subject}</h2>
-                            <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{item.detail}</p>
+                            <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Audit</p>
+                            <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>{item.action}</h2>
+                            <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{item.details ?? 'No details'}</p>
                           </div>
-                          <span className={historySeverityChipClass(item.severity)}>{item.severity}</span>
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${severityChipClass(item.action.includes('DENIED') ? 'Warning' : 'Info')}`}>
+                            {item.action.includes('DENIED') ? 'Warning' : 'Info'}
+                          </span>
                         </div>
-
                         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-[color:var(--agent-muted-soft)]">
-                          <span>Actor: {item.actor}</span>
-                          <span>{formatDateTime(item.createdAt)}</span>
+                          <span>User: {item.userId ?? 'N/A'}</span>
+                          <span>IP: {item.ipAddress ?? 'N/A'}</span>
+                          <span>{formatDateTime(item.timestamp)}</span>
                         </div>
+                      </article>
+                    ))
+                  )}
+                </section>
+              ) : null}
+
+              {activeSection === 'error_log' ? (
+                <section className="space-y-3">
+                  <article className={`${workspacePanelClass} p-5`}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>
+                        Download an encrypted backup of error logs.
+                      </p>
+                      <button
+                        type="button"
+                        className={workspaceGhostButtonClass}
+                        onClick={() => void handleDownloadErrorBackup()}
+                        disabled={isDownloadingErrorBackup}
+                      >
+                        {isDownloadingErrorBackup ? 'Downloading...' : 'Download Encrypted Backup'}
+                      </button>
+                    </div>
+                  </article>
+                  {filteredErrorLogs.length === 0 ? (
+                    <article className={`${workspacePanelClass} p-5`}>
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>No error log records match your search query.</p>
+                    </article>
+                  ) : (
+                    filteredErrorLogs.map((item) => (
+                      <article key={item.id} className={`${workspacePanelClass} p-5`}>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Error</p>
+                            <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>{item.message}</h2>
+                            <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                              {(item.method ?? 'N/A').toUpperCase()} {item.route ?? 'N/A'}
+                            </p>
+                          </div>
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${severityChipClass('Critical')}`}>
+                            Critical
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-[color:var(--agent-muted-soft)]">
+                          <span>User: {item.userId ?? 'N/A'}</span>
+                          <span>IP: {item.ipAddress ?? 'N/A'}</span>
+                          <span>{formatDateTime(item.timestamp)}</span>
+                        </div>
+                        {item.stack ? (
+                          <pre className="mt-3 overflow-x-auto rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3 text-xs text-[color:var(--agent-muted)]">
+                            {item.stack}
+                          </pre>
+                        ) : null}
                       </article>
                     ))
                   )}
@@ -855,9 +1316,7 @@ const AdminDashboard = ({
                 <section className="space-y-3">
                   {filteredNotifications.length === 0 ? (
                     <article className={`${workspacePanelClass} p-5`}>
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>
-                        No notifications match your search query.
-                      </p>
+                      <p className={`text-sm ${workspaceMutedTextClass}`}>No notifications match your search query.</p>
                     </article>
                   ) : (
                     filteredNotifications.map((item) => (
@@ -869,21 +1328,16 @@ const AdminDashboard = ({
                           <div>
                             <div className="flex items-center gap-2">
                               {!item.read ? (
-                                <span
-                                  className="inline-block h-2.5 w-2.5 rounded-full bg-[color:var(--agent-accent)]"
-                                  title="Unread"
-                                />
+                                <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500" title="Unread" />
                               ) : null}
-                              <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
-                                {item.category}
-                              </p>
+                              <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>{item.category}</p>
                             </div>
-                            <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>
-                              {item.title}
-                            </h2>
+                            <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>{item.title}</h2>
                             <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{item.detail}</p>
                           </div>
-                          <span className={historySeverityChipClass(item.severity)}>{item.severity}</span>
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${severityChipClass(item.severity)}`}>
+                            {item.severity}
+                          </span>
                         </div>
 
                         <div className="mt-3 text-xs text-[color:var(--agent-muted-soft)]">
@@ -897,7 +1351,7 @@ const AdminDashboard = ({
 
               {activeSection === 'settings' ? (
                 <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className="agent-section-title agent-section-title--compact">Account settings</h2>
+                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Account settings</h2>
                   <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
                     Manage profile visibility and workspace preferences from a single tab.
                   </p>
@@ -915,18 +1369,11 @@ const AdminDashboard = ({
                       <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Theme</p>
                       <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{theme === 'dark' ? 'Dark' : 'Light'}</p>
                     </div>
-                    <div className="reference-card-soft p-3">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Data masking</p>
-                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{dataMaskingEnabled ? 'On' : 'Off'}</p>
-                    </div>
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
                       Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
-                    </button>
-                    <button type="button" className={workspaceGhostButtonClass} onClick={onToggleDataMasking}>
-                      Turn data masking {dataMaskingEnabled ? 'Off' : 'On'}
                     </button>
                   </div>
 

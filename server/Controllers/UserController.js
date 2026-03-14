@@ -2,572 +2,676 @@ import User from "../Models/UserModel.js";
 import AuditLog from "../Models/AuditLogModel.js";
 import jwt from "jsonwebtoken";
 import Sessions from "../Models/SessionModel.js";
-import { sendOTP } from "../Utils/emailService.js";
-import { appConfig } from "../Config/env.js";
+import {sendOTP} from "../Utils/emailService.js";
+import Appointments from "../Models/AppointmentsModel.js";
 
-const OTP_EXPIRY_MS = 10 * 60 * 1000;
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ALLOWED_DOCTOR_DEPARTMENTS = new Set([
+    "Internal Medicine",
+    "Pediatrics",
+    "Surgery",
+    "Obstetrics and Gynecology",
+    "Family and Community Medicine",
+    "Anesthesiology",
+    "Radiology",
+    "Pathology",
+    "Psychiatry",
+    "Ophthalmology",
+    "Otorhinolaryngology",
+    "Rehabilitation Medicine",
+    "Dermatology",
+    "Emergency Medicine",
+    "Cardiology",
+    "Pulmonology",
+    "Nephrology",
+    "Neurology",
+    "Gastroenterology",
+]);
 
-const normalizeRole = (role) => (role === "doctor" ? "nurse" : role);
-
-const sanitizeEmail = (email) => String(email || "").trim().toLowerCase();
-
-const issueOtpForUser = async (user) => {
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    user.otp = otpCode;
-    user.otpExpires = Date.now() + OTP_EXPIRY_MS;
-    await user.save();
-
-    const delivery = await sendOTP(user.email, otpCode);
-
-    return {
-        message: delivery.delivered
-            ? "OTP sent to your email. Please verify to complete login."
-            : "OTP generated for local login. Use the preview code to continue.",
-        userId: user._id,
-        requires2FA: true,
-        otpPreview: appConfig.isProduction ? undefined : delivery.preview,
-    };
+const extractUploadedLicenses = (req) => {
+    if (Array.isArray(req.files)) return req.files;
+    if (req.files && typeof req.files === 'object') {
+        const byField = req.files;
+        return [
+            ...(Array.isArray(byField.licenses) ? byField.licenses : []),
+            ...(Array.isArray(byField.license) ? byField.license : []),
+            ...(Array.isArray(byField.licenseFile) ? byField.licenseFile : []),
+        ];
+    }
+    if (req.file) return [req.file];
+    return [];
 };
-
-const createJwtToken = (user) => {
-    return jwt.sign(
-        {
-            id: user._id,
-            role: normalizeRole(user.role),
-        },
-        appConfig.jwtSecret,
-        { expiresIn: "7d" }
-    );
-};
-
-const buildAuthResponse = (user, token, sessionId) => ({
-    message: "Login successful.",
-    token,
-    user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        username: user.email,
-        role: normalizeRole(user.role),
-        authMethod: "otp",
-        mfa: true,
-        sessionId,
-    },
-});
 
 export async function register(req, res) {
     try {
-        const email = sanitizeEmail(req.body?.email);
-        const firstName = String(req.body?.firstName || "").trim();
-        const lastName = String(req.body?.lastName || "").trim();
-        const password = String(req.body?.password || "");
+        const { email, firstName, lastName, password} = req.body;
 
         if (!firstName || !lastName || !password || !email) {
             return res.status(400).json({ message: "Missing Fields." });
         }
 
-        if (!EMAIL_REGEX.test(email)) {
-            return res.status(400).json({ message: "Email is invalid" });
-        }
-
-        if (!PASSWORD_REGEX.test(password)) {
-            return res.status(400).json({
-                message:
-                    "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character.",
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com|yahoo\.com|outlook\.com)$/i;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ 
+                message: "Email is invalid" 
             });
         }
-
         const emailExists = await User.findOne({ email });
         if (emailExists) {
             return res.status(409).json({ message: "Email is already registered." });
         }
 
-        const user = new User({
-            email,
-            firstName,
-            lastName,
-            role: "user",
-            status: "active",
-        });
+        // Require: min 8, at least one lower, one upper, one digit, and one non-alphanumeric (any special char)
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({ 
+                message: "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character." 
+            });
+        }
+
+        const user = new User({
+            email: email,
+            firstName: firstName,
+            lastName: lastName,
+        });
         await user.setPassword(password);
         await user.save();
 
         return res.status(201).json({ message: "Successfully registered." });
     } catch (error) {
-        console.error("Registration failed", error);
-        return res.status(500).json({ message: "Registration Failed." });
-    }
-}
-
-export async function registerDoctor(req, res) {
-    try {
-        const email = sanitizeEmail(req.body?.email);
-        const firstName = String(req.body?.firstName || "").trim();
-        const lastName = String(req.body?.lastName || "").trim();
-        const password = String(req.body?.password || "");
-        const department = String(req.body?.department || "").trim();
-        const licenseFile = req.file;
-
-        if (!firstName || !lastName || !password || !email || !department) {
-            return res.status(400).json({ message: "Missing required field" });
-        }
-
-        if (!licenseFile) {
-            return res.status(400).json({ message: "Medical license file is required" });
-        }
-
-        if (!EMAIL_REGEX.test(email)) {
-            return res.status(400).json({ message: "Email is invalid" });
-        }
-
-        if (!PASSWORD_REGEX.test(password)) {
-            return res.status(400).json({
-                message:
-                    "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character.",
-            });
-        }
-
-        const emailExists = await User.findOne({ email });
-        if (emailExists) {
-            return res.status(409).json({ message: "Email is already registered." });
-        }
-
-        const nurseUser = new User({
-            email,
-            firstName,
-            lastName,
-            role: "nurse",
-            department,
-            licenseUrl: licenseFile.path,
-            status: "disabled",
-        });
-
-        await nurseUser.setPassword(password);
-        await nurseUser.save();
-
-        return res.status(201).json({
-            message: "Doctor registration submitted successfully. Pending approval.",
-        });
-    } catch (error) {
-        console.error("Doctor registration failed", error);
+        console.error("Registration Failed.");
         return res.status(500).json({ message: "Registration Failed." });
     }
 }
 
 export async function login(req, res) {
-    try {
-        const email = sanitizeEmail(req.body?.email);
-        const password = String(req.body?.password || "");
+    try{
+        console.log("Login request body:", req.body.email);
+        const {email, password} = req.body;
 
-        if (!email || !password) {
-            return res.status(400).json({ message: "Missing Fields." });
+        if(!email || !password) {
+            return res.status(400).json({message: "Missing Fields."});
+        }
+        // Search by phoneNumber or email
+        const user = await User.findOne({ email: email}).select("+passwordHashed");
+
+        if(!user || !(await user.validatePassword(password))) {
+            return res.status(401).json({message: "Wrong password or Email. Please try again."});
+        }
+        if(user.status !== "active") {
+            return res.status(401).json({message: "Account is disabled. Contact an Admin."});
         }
 
-        const user = await User.findOne({ email }).select("+passwordHashed +otp +otpExpires");
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-        if (!user || !(await user.validatePassword(password))) {
-            return res.status(401).json({ message: "Wrong password or Email. Please try again." });
-        }
-
-        if (user.status !== "active") {
-            return res.status(401).json({ message: "Account is disabled. Contact an Admin." });
-        }
-
-        const payload = await issueOtpForUser(user);
-        return res.status(200).json(payload);
-    } catch (error) {
-        console.error("Login failed", error);
-        return res.status(500).json({ message: "Login failed." });
-    }
-}
-
-export async function requestOtpChallenge(req, res) {
-    try {
-        const username = sanitizeEmail(req.body?.username);
-        const email = sanitizeEmail(req.body?.email) || username;
-        const password = String(req.body?.password || "");
-
-        if (!email || !password) {
-            return res.status(400).json({ message: "Missing Fields." });
-        }
-
-        const user = await User.findOne({ email }).select("+passwordHashed +otp +otpExpires");
-
-        if (!user || !(await user.validatePassword(password))) {
-            return res.status(401).json({ message: "Wrong password or Email. Please try again." });
-        }
-
-        if (user.status !== "active") {
-            return res.status(401).json({ message: "Account is disabled. Contact an Admin." });
-        }
-
-        const payload = await issueOtpForUser(user);
-        return res.status(200).json({
-            challengeId: String(payload.userId),
-            username: user.email,
-            expiresAt: new Date(Date.now() + OTP_EXPIRY_MS).toISOString(),
-            expiresInSeconds: OTP_EXPIRY_MS / 1000,
-            otpPreview: payload.otpPreview,
-        });
-    } catch (error) {
-        console.error("OTP challenge request failed", error);
-        return res.status(500).json({ message: "Failed to request OTP challenge." });
-    }
-}
-
-export async function verifyOTP(req, res) {
-    try {
-        const { userId, otp } = req.body || {};
-
-        if (!userId || !otp) {
-            return res.status(400).json({ message: "Missing userId or OTP." });
-        }
-
-        const user = await User.findById(userId).select("+otp +otpExpires");
-
-        if (!user) {
-            return res.status(404).json({ message: "User not found." });
-        }
-
-        if (String(user.otp || "") !== String(otp || "")) {
-            return res.status(400).json({ message: "Invalid OTP." });
-        }
-
-        if (!user.otpExpires || user.otpExpires.getTime() < Date.now()) {
-            return res.status(400).json({ message: "OTP has expired. Please login again." });
-        }
-
-        user.otp = undefined;
-        user.otpExpires = undefined;
+        user.otp = otpCode;
+        user.otpExpires = Date.now() + 10 * 60 * 1000; 
         await user.save();
-
-        const token = createJwtToken(user);
-        const session = await Sessions.create({
-            userId: user._id,
-            token,
-        });
-
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
-
-        await AuditLog.create({
-            userId: user._id,
-            action: "LOGIN_SUCCESS",
-            details: `User ${user.email} logged in successfully via OTP.`,
-            ipAddress: req.ip || req.connection?.remoteAddress,
-            userAgent: req.headers["user-agent"],
-        });
-
-        return res.status(200).json(buildAuthResponse(user, token, session._id?.toString?.() || null));
-    } catch (error) {
-        console.error("OTP verification failed", error);
-        return res.status(500).json({ message: "Verification failed." });
-    }
-}
-
-export async function resendOTP(req, res) {
-    try {
-        const { userId } = req.body || {};
-
-        if (!userId) {
-            return res.status(400).json({ message: "Missing userId." });
+        
+        try {
+            await sendOTP(user.email, otpCode);
+        } catch (emailError) {
+            console.error("Email sending failed:", emailError);
+            return res.status(500).json({ message: "Failed to send OTP. Please try again." });
         }
 
-        const user = await User.findById(userId).select("+otp +otpExpires");
-
-        if (!user) {
-            return res.status(404).json({ message: "User not found." });
-        }
-
-        if (user.status !== "active") {
-            return res.status(401).json({ message: "Account is disabled. Contact an Admin." });
-        }
-
-        const payload = await issueOtpForUser(user);
         return res.status(200).json({
-            message: "OTP resent to your email.",
-            userId: payload.userId,
-            otpPreview: payload.otpPreview,
+            message: "OTP sent to your email. Please verify to complete login.",
+            userId: user._id, // Send ID so client knows who is verifying
+            requires2FA: true 
         });
-    } catch (error) {
-        console.error("Resend OTP failed", error);
-        return res.status(500).json({ message: "Failed to resend OTP." });
+    } catch (error){
+        console.log("Login request body:", req.body.email);
+        res.status(500).json({message: "Login failed."});
     }
 }
 
 export async function logout(req, res) {
     try {
-        const token =
-            req.cookies?.token ||
-            (req.headers.authorization || "").replace(/^Bearer\s+/, "") ||
-            null;
-
+        // Remove session record (if any) and clear cookie
+        const token = req.cookies?.token || (req.headers.authorization || '').replace(/^Bearer\s+/, '') || null;
         if (token) {
-            const session = await Sessions.findOne({ token });
-            if (session) {
-                try {
-                    await AuditLog.create({
-                        userId: session.userId,
-                        action: "LOGOUT",
-                        details: "User logged out (session ended)",
-                        ipAddress: req.ip,
-                        userAgent: req.headers["user-agent"],
-                    });
-                } catch (logErr) {
-                    console.warn("Failed to write logout audit log", logErr);
+            try {
+                // find session to get userId for audit logging
+                const session = await Sessions.findOne({ token });
+                if (session) {
+                    // create audit log for logout
+                    try {
+                        await AuditLog.create({
+                            userId: session.userId,
+                            action: 'LOGOUT',
+                            details: `User logged out (session ended)`,
+                            ipAddress: req.ip,
+                            userAgent: req.headers['user-agent']
+                        });
+                    } catch (logErr) {
+                        console.warn('Failed to write logout audit log', logErr);
+                    }
                 }
+
                 await Sessions.deleteOne({ token });
+            } catch (e) {
+                // non-fatal, continue to clear cookie
+                console.warn('Failed to remove session record', e);
+            }
+        } else if (req.user?.id) {
+            // If no token but request was authenticated and has user info, log logout
+            try {
+                const actor = await User.findById(req.user.id).select('email').lean();
+                await AuditLog.create({
+                    userId: req.user.id,
+                    action: 'LOGOUT',
+                    details: `User ${req.user.email || actor?.email || req.user.id} logged out`,
+                    ipAddress: req.ip,
+                    userAgent: req.headers['user-agent']
+                });
+            } catch (logErr) {
+                console.warn('Failed to write logout audit log', logErr);
             }
         }
 
         res.clearCookie("token", {
             httpOnly: true,
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            secure: process.env.NODE_ENV === 'production'
         });
 
         return res.status(200).json({ message: "Logout successful." });
     } catch (error) {
-        console.error("Logout failed", error);
+        console.error("Logout error: ", error);
         return res.status(500).json({ message: "Logout failed." });
     }
 }
 
-export async function getSession(req, res) {
+export async function verifyOTP(req, res) {
     try {
-        const userId = req.user?.id || req.user?._id;
-        if (!userId) return res.status(401).json({ message: "Invalid session" });
 
-        const user = await User.findById(userId);
-        if (!user) return res.status(404).json({ message: "User not found" });
+        const { userId, otp } = req.body;
 
-        return res.json({
-            username: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            role: normalizeRole(user.role),
-            authMethod: "otp",
-            mfa: true,
-            sessionId: req.user?.sessionId || null,
+        if (!userId || !otp) {
+            return res.status(400).json({ message: "Missing userId or OTP." });
+        }
+
+        const user = await User.findById(userId).select('+otp +otpExpires');
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        if (user.otp !== otp) {
+            return res.status(400).json({ message: "Invalid OTP." });
+        }
+
+        if (user.otpExpires < Date.now()) {
+            return res.status(400).json({ message: "OTP has expired. Please login again." });
+        }
+        user.otp = undefined;
+        user.otpExpires = undefined;
+        await user.save();
+
+        const token = jwt.sign(
+            {id: user._id, role: user.role, email: user.email},
+            process.env.JWT_SECRET,
+            {expiresIn: "7d"}
+        );
+        await Sessions.create({
+            userId: user._id,
+            token: token,
+        });
+
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 7* 24 * 60 * 60 * 1000,
+        });
+        await AuditLog.create({
+            userId: user._id,
+            action: "LOGIN_SUCCESS",
+            details: `User ${user.email} logged in successfully via OTP.`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.headers['user-agent']
+        });
+
+        console.log("[Successful Login]:", req.body.email);
+
+        return res.status(200).json({
+            message: "Login successful.",
+            token,
+            user: {
+                id: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                role: user.role
+            }
         });
     } catch (error) {
-        console.error("Session lookup failed", error);
-        return res.status(500).json({ message: "Session lookup failed" });
+        console.error("OTP Verification Error:", error);
+        res.status(500).json({ message: "Verification failed." });   
+    }
+}
+
+export async function resendOTP(req, res) {
+    try {
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ message: "Missing userId." });
+        }
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        if (user.status !== "active") {
+            return res.status(401).json({ message: "Account is disabled. Contact an Admin." });
+        }
+
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        user.otp = otpCode;
+        user.otpExpires = Date.now() + 10 * 60 * 1000;
+        await user.save();
+
+        try {
+            await sendOTP(user.email, otpCode);
+        } catch (emailError) {
+            console.error("Email sending failed:", emailError);
+            return res.status(500).json({ message: "Failed to send OTP. Please try again." });
+        }
+
+        return res.status(200).json({
+            message: "OTP resent to your email.",
+            userId: user._id,
+        });
+    } catch (error) {
+        console.error("Resend OTP Error:", error);
+        res.status(500).json({ message: "Failed to resend OTP." });
     }
 }
 
 export async function getSettings(req, res) {
     try {
-        const userId = req.user?.id || req.user?._id;
-        if (!userId) return res.status(401).json({ message: "Invalid session" });
-
-        const user = await User.findById(userId).select("settings");
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        return res.json({
-            settings: user.settings || {
-                theme: "light",
-                notifications: { email: true, sms: false, push: true },
-            },
-        });
+        const userId = req.user?.id || req.user?._id
+        if (!userId) return res.status(401).json({ message: 'Invalid session' })
+        const user = await User.findById(userId).select('settings')
+        if (!user) return res.status(404).json({ message: 'User not found' })
+        return res.json({ settings: user.settings || {} })
     } catch (error) {
-        console.error("Get settings failed", error);
-        return res.status(500).json({ message: "Failed to load settings" });
+        console.error('Get settings failed', error)
+        return res.status(500).json({ message: 'Failed to load settings' })
     }
 }
 
 export async function updateSettings(req, res) {
     try {
-        const userId = req.user?.id || req.user?._id;
-        if (!userId) return res.status(401).json({ message: "Invalid session" });
-
-        const { settings } = req.body || {};
-        if (!settings || typeof settings !== "object") {
-            return res.status(400).json({ message: "Invalid settings payload" });
+        const userId = req.user?.id || req.user?._id
+        if (!userId) return res.status(401).json({ message: 'Invalid session' })
+        const { settings } = req.body
+        if (!settings || typeof settings !== 'object') {
+            return res.status(400).json({ message: 'Invalid settings payload' })
         }
 
-        const update = {};
-        if (settings.theme === "light" || settings.theme === "dark") {
-            update["settings.theme"] = settings.theme;
-        }
-        if (settings.notifications && typeof settings.notifications === "object") {
-            update["settings.notifications.email"] = !!settings.notifications.email;
-            update["settings.notifications.sms"] = !!settings.notifications.sms;
-            update["settings.notifications.push"] = !!settings.notifications.push;
+        // Only allow updating known keys
+        const update = {}
+        if (settings.notifications && typeof settings.notifications === 'object') {
+            update['settings.notifications.email'] = !!settings.notifications.email
+            update['settings.notifications.sms'] = !!settings.notifications.sms
+            update['settings.notifications.push'] = !!settings.notifications.push
         }
 
-        const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true }).select("settings");
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        return res.json({ settings: user.settings });
+        const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true }).select('settings')
+        if (!user) return res.status(404).json({ message: 'User not found' })
+        return res.json({ settings: user.settings })
     } catch (error) {
-        console.error("Update settings failed", error);
-        return res.status(500).json({ message: "Failed to update settings" });
-    }
-}
-
-export async function updateProfile(req, res) {
-    try {
-        const userId = req.user?.id || req.user?._id;
-        if (!userId) return res.status(401).json({ message: "Invalid session" });
-
-        const rawFirstName = String(req.body?.firstName || "").trim();
-        const rawLastName = String(req.body?.lastName || "").trim();
-        const rawName = String(req.body?.name || "").trim();
-
-        let firstName = rawFirstName;
-        let lastName = rawLastName;
-
-        if (!firstName && !lastName && rawName) {
-            const [parsedFirstName, ...rest] = rawName.split(/\s+/).filter(Boolean);
-            firstName = parsedFirstName || "";
-            lastName = rest.join(" ") || "";
-        }
-
-        if (!firstName || !lastName) {
-            return res.status(400).json({ message: "First name and last name are required." });
-        }
-
-        if (firstName.length > 30 || lastName.length > 30) {
-            return res.status(400).json({ message: "First name and last name must be 30 characters or less." });
-        }
-
-        const user = await User.findByIdAndUpdate(
-            userId,
-            { $set: { firstName, lastName } },
-            { new: true }
-        );
-
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        return res.json({
-            message: "Profile updated.",
-            user: {
-                username: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                role: normalizeRole(user.role),
-            },
-        });
-    } catch (error) {
-        console.error("Update profile failed", error);
-        return res.status(500).json({ message: "Failed to update profile" });
-    }
-}
-
-export async function updatePassword(req, res) {
-    try {
-        const userId = req.user?.id || req.user?._id;
-        if (!userId) return res.status(401).json({ message: "Invalid session" });
-
-        const currentPassword = String(req.body?.currentPassword || "");
-        const newPassword = String(req.body?.newPassword || "");
-
-        if (!currentPassword || !newPassword) {
-            return res.status(400).json({ message: "Current password and new password are required." });
-        }
-
-        if (!PASSWORD_REGEX.test(newPassword)) {
-            return res.status(400).json({
-                message:
-                    "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character.",
-            });
-        }
-
-        if (currentPassword === newPassword) {
-            return res.status(400).json({ message: "New password must be different from current password." });
-        }
-
-        const user = await User.findById(userId).select("+passwordHashed");
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        const passwordMatches = await user.validatePassword(currentPassword);
-        if (!passwordMatches) {
-            return res.status(401).json({ message: "Current password is incorrect." });
-        }
-
-        await user.setPassword(newPassword);
-        await user.save();
-
-        return res.json({ message: "Password updated." });
-    } catch (error) {
-        console.error("Update password failed", error);
-        return res.status(500).json({ message: "Failed to update password" });
+        console.error('Update settings failed', error)
+        return res.status(500).json({ message: 'Failed to update settings' })
     }
 }
 
 // DEBUG: Local helper to inspect a user record (development only)
 export async function debugUser(req, res) {
     try {
-        const email = sanitizeEmail(req.query?.email);
-        if (!email) return res.status(400).json({ message: "email query required" });
-
-        const user = await User.findOne({ email }).select("+passwordHashed settings");
-        if (!user) return res.status(404).json({ message: "User not found" });
-
+        const email = String(req.query.email || '').toLowerCase()
+        if (!email) return res.status(400).json({ message: 'email query required' })
+        const user = await User.findOne({ email }).select('+passwordHashed settings')
+        if (!user) return res.status(404).json({ message: 'User not found' })
         return res.json({
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
-            role: normalizeRole(user.role),
+            role: user.role,
             status: user.status,
             hasPassword: !!user.passwordHashed,
             settings: user.settings || {},
-        });
-    } catch (error) {
-        console.error("Debug user failed", error);
-        return res.status(500).json({ message: "Debug failed" });
+        })
+    } catch (err) {
+        console.error('Debug user failed', err)
+        return res.status(500).json({ message: 'Debug failed' })
     }
 }
 
 export async function googleCallback(req, res) {
-    const frontendBaseUrl = appConfig.frontendUrl.replace(/\/$/, "");
     try {
-        const user = req.user;
+        // Passport already put the user in req.user
+        const user = req.user; 
+
         if (!user) {
-            return res.redirect(`${frontendBaseUrl}/login`);
+            return res.redirect('/login-failed');
         }
 
-        const token = createJwtToken(user);
-        await Sessions.create({ userId: user._id, token });
+        // 1. Generate Token
+        const token = jwt.sign(
+            { id: user._id, role: user.role, email: user.email },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
 
+        // 2. Create Session (This makes logout work!)
+        await Sessions.create({
+            userId: user._id,
+            token: token
+        });
+
+        // 3. [NEW] Audit Log
         await AuditLog.create({
             userId: user._id,
             action: "LOGIN_GOOGLE",
             details: `User ${user.email} logged in via Google OAuth.`,
             ipAddress: req.ip,
-            userAgent: req.headers["user-agent"],
+            userAgent: req.headers['user-agent'],
+            
         });
 
-        const isProd = process.env.NODE_ENV === "production";
-        res.cookie("token", token, {
+        // 4. Set Cookie
+        // For cross-site OAuth flows the cookie must be SameSite=None and Secure in production
+        const isProd = process.env.NODE_ENV === 'production'
+        res.cookie('token', token, {
             httpOnly: true,
             secure: isProd,
-            sameSite: isProd ? "none" : "lax",
+            sameSite: isProd ? 'none' : 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
-        const normalizedRole = normalizeRole(user.role);
-        const redirectPath =
-            normalizedRole === "user"
-                ? "/appointments"
-                : normalizedRole === "nurse"
-                  ? "/doctor/dashboard"
-                  : normalizedRole === "admin" || normalizedRole === "system_admin"
-                    ? "/admin"
-                    : "/login";
+        // 5. Redirect to Frontend
+        const frontendUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
+        return res.redirect(`${frontendUrl.replace(/\/$/, '')}/appointments`);
 
-        return res.redirect(`${frontendBaseUrl}${redirectPath}`);
     } catch (error) {
-        console.error("Google auth failed", error);
-        return res.redirect(`${frontendBaseUrl}/login`);
+        console.error("Google Auth Error:", error);
+        return res.redirect('/login-failed');
+    }
+}
+
+export async function registerDoctor(req, res) {
+    try {
+        const { email, firstName, lastName, password, department } = req.body;
+        const licenseFiles = extractUploadedLicenses(req);
+        const licensePaths = licenseFiles.map((file) => String(file.path || '').trim()).filter(Boolean);
+        const normalizedDepartment = String(department || '').trim();
+
+        if (!firstName || !lastName || !password || !email || !normalizedDepartment) {
+            return res.status(400).json({ message: "Missing required field" });
+        }
+        if (!ALLOWED_DOCTOR_DEPARTMENTS.has(normalizedDepartment)) {
+            return res.status(400).json({ message: "Selected doctor department is not allowed." });
+        }
+        if (licensePaths.length === 0) {
+            return res.status(400).json({message: "At least one medical license file is required"})
+        }
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com|yahoo\.com|outlook\.com)$/i;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ 
+                message: "Email is invalid" 
+            });
+        }
+        const emailExists = await User.findOne({ email });
+        if (emailExists) {
+            return res.status(409).json({ message: "Email is already registered." });
+        }
+
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({ 
+                message: "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character." 
+            });
+        }
+
+        const doctor = new User({
+            email,
+            firstName,
+            lastName,
+            role: "doctor",
+            department: normalizedDepartment,
+            licenseUrl: licensePaths[0],
+            licenseUrls: licensePaths,
+            status: "disabled", // Prevents login until Admin verifies the license
+            staffApplicationReviewed: false
+        });
+
+        await doctor.setPassword(password);
+        await doctor.save();
+
+        return res.status(201).json({ 
+            message: "Doctor registration submitted successfully. Pending approval." 
+        });
+
+    } catch (error) {
+        console.error("Doctor Registration Failed:", error);
+        return res.status(500).json({ message: "Registration Failed." });
+    }
+}
+
+export async function getMyProfile(req, res) {
+    try {
+        const userId = req.user?.id || req.user?._id
+        if (!userId) return res.status(401).json({ message: 'Invalid session' })
+
+        const user = await User.findById(userId).select(
+            'email firstName lastName role status department profile personalHealthInfo'
+        )
+        if (!user) return res.status(404).json({ message: 'User not found' })
+
+        return res.json({
+            profile: {
+                id: user._id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+                status: user.status,
+                department: user.department,
+                ...(user.profile || {}),
+            },
+            personalHealthInfo: user.personalHealthInfo || {}
+        })
+    } catch (error) {
+        console.error('Get profile failed', error)
+        return res.status(500).json({ message: 'Failed to load profile' })
+    }
+}
+
+export async function updateMyProfile(req, res) {
+    try {
+        const userId = req.user?.id || req.user?._id
+        if (!userId) return res.status(401).json({ message: 'Invalid session' })
+
+        const allowedRoot = ['firstName', 'lastName']
+        const allowedProfile = ['dateOfBirth', 'phoneNumber', 'address', 'gender']
+        const update = {}
+
+        for (const key of allowedRoot) {
+            if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+                update[key] = req.body[key]
+            }
+        }
+        for (const key of allowedProfile) {
+            if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+                update[`profile.${key}`] = req.body[key]
+            }
+        }
+
+        if (Object.keys(update).length === 0) {
+            return res.status(400).json({ message: 'No updatable fields provided.' })
+        }
+
+        const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true })
+            .select('email firstName lastName role status department profile')
+        if (!user) return res.status(404).json({ message: 'User not found' })
+
+        await AuditLog.create({
+            userId,
+            action: 'UPDATED_PROFILE',
+            details: `User ${user.email} updated profile fields.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        })
+
+        return res.json({
+            message: 'Profile updated.',
+            profile: {
+                id: user._id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+                status: user.status,
+                department: user.department,
+                ...(user.profile || {})
+            }
+        })
+    } catch (error) {
+        console.error('Update profile failed', error)
+        return res.status(500).json({ message: 'Failed to update profile' })
+    }
+}
+
+function sanitizeStringList(list) {
+    if (!Array.isArray(list)) return undefined
+    return list
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .slice(0, 50)
+}
+
+export async function upsertPersonalHealthInfo(req, res) {
+    try {
+        const userId = req.user?.id || req.user?._id
+        if (!userId) return res.status(401).json({ message: 'Invalid session' })
+
+        const incoming = req.body?.personalHealthInfo || req.body
+        if (!incoming || typeof incoming !== 'object') {
+            return res.status(400).json({ message: 'Invalid personal health info payload.' })
+        }
+
+        const listFields = ['allergies', 'medications', 'chronicConditions', 'surgeries']
+        for (const field of listFields) {
+            if (
+                Object.prototype.hasOwnProperty.call(incoming, field) &&
+                !Array.isArray(incoming[field])
+            ) {
+                return res.status(400).json({ message: `${field} must be an array.` })
+            }
+        }
+
+        const payload = {
+            bloodType: incoming.bloodType ? String(incoming.bloodType).trim() : undefined,
+            allergies: sanitizeStringList(incoming.allergies),
+            medications: sanitizeStringList(incoming.medications),
+            chronicConditions: sanitizeStringList(incoming.chronicConditions),
+            surgeries: sanitizeStringList(incoming.surgeries),
+            notes: incoming.notes ? String(incoming.notes).trim() : undefined,
+            updatedAt: new Date(),
+        }
+
+        if (incoming.emergencyContact && typeof incoming.emergencyContact === 'object') {
+            payload.emergencyContact = {
+                name: incoming.emergencyContact.name ? String(incoming.emergencyContact.name).trim() : undefined,
+                phone: incoming.emergencyContact.phone ? String(incoming.emergencyContact.phone).trim() : undefined,
+                relationship: incoming.emergencyContact.relationship ? String(incoming.emergencyContact.relationship).trim() : undefined,
+            }
+        }
+
+        const setPayload = {}
+        for (const [key, value] of Object.entries(payload)) {
+            if (value !== undefined) {
+                setPayload[`personalHealthInfo.${key}`] = value
+            }
+        }
+        if (Object.keys(setPayload).length === 0) {
+            return res.status(400).json({ message: 'No valid personal health info fields provided.' })
+        }
+
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { $set: setPayload },
+            { new: true }
+        ).select('email personalHealthInfo')
+
+        if (!user) return res.status(404).json({ message: 'User not found' })
+
+        await AuditLog.create({
+            userId,
+            action: 'UPSERT_PERSONAL_HEALTH_INFO',
+            details: `User ${user.email} updated personal health information.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        })
+
+        return res.status(200).json({
+            message: 'Personal health information saved.',
+            personalHealthInfo: user.personalHealthInfo || {}
+        })
+    } catch (error) {
+        console.error('Upsert personal health info failed', error)
+        return res.status(500).json({ message: 'Failed to save personal health information' })
+    }
+}
+
+export async function getPatientMedicalProfile(req, res) {
+    try {
+        const doctorId = req.user?.id || req.user?._id
+        const { patientId } = req.params
+        if (!doctorId) return res.status(401).json({ message: 'Invalid session' })
+
+        const appointment = await Appointments.findOne({
+            doctor: doctorId,
+            patient: patientId
+        }).select('_id')
+
+        if (!appointment) {
+            return res.status(403).json({ message: 'You do not have access to this patient record.' })
+        }
+
+        const patient = await User.findById(patientId).select(
+            'email firstName lastName profile personalHealthInfo status'
+        )
+        if (!patient) return res.status(404).json({ message: 'Patient not found' })
+
+        await AuditLog.create({
+            userId: doctorId,
+            action: 'VIEWED_PATIENT_MEDICAL_PROFILE',
+            details: `Doctor viewed patient profile for patientId=${patientId}`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        })
+
+        return res.status(200).json({
+            patient: {
+                id: patient._id,
+                email: patient.email,
+                firstName: patient.firstName,
+                lastName: patient.lastName,
+                status: patient.status,
+                ...(patient.profile || {}),
+            },
+            personalHealthInfo: patient.personalHealthInfo || {}
+        })
+    } catch (error) {
+        console.error('Get patient medical profile failed', error)
+        return res.status(500).json({ message: 'Failed to load patient profile' })
     }
 }

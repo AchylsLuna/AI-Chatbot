@@ -29,8 +29,7 @@ const UserSchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            set: (value) => (value === "doctor" ? "nurse" : value),
-            enum: ["user", "nurse", "admin", "system_admin"],
+            enum: ["user", "doctor", "admin", "system_admin"],
             default: "user",
         },
         status: {
@@ -41,11 +40,19 @@ const UserSchema = new mongoose.Schema(
         department: {
             type: String,
             trim: true,
-            required: function() { return this.role === 'nurse'; }
+            required: function() { return this.role === 'doctor'; }
         },
         licenseUrl: { // Or licensePath, depending on where you store it
             type: String,
-            required: function() { return this.role === 'nurse'; }
+            required: function() { return this.role === 'doctor'; }
+        },
+        licenseUrls: {
+            type: [{ type: String, trim: true }],
+            default: [],
+        },
+        staffApplicationReviewed: {
+            type: Boolean,
+            default: function() { return this.role !== 'doctor'; }
         },
         passwordHashed: {
             type: String,
@@ -61,19 +68,33 @@ const UserSchema = new mongoose.Schema(
         }
         ,
         settings: {
-            theme: {
-                type: String,
-                enum: ["light", "dark"],
-                default: "light",
-            },
             notifications: {
                 email: { type: Boolean, default: true },
                 sms: { type: Boolean, default: false },
                 push: { type: Boolean, default: true },
             },
+        },
+        profile: {
+            dateOfBirth: { type: Date },
+            phoneNumber: { type: String, trim: true, maxlength: 30 },
+            address: { type: String, trim: true, maxlength: 200 },
+            gender: { type: String, trim: true, maxlength: 30 },
+        },
+        personalHealthInfo: {
+            bloodType: { type: String, trim: true, maxlength: 10 },
+            allergies: { type: [{ type: String, trim: true, maxlength: 120 }], default: [] },
+            medications: { type: [{ type: String, trim: true, maxlength: 120 }], default: [] },
+            chronicConditions: { type: [{ type: String, trim: true, maxlength: 120 }], default: [] },
+            surgeries: { type: [{ type: String, trim: true, maxlength: 120 }], default: [] },
+            emergencyContact: {
+                name: { type: String, trim: true, maxlength: 80 },
+                phone: { type: String, trim: true, maxlength: 30 },
+                relationship: { type: String, trim: true, maxlength: 50 },
+            },
+            notes: { type: String, trim: true, maxlength: 1000 },
+            updatedAt: { type: Date },
         }
     },
-    { timestamps: true }
 );
 UserSchema.methods.setPassword = async function (password) {
     this.passwordHashed = await bcrypt.hash(password, 10);

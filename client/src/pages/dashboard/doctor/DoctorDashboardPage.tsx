@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import DashboardTopBar from '../../../components/layout/DashboardTopBar'
 import { buildDashboardLogItems } from '../shared/dashboardEvents'
 import DoctorAppointmentSection from './sections/DoctorAppointmentSection'
+import DoctorCalendarSection from './sections/DoctorCalendarSection'
 import DoctorDashboardOverviewSection from './sections/DoctorDashboardOverviewSection'
 import DoctorReportsLogSection from './sections/DoctorReportsLogSection'
 import DoctorSettingsSection from './sections/DoctorSettingsSection'
@@ -14,6 +15,7 @@ import type {
   AuthSession,
   Reservation,
 } from '../../../types'
+import { formatPhilippineDateTime } from '../../../utils/dateTime'
 import {
   maskIdentifier,
   maskPersonName,
@@ -36,12 +38,12 @@ type DoctorDashboardPageProps = {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   dataMaskingEnabled: boolean
-  onToggleDataMasking: () => void
 }
 
 type DoctorSidebarSection =
   | 'dashboard'
   | 'appointments'
+  | 'calendar'
   | 'reports_log'
   | 'settings'
 
@@ -56,7 +58,8 @@ type NotificationPreferences = {
 
 const sidebarItems: SidebarItem[] = [
   { key: 'dashboard', label: 'Dashboard', icon: 'home' },
-  { key: 'appointments', label: 'Appointment', icon: 'calendar' },
+  { key: 'appointments', label: 'Appointment', icon: 'book' },
+  { key: 'calendar', label: 'Calendar', icon: 'calendar' },
   { key: 'reports_log', label: "Report's Log", icon: 'report' },
 ]
 
@@ -123,10 +126,17 @@ const getPageSlice = <T,>(items: T[], currentPage: number, pageSize = PAGINATION
   return items.slice(start, start + pageSize)
 }
 
+const resolveDoctorDisplayName = (user: AuthSession['user'] | null) => {
+  const fullName = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim()
+  if (fullName) return fullName
+  return 'Staff'
+}
+
 const isDoctorSidebarSection = (value: string): value is DoctorSidebarSection => {
   return (
     value === 'dashboard' ||
     value === 'appointments' ||
+    value === 'calendar' ||
     value === 'reports_log' ||
     value === 'settings'
   )
@@ -141,7 +151,6 @@ const DoctorDashboardPage = ({
   theme,
   onToggleTheme,
   dataMaskingEnabled,
-  onToggleDataMasking,
 }: DoctorDashboardPageProps) => {
   const [activeSection, setActiveSection] = useState<DoctorSidebarSection>('dashboard')
   const [searchQuery, setSearchQuery] = useState('')
@@ -249,7 +258,7 @@ const DoctorDashboardPage = ({
       id: item.id,
       title: dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName,
       detail: `${item.department} · ${item.status}`,
-      meta: new Date(item.createdAt).toLocaleString(),
+      meta: formatPhilippineDateTime(item.createdAt),
     }))
 
     if (items.length > 0) return items
@@ -268,7 +277,7 @@ const DoctorDashboardPage = ({
     const items = searchableReservations.slice(0, 6).map((item) => ({
       id: item.id,
       title: `${item.department} queue item`,
-      subtitle: `${dataMaskingEnabled ? maskIdentifier(item.id) : item.id} · ${item.requestedTime}`,
+      subtitle: `${dataMaskingEnabled ? maskIdentifier(item.id) : item.id} · ${formatPhilippineDateTime(item.requestedTime)}`,
       detail: item.summary,
       badge: item.status,
     }))
@@ -280,7 +289,7 @@ const DoctorDashboardPage = ({
         id: 'ops-a',
         title: 'Queue monitoring',
         subtitle: 'No active records',
-        detail: 'Live appointment records appear here for doctor and nurse review.',
+        detail: 'Live appointment records appear here for doctor review.',
       },
     ]
   }, [dataMaskingEnabled, searchableReservations])
@@ -362,6 +371,7 @@ const DoctorDashboardPage = ({
   const searchPlaceholderMap: Record<DoctorSidebarSection, string> = {
     dashboard: 'Search by patient, id, department, or summary',
     appointments: 'Search appointments',
+    calendar: 'Search calendar appointments',
     reports_log: 'Search report logs',
     settings: 'Search settings',
   }
@@ -369,6 +379,7 @@ const DoctorDashboardPage = ({
   const searchLabelMap: Record<DoctorSidebarSection, string> = {
     dashboard: 'Search dashboard',
     appointments: 'Search appointments',
+    calendar: 'Search calendar appointments',
     reports_log: "Search report's log",
     settings: 'Search settings',
   }
@@ -376,9 +387,11 @@ const DoctorDashboardPage = ({
   const sectionTitleMap: Record<DoctorSidebarSection, string> = {
     dashboard: 'Dashboard',
     appointments: 'Appointment',
+    calendar: 'Calendar',
     reports_log: "Report's Log",
     settings: 'Settings',
   }
+  const profileName = resolveDoctorDisplayName(authUser)
 
   return (
     <WorkspaceCanvas>
@@ -414,7 +427,7 @@ const DoctorDashboardPage = ({
               }}
               supportItem={{ key: 'logout', label: 'Log out', icon: 'shield' }}
               footerProfile={{
-                name: authUser?.username ?? 'Staff',
+                name: profileName,
                 subtitle: 'Doctor workspace',
                 onClick: () => setSection('settings'),
               }}
@@ -483,6 +496,13 @@ const DoctorDashboardPage = ({
               />
             ) : null}
 
+            {activeSection === 'calendar' ? (
+              <DoctorCalendarSection
+                reservations={searchableReservations}
+                dataMaskingEnabled={dataMaskingEnabled}
+              />
+            ) : null}
+
             {activeSection === 'reports_log' ? (
               <DoctorReportsLogSection
                 items={filteredReportLogs}
@@ -504,8 +524,6 @@ const DoctorDashboardPage = ({
                 sessionStatus={sessionStatus}
                 theme={theme}
                 onToggleTheme={onToggleTheme}
-                dataMaskingEnabled={dataMaskingEnabled}
-                onToggleDataMasking={onToggleDataMasking}
                 notificationPrefs={notificationPrefs}
                 onToggleNotificationPref={(key) => {
                   setNotificationPrefs((previous) => ({ ...previous, [key]: !previous[key] }))

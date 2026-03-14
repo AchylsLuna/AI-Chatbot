@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-27b0411e07261c14142adf0c667d4d9ba260840d",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/AppointmentLedger.sol": "project/contracts/AppointmentLedger.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/AppointmentLedger.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.0;\r\n\r\ncontract AppointmentLedger {\r\n    address public systemWallet;\r\n\r\n    struct MedicalRecord {\r\n        uint8 status; // 0: Pending, 1: Confirmed, 2: Completed, 3: Cancelled\r\n        string soapNoteHash;\r\n        string prescriptionsHash;\r\n    }\r\n\r\n    mapping(string => MedicalRecord) public records;\r\n\r\n    event AppointmentCreated(string indexed mongoId, string patientId, string doctorId);\r\n    event StatusUpdated(string indexed mongoId, uint8 newStatus);\r\n    event SoapNoteUpdated(string indexed mongoId, string newHash);\r\n    event PrescriptionsUpdated(string indexed mongoId, string newHash);\r\n\r\n    modifier onlySystem() {\r\n        require(msg.sender == systemWallet, \"Only system relayer can execute\");\r\n        _;\r\n    }\r\n\r\n    constructor() {\r\n        systemWallet = msg.sender; \r\n    }\r\n\r\n    function recordAppointment(string memory _mongoId, string memory _patientId, string memory _doctorId) public onlySystem {\r\n        records[_mongoId].status = 0; \r\n        emit AppointmentCreated(_mongoId, _patientId, _doctorId);\r\n    }\r\n\r\n    function updateStatus(string memory _mongoId, uint8 _newStatus) public onlySystem {\r\n        records[_mongoId].status = _newStatus;\r\n        emit StatusUpdated(_mongoId, _newStatus);\r\n    }\r\n\r\n    function updateSoapNote(string memory _mongoId, string memory _hash) public onlySystem {\r\n        records[_mongoId].soapNoteHash = _hash;\r\n        emit SoapNoteUpdated(_mongoId, _hash);\r\n    }\r\n\r\n    function updatePrescriptions(string memory _mongoId, string memory _hash) public onlySystem {\r\n        records[_mongoId].prescriptionsHash = _hash;\r\n        emit PrescriptionsUpdated(_mongoId, _hash);\r\n    }\r\n}"
+      }
+    }
+  }
+}

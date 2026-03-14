@@ -1,17 +1,20 @@
-import { type CSSProperties, type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import type { AppPage } from '../types/navigation'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import type { Reservation } from '../types'
 import AppLogoBadge from '../components/branding/AppLogoBadge'
+import { isDoctorRole } from '../utils/dashboardRoutes'
 
 type LandingPageProps = {
   onNavigate?: (page: AppPage) => void
   latestReservation?: Reservation
   isAuthenticated?: boolean
+  authRole?: string | null
+  authAccountType?: string | null
   onLogout?: () => void
 }
 
-type LandingSectionId = 'home' | 'services' | 'about' | 'contact'
+type LandingSectionId = 'overview' | 'details' | 'contact'
 
 type ContactFormErrors = {
   fullName?: string
@@ -19,125 +22,57 @@ type ContactFormErrors = {
   message?: string
 }
 
-type PlaceholderCardProps = {
-  title: string
-  note?: string
-  className?: string
-}
-
-const serviceCards = [
+const featureCards = [
   {
-    title: 'Booking Intake',
-    detail: 'Capture appointment requests with a clear and consistent patient flow.',
+    title: 'Guided Booking',
+    detail: 'Clear booking flow with concise scheduling guidance.',
   },
   {
-    title: 'Queue Visibility',
-    detail: 'Track booking status updates and operational follow-up from one workspace.',
+    title: 'Appointment Tracking',
+    detail: 'Simple booking status view for patients and care staff.',
   },
   {
-    title: 'Role Separation',
-    detail: 'Patient, doctor, and admin experiences stay focused and policy-safe.',
+    title: 'Role-Safe Access',
+    detail: 'Patient, doctor, and admin routes are separated clearly.',
   },
-  {
-    title: 'Secure Access',
-    detail: 'Authentication checks and OTP flows protect all privileged workflows.',
-  },
-]
-
-const processSteps = [
-  {
-    title: 'Schedule',
-    detail: 'Submit appointment details quickly and clearly.',
-  },
-  {
-    title: 'Assessment',
-    detail: 'Care teams review and route requests appropriately.',
-  },
-  {
-    title: 'Treatment',
-    detail: 'Track outcomes and status updates in one place.',
-  },
-]
-
-const quickOverviewItems = [
-  'Role-safe routing for patient, doctor, and admin paths.',
-  'Session-aware checks for protected workspace access.',
-  'Clear booking visibility from request to status updates.',
 ]
 
 const sectionTabs: Array<{ id: LandingSectionId; label: string }> = [
-  { id: 'home', label: 'Home' },
-  { id: 'services', label: 'Services' },
-  { id: 'about', label: 'About' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'details', label: 'Details' },
   { id: 'contact', label: 'Contact' },
 ]
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i
-const publicHeaderClass = 'landing-ref-header sticky top-0 z-50'
-const publicBrandClass = 'inline-flex items-center gap-3 text-left'
-const sectionPanelClass = 'landing-ref-card rounded-[1.3rem] border p-6 shadow-[var(--card-shadow-soft)]'
-const softCardClass = 'landing-ref-soft-card rounded-[1rem] border'
-const featureIconClass =
-  'landing-ref-feature-icon grid h-10 w-10 place-items-center rounded-[0.8rem] text-[color:var(--agent-accent)]'
-
-const revealDelay = (delay: number): CSSProperties => ({
-  ['--reveal-delay' as string]: `${delay}ms`,
-})
-
-const ImagePlaceholderCard = ({
-  title,
-  note = 'Image placeholder',
-  className = '',
-}: PlaceholderCardProps) => (
-  <div
-    className={`${softCardClass} landing-ref-placeholder ${className} flex flex-col items-center justify-center gap-2 p-4 text-center`}
-  >
-    <span className="landing-ref-placeholder-icon grid h-10 w-10 place-items-center rounded-[0.75rem] border text-[color:var(--agent-muted-soft)]">
-      <svg
-        viewBox="0 0 24 24"
-        className="h-5 w-5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="3.5" y="5" width="17" height="14" rx="2" />
-        <path d="M3.5 15 8 11l3.2 3 3.1-2.7L20.5 16" />
-        <circle cx="15.2" cy="9.2" r="1.2" />
-      </svg>
-    </span>
-    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-      {title}
-    </p>
-    <p className="text-xs text-[color:var(--agent-muted)]">{note}</p>
-  </div>
-)
 
 const LandingPage = ({
   onNavigate,
+  latestReservation,
   isAuthenticated = false,
+  authRole = null,
+  authAccountType = null,
   onLogout,
 }: LandingPageProps) => {
-  const [activeSection, setActiveSection] = useState<LandingSectionId>('home')
+  const [activeSection, setActiveSection] = useState<LandingSectionId>('overview')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
   const [errors, setErrors] = useState<ContactFormErrors>({})
   const [submitted, setSubmitted] = useState(false)
+  const doctorDestination: AppPage = isDoctorRole(authRole, authAccountType)
+    ? 'doctor_dashboard'
+    : 'doctor_login'
+  const adminDestination: AppPage =
+    authRole === 'admin' || authRole === 'system_admin' ? 'admin' : 'admin_login'
 
-  const homeRef = useRef<HTMLElement | null>(null)
-  const servicesRef = useRef<HTMLElement | null>(null)
-  const aboutRef = useRef<HTMLElement | null>(null)
+  const overviewRef = useRef<HTMLElement | null>(null)
+  const detailsRef = useRef<HTMLElement | null>(null)
   const contactRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
-    const sections = [
-      homeRef.current,
-      servicesRef.current,
-      aboutRef.current,
-      contactRef.current,
-    ].filter(Boolean) as HTMLElement[]
+    const sections = [overviewRef.current, detailsRef.current, contactRef.current].filter(
+      Boolean
+    ) as HTMLElement[]
 
     if (!sections.length || typeof IntersectionObserver === 'undefined') return
 
@@ -152,23 +87,25 @@ const LandingPage = ({
         setActiveSection(id)
       },
       {
-        rootMargin: '-38% 0px -42% 0px',
-        threshold: [0.2, 0.45, 0.7],
+        rootMargin: '-42% 0px -42% 0px',
+        threshold: [0.15, 0.35, 0.6],
       }
     )
 
     sections.forEach((section) => observer.observe(section))
 
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+    }
   }, [])
 
   const scrollToSection = (sectionId: LandingSectionId) => {
     const sectionMap: Record<LandingSectionId, HTMLElement | null> = {
-      home: homeRef.current,
-      services: servicesRef.current,
-      about: aboutRef.current,
+      overview: overviewRef.current,
+      details: detailsRef.current,
       contact: contactRef.current,
     }
+
     const target = sectionMap[sectionId] ?? document.getElementById(sectionId)
     if (!target) return
 
@@ -206,20 +143,18 @@ const LandingPage = ({
   }
 
   return (
-    <div className="landing-ref-shell min-h-screen text-[color:var(--agent-ink)]">
-      <header className={publicHeaderClass}>
-        <div className="mx-auto grid w-full max-w-[84rem] grid-cols-1 gap-3 px-4 py-4 md:grid-cols-[auto_1fr_auto] md:items-center md:px-6">
+    <div className="min-h-screen bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)]">
+      <header className="sticky top-0 z-40 border-b border-[color:var(--card-border)] bg-[color:var(--agent-surface)]/95 backdrop-blur">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-3 px-4 py-4 sm:px-6 md:grid-cols-[1fr_auto_1fr] md:items-center">
           <button
             type="button"
-            className={`${publicBrandClass} md:justify-self-start`}
+            className="flex items-center gap-2.5 text-left md:justify-self-start"
             onClick={() => onNavigate?.('landing')}
           >
             <AppLogoBadge className="h-9 w-9" />
             <div>
-              <p className="text-sm font-extrabold text-[color:var(--agent-ink)]">AI Health Care</p>
-              <p className="text-xs text-[color:var(--agent-muted)]">
-                Clinical scheduling and role-safe workflows
-              </p>
+              <p className="text-sm font-semibold">AI Health Care</p>
+              <p className="text-xs text-[color:var(--agent-muted)]">Minimal care workspace</p>
             </div>
           </button>
 
@@ -235,7 +170,11 @@ const LandingPage = ({
                   type="button"
                   onClick={() => scrollToSection(tab.id)}
                   aria-current={isActive ? 'true' : undefined}
-                  className={`landing-ref-nav-chip ${isActive ? 'is-active' : ''}`}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition ${
+                    isActive
+                      ? 'border-[color:var(--agent-accent)] bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-ink)]'
+                      : 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)] hover:border-[color:var(--agent-line)] hover:text-[color:var(--agent-ink)]'
+                  }`}
                 >
                   {tab.label}
                 </button>
@@ -249,14 +188,14 @@ const LandingPage = ({
                 <button
                   type="button"
                   onClick={() => onNavigate?.('login')}
-                  className="landing-ref-nav-chip"
+                  className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
                 >
                   Login
                 </button>
                 <button
                   type="button"
                   onClick={() => onNavigate?.('signup')}
-                  className="landing-ref-primary-chip"
+                  className="rounded-full bg-[color:var(--agent-accent)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
                 >
                   Sign up
                 </button>
@@ -268,224 +207,89 @@ const LandingPage = ({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[84rem] space-y-8 px-4 pb-16 pt-6 sm:px-6">
-        <section id="home" ref={homeRef} className="scroll-mt-28">
-          <div
-            data-reveal="fade"
-            style={revealDelay(30)}
-            className="landing-ref-hero-stage overflow-hidden rounded-[1.75rem] border border-[color:var(--card-border)] shadow-[var(--card-shadow)]"
-          >
-            <div className="grid min-h-[29rem] gap-0 lg:grid-cols-[minmax(0,0.43fr)_minmax(0,0.57fr)]">
-              <div
-                data-reveal="slide-right"
-                style={revealDelay(80)}
-                className="landing-ref-hero-copy px-6 pb-6 pt-7 sm:px-8 sm:pt-8"
-              >
-                <span className="agent-eyebrow">
-                  <span className="landing-ref-pulse-dot" aria-hidden="true" />
-                  Clinical appointment platform
-                </span>
-                <h1 className="mt-4 max-w-[10ch] text-[clamp(2.25rem,6.4vw,4.4rem)] font-medium leading-[0.95] tracking-[-0.03em] text-[color:var(--agent-ink)]">
-                  Your trusted appointment workflow starts here.
-                </h1>
-                <p className="mt-4 max-w-[34ch] text-sm leading-7 text-[color:var(--agent-muted)] sm:text-base">
-                  Coordinate booking intake, status tracking, and role-specific workspaces with a
-                  clearer clinical experience.
-                </p>
-                <div className="mt-6">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate?.(isAuthenticated ? 'appointments' : 'login')}
-                    className="landing-ref-primary-button px-5 py-2.5 text-sm"
-                  >
-                    {isAuthenticated ? 'Open patient workspace' : 'Sign in to continue'}
-                  </button>
-                </div>
-              </div>
-
-              <div
-                data-reveal="slide-left"
-                style={revealDelay(140)}
-                className="landing-ref-hero-visual-wrap px-5 pb-5 pt-6 sm:px-8 sm:pb-8 sm:pt-8"
-              >
-                <ImagePlaceholderCard
-                  title="Hero Image"
-                  note="Replace with featured clinical photo"
-                  className="landing-ref-float h-full min-h-[18rem] rounded-[1.4rem]"
-                />
-              </div>
-            </div>
-
-          </div>
-        </section>
-
-        <section id="services" ref={servicesRef} className="scroll-mt-28">
-          <div data-reveal="fade" style={revealDelay(50)} className={`${sectionPanelClass} sm:p-8`}>
-            <span className="agent-eyebrow">
-              <span className="landing-ref-pulse-dot" aria-hidden="true" />
-              Services
-            </span>
-            <h2 className="mt-4 text-[1.75rem] font-semibold leading-tight text-[color:var(--agent-ink)]">
-              Core workflow capabilities
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--agent-muted)]">
-              Structured modules support patient booking, care-team review, and role-based
-              workspace operations.
+      <main className="mx-auto w-full max-w-6xl px-4 pb-12 pt-8 sm:px-6">
+        <section id="overview" ref={overviewRef} className="scroll-mt-32">
+          <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-6 shadow-[var(--card-shadow-soft)] sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+              AI appointment workflow
             </p>
-            <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-              {quickOverviewItems.map((item) => (
-                <li
-                  key={`overview-${item}`}
-                  className="flex items-center gap-2 text-xs text-[color:var(--agent-muted)]"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--agent-accent)]"
-                  />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {serviceCards.map((item, index) => (
-                <article
-                  key={item.title}
-                  data-reveal="fade"
-                  style={revealDelay(120 + index * 90)}
-                  className={`${softCardClass} landing-ref-card-interactive p-4`}
-                >
-                  <span className={featureIconClass} aria-hidden="true">
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      {index === 0 ? <path d="M4 6h16M7 3v6M17 3v6M4 10h16v10H4z" /> : null}
-                      {index === 1 ? <path d="M5 12h5l2-3 3 7 2-4h2" /> : null}
-                      {index === 2 ? <path d="M12 3 4 7v6c0 4.5 3 7.3 8 8 5-0.7 8-3.5 8-8V7l-8-4z" /> : null}
-                      {index === 3 ? <path d="M6 12h12M12 6v12M4 4h16v16H4z" /> : null}
-                    </svg>
-                  </span>
-                  <h3 className="mt-3 text-base font-semibold text-[color:var(--agent-ink)]">
-                    {item.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-[color:var(--agent-muted)]">
-                    {item.detail}
-                  </p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="about" ref={aboutRef} className="scroll-mt-28 space-y-4">
-          <div
-            data-reveal="fade"
-            style={revealDelay(40)}
-            className={`${sectionPanelClass} overflow-hidden sm:p-8`}
-          >
-            <span className="agent-eyebrow">
-              <span className="landing-ref-pulse-dot" aria-hidden="true" />
-              About
-            </span>
-            <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-              <div className="relative min-h-[17.5rem] sm:min-h-[20.5rem]" data-reveal="slide-right" style={revealDelay(140)}>
-                <ImagePlaceholderCard
-                  title="Primary Image"
-                  note="Replace with clinic photo"
-                  className="h-[16.5rem] w-[79%] sm:h-[20rem]"
-                />
-                <ImagePlaceholderCard
-                  title="Supporting Image"
-                  note="Replace with team photo"
-                  className="absolute bottom-2 right-0 h-[9.5rem] w-[46%] sm:h-[11rem]"
-                />
-              </div>
-
-              <div data-reveal="slide-left" style={revealDelay(170)}>
-                <h2 className="text-[1.75rem] font-semibold leading-tight text-[color:var(--agent-ink)]">
-                  Professional care coordination with clear operational lanes.
-                </h2>
-                <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
-                  This platform is designed to keep patient requests, doctor triage, and admin
-                  oversight synchronized without route or access confusion.
-                </p>
-                <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
-                  Teams can move through high-frequency daily workflows with consistent status
-                  visibility and role-safe access at each step.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div
-            data-reveal="fade"
-            style={revealDelay(80)}
-            className={`${sectionPanelClass} landing-ref-process-panel sm:p-7`}
-          >
-            <span className="agent-eyebrow">
-              <span className="landing-ref-pulse-dot" aria-hidden="true" />
-              Process
-            </span>
-            <h3 className="mt-4 text-[1.6rem] font-semibold leading-tight text-[color:var(--agent-ink)]">
-              Simple three-step patient flow
-            </h3>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              {processSteps.map((step, index) => (
-                <article
-                  key={step.title}
-                  data-reveal="fade"
-                  style={revealDelay(150 + index * 90)}
-                  className={`${softCardClass} landing-ref-card-interactive p-4`}
-                >
-                  <p className="text-[1.9rem] font-semibold leading-none text-[color:var(--agent-accent)]">
-                    {String(index + 1).padStart(2, '0')}
-                  </p>
-                  <h4 className="mt-2 text-base font-semibold text-[color:var(--agent-ink)]">
-                    {step.title}
-                  </h4>
-                  <p className="mt-1 text-sm leading-6 text-[color:var(--agent-muted)]">
-                    {step.detail}
-                  </p>
-                </article>
-              ))}
-            </div>
-            <div className="mt-5">
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+              Cleaner care workflow, minimal interface.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm text-[color:var(--agent-muted)] sm:text-base">
+              Book appointments and monitor status with role-safe access. The interface is
+              streamlined for speed, clarity, and daily use.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => onNavigate?.(isAuthenticated ? 'appointments' : 'login')}
-                className="landing-ref-primary-button px-5 py-2.5 text-sm"
+                className="rounded-xl bg-[color:var(--agent-accent)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]"
               >
-                Book now
+                Open appointments
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate?.(isAuthenticated ? 'appointments' : 'login')}
+                className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
+              >
+                Open appointments
               </button>
             </div>
           </div>
         </section>
 
-        <section id="contact" ref={contactRef} className="scroll-mt-28">
-          <div
-            data-reveal="fade"
-            style={revealDelay(60)}
-            className={`${sectionPanelClass} sm:p-8`}
-          >
-            <span className="agent-eyebrow">
-              <span className="landing-ref-pulse-dot" aria-hidden="true" />
+        <section id="details" ref={detailsRef} className="mt-6 scroll-mt-32 space-y-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            {featureCards.map((item) => (
+              <article
+                key={item.title}
+                className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-5"
+              >
+                <h2 className="text-base font-semibold">{item.title}</h2>
+                <p className="mt-2 text-sm text-[color:var(--agent-muted)]">{item.detail}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
+              Latest booking snapshot
+            </p>
+            {latestReservation ? (
+              <div className="mt-3">
+                <p className="text-sm font-semibold">{latestReservation.patientName}</p>
+                <p className="mt-1 text-sm text-[color:var(--agent-muted)]">
+                  {latestReservation.department} · {latestReservation.priority} priority
+                </p>
+                <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
+                  {latestReservation.summary}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-[color:var(--agent-muted)]">
+                No booking yet. Open appointments to track your first booking.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section id="contact" ref={contactRef} className="mt-6 scroll-mt-32">
+          <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-6 shadow-[var(--card-shadow-soft)] sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
               Contact
-            </span>
-            <h2 className="mt-4 text-[1.95rem] font-semibold leading-tight text-[color:var(--agent-ink)]">
-              Need help or have feedback?
-            </h2>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-[color:var(--agent-muted)]">
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold">Need help or have feedback?</h2>
+            <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
               Send us a message. This form is frontend-only demo mode and does not send data to a
               backend service.
             </p>
 
             <form className="mt-5 space-y-4" onSubmit={handleContactSubmit} noValidate>
               <div>
-                <label className="agent-field-label">Full Name</label>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[color:var(--agent-muted)]">
+                  Full Name
+                </label>
                 <input
                   value={fullName}
                   onChange={(event) => {
@@ -497,14 +301,14 @@ const LandingPage = ({
                   className="agent-input"
                 />
                 {errors.fullName ? (
-                  <p className="mt-2 text-xs font-semibold text-[color:var(--agent-danger)]">
-                    {errors.fullName}
-                  </p>
+                  <p className="mt-1 text-xs font-semibold text-rose-500">{errors.fullName}</p>
                 ) : null}
               </div>
 
               <div>
-                <label className="agent-field-label">Email</label>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[color:var(--agent-muted)]">
+                  Email
+                </label>
                 <input
                   type="email"
                   value={email}
@@ -517,14 +321,14 @@ const LandingPage = ({
                   className="agent-input"
                 />
                 {errors.email ? (
-                  <p className="mt-2 text-xs font-semibold text-[color:var(--agent-danger)]">
-                    {errors.email}
-                  </p>
+                  <p className="mt-1 text-xs font-semibold text-rose-500">{errors.email}</p>
                 ) : null}
               </div>
 
               <div>
-                <label className="agent-field-label">Message</label>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[color:var(--agent-muted)]">
+                  Message
+                </label>
                 <textarea
                   value={message}
                   onChange={(event) => {
@@ -536,14 +340,12 @@ const LandingPage = ({
                   className="agent-textarea min-h-[130px]"
                 />
                 {errors.message ? (
-                  <p className="mt-2 text-xs font-semibold text-[color:var(--agent-danger)]">
-                    {errors.message}
-                  </p>
+                  <p className="mt-1 text-xs font-semibold text-rose-500">{errors.message}</p>
                 ) : null}
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <button type="submit" className="landing-ref-primary-button px-5 py-2.5 text-sm">
+                <button type="submit" className="agent-button">
                   Submit Message
                 </button>
                 <p className="text-xs text-[color:var(--agent-muted-soft)]">
@@ -553,7 +355,7 @@ const LandingPage = ({
             </form>
 
             {submitted ? (
-              <p className="agent-alert agent-alert--success mt-4 text-sm">
+              <p className="mt-4 rounded-xl border border-emerald-300/40 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-700">
                 Thanks. Your message was saved locally in this demo view.
               </p>
             ) : null}
@@ -563,12 +365,26 @@ const LandingPage = ({
 
       <footer
         id="site-footer"
-        className="border-t border-[color:var(--card-border)] px-4 py-4 text-xs text-[color:var(--agent-muted)] sm:px-6"
+        className="border-t border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-4 text-xs text-[color:var(--agent-muted)] sm:px-6"
       >
-        <div className="mx-auto flex w-full max-w-[84rem] items-center justify-center gap-3 text-center">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3">
           <span>AI Health Care</span>
-          <span className="text-[color:var(--agent-muted-soft)]">|</span>
-          <span>Clinical scheduling and role-safe workflows</span>
+          <div className="flex flex-wrap items-center gap-4">
+            <button
+              type="button"
+              onClick={() => onNavigate?.(adminDestination)}
+              className="font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
+            >
+              Admin Dashboard
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate?.(doctorDestination)}
+              className="font-semibold text-[color:var(--agent-muted)] transition hover:text-[color:var(--agent-ink)]"
+            >
+              Doctor Dashboard
+            </button>
+          </div>
         </div>
       </footer>
     </div>
@@ -585,7 +401,7 @@ function LogoutControls({ onLogout }: { onLogout?: () => void }) {
       <button
         type="button"
         onClick={() => setShowConfirm(true)}
-        className="landing-ref-nav-chip"
+        className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]"
       >
         Logout
       </button>
