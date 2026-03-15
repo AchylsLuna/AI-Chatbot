@@ -9,7 +9,7 @@ import useAuthData from './hooks/useAuthData'
 import useAppRouting from './hooks/useAppRouting'
 import useScrollReveal from './hooks/useScrollReveal'
 import useAppTheme from './hooks/useAppTheme'
-import { getDefaultDashboardPage, isAdminRole, isDoctorRole } from './utils/dashboardRoutes'
+import { isAdminRole, isDoctorRole } from './utils/dashboardRoutes'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminLoginPage from './pages/AdminLoginPage'
 import DoctorDashboardPage from './pages/DoctorDashboardPage'
@@ -18,7 +18,9 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import OtpPage from './pages/OtpPage'
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
 import SignupPage from './pages/SignupPage'
+import TermsPage from './pages/TermsPage'
 import ConfirmModal from './components/ui/ConfirmModal'
 
 type ProtectedPage = 'appointments' | 'doctor_dashboard'
@@ -34,7 +36,7 @@ function App() {
     sessionStatus,
     authUser,
     authError,
-    isAuthLoading,
+    authUiAction,
     isCheckingSession,
     reservations,
     latestReservation,
@@ -66,6 +68,8 @@ function App() {
   const showSupportAssistant = true
   const isDoctorAuthenticated = isDoctorRole(authUser?.role, authUser?.accountType)
   const isAdminAuthenticated = isAdminRole(authUser?.role, authUser?.accountType)
+  const isLoginActionLoading = authUiAction === 'login' || authUiAction === 'provider'
+  const isOtpActionLoading = authUiAction === 'otp'
 
   useEffect(() => {
     if (!authUser) return
@@ -101,12 +105,6 @@ function App() {
     navigateToPage('doctor_dashboard', { replace: true })
   }, [authUser, currentPage, isDoctorAuthenticated, navigateToPage])
 
-  useEffect(() => {
-    if (!authUser) return
-    if (currentPage !== 'landing') return
-    navigateToPage(getDefaultDashboardPage(authUser.role, authUser.accountType), { replace: true })
-  }, [authUser, currentPage, navigateToPage])
-
   useScrollReveal(`${currentPage}-${isCheckingSession}-${authUser?.role ?? 'guest'}`)
 
   const loginPage = (
@@ -114,7 +112,7 @@ function App() {
       key="login-patient"
       authUser={authUser}
       authError={authError}
-      isAuthLoading={isAuthLoading}
+      isAuthLoading={isLoginActionLoading}
       onLogin={handleLogin}
       onProviderLogin={auth0Enabled ? () => handleProviderLogin() : undefined}
       authProvider={authProvider}
@@ -131,7 +129,7 @@ function App() {
       key="login-doctor"
       authUser={authUser}
       authError={authError}
-      isAuthLoading={isAuthLoading}
+      isAuthLoading={isLoginActionLoading}
       onLogin={handleLogin}
       onProviderLogin={auth0Enabled ? () => handleProviderLogin('doctor_dashboard') : undefined}
       authProvider={authProvider}
@@ -147,7 +145,7 @@ function App() {
     <AdminLoginPage
       authUser={authUser}
       authError={authError}
-      isAuthLoading={isAuthLoading}
+      isAuthLoading={isLoginActionLoading}
       onLogin={handleLogin}
       onProviderLogin={auth0Enabled ? () => handleProviderLogin('admin') : undefined}
       authProvider={authProvider}
@@ -162,7 +160,7 @@ function App() {
     <OtpPage
       challenge={pendingOtpChallenge}
       authError={authError}
-      isAuthLoading={isAuthLoading}
+      isAuthLoading={isOtpActionLoading}
       onVerifyOtp={handleVerifyOtp}
       onCancelOtp={handleCancelOtp}
       onResendOtp={handleResendOtp}
@@ -213,15 +211,11 @@ function App() {
 
   switch (currentPage) {
     case 'landing':
-      pageContent = isCheckingSession ? (
-        <AuthLoadingCard label="Restoring your session..." />
-      ) : (
+      pageContent = (
         <LandingPage
           onNavigate={navigateToPage}
           latestReservation={latestReservation}
           isAuthenticated={Boolean(authUser)}
-          authRole={authUser?.role ?? null}
-          authAccountType={authUser?.accountType ?? null}
           onLogout={handleLogout}
         />
       )
@@ -356,25 +350,43 @@ function App() {
     case 'signup':
       pageContent = (
         <SignupPage
+          key="signup-patient"
           onNavigate={navigateToPage}
           onSignupSuccess={handleSignupSuccess}
           onGoBack={() => navigateBack('login')}
+          defaultRoleTab="patient"
         />
       )
       break
     case 'doctor_signup':
       pageContent = (
         <SignupPage
-          variant="doctor"
+          key="signup-doctor"
           onNavigate={navigateToPage}
-          onGoBack={() => navigateBack('signup')}
+          onGoBack={() => navigateBack('doctor_login')}
+          defaultRoleTab="doctor"
         />
       )
       break
 
     case 'forgot_password':
       pageContent = (
-        <ForgotPasswordPage onNavigate={navigateToPage} onGoBack={() => navigateBack('login')} />
+        <ForgotPasswordPage
+          onNavigate={navigateToPage}
+          onGoBack={() => navigateToPage('login', { replace: true })}
+        />
+      )
+      break
+
+    case 'terms':
+      pageContent = (
+        <TermsPage onNavigate={navigateToPage} onGoBack={() => navigateBack('signup')} />
+      )
+      break
+
+    case 'privacy_policy':
+      pageContent = (
+        <PrivacyPolicyPage onNavigate={navigateToPage} onGoBack={() => navigateBack('signup')} />
       )
       break
 
@@ -386,13 +398,6 @@ function App() {
     <div
       className={`${theme === 'dark' ? 'theme-dark' : 'theme-light'} relative min-h-screen bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)]`}
     >
-      {!isLanding && !authUser && (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute inset-0 agent-grid opacity-15" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.08),transparent_55%)]" />
-        </div>
-      )}
-
       <div className="relative z-10">
         <ConfirmModal
           open={Boolean(idleWarningOpen)}

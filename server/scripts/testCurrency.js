@@ -1,5 +1,5 @@
 async function runConcurrencyTest() {
-    const url = 'http://localhost:5000/api/doctor/appointments/69aece9bc7e76f8567a9e4ad/soap-note';
+    const url = 'http://localhost:5001/api/doctor/appointments/69aece9bc7e76f8567a9e4ad/soap-note';
     const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YTgwMGU1YzJmZTBhODZjNjVhZDRhNSIsInJvbGUiOiJkb2N0b3IiLCJlbWFpbCI6ImZyb3N0aW52b2tlcjcyMEBnbWFpbC5jb20iLCJpYXQiOjE3NzMyMDA1ODMsImV4cCI6MTc3MzgwNTM4M30.NW3VYAaAsD6yvAiAQZcJ2e5E_hQoExm9JllQbz7MYwo'; // Keep your token here
 
     console.log("Sending 50 concurrent requests...");
@@ -33,4 +33,3 @@ async function runConcurrencyTest() {
 }
 
 runConcurrencyTest();
-

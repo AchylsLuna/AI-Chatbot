@@ -34,7 +34,7 @@ export const authUserSchema = z.object({
 })
 
 export const authSessionSchema = z.object({
-  token: safeTextSchema,
+  token: safeOptionalTextSchema,
   user: authUserSchema,
 })
 
@@ -117,6 +117,15 @@ export const appointmentResponseSchema = z.object({
 
 export const accessRequestsResponseSchema = z.object({
   requests: z.array(accessRequestSchema),
+})
+
+export const supportTicketReceiptResponseSchema = z.object({
+  message: safeOptionalTextSchema,
+  ticket: z.object({
+    id: safeTextSchema,
+    status: z.enum(['open', 'closed']),
+    createdAt: safeTextSchema,
+  }),
 })
 
 export const aiAlertAuditResponseSchema = z.object({

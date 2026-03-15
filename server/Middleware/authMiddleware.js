@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import Sessions from "../Models/SessionModel.js";
 import { appConfig } from "../Config/env.js";
+import { hashSessionToken } from "../Utils/sessionTokens.js";
 
 const verifyToken = async (req, res, next) => {
     // Check for token in Authorization header or cookies
@@ -16,18 +17,17 @@ const verifyToken = async (req, res, next) => {
     }
     try {
         const decoded = jwt.verify(token, appConfig.jwtSecret);
-        const activeSession = await Sessions.findOne({ token: token });
+        const activeSession = await Sessions.findOne({
+            $or: [{ tokenHash: hashSessionToken(token) }, { token }],
+        });
         if (!activeSession) {
             return res.status(401).json({ message: "Session expired. Please log in again." });
         }
 
-        const rawRole = decoded?.role;
-        const normalizedRole = rawRole === "doctor" ? "nurse" : rawRole;
-
         req.user = {
             ...decoded,
             id: decoded?.id || decoded?._id || activeSession.userId?.toString?.(),
-            role: normalizedRole,
+            role: decoded?.role,
             sessionId: activeSession._id?.toString?.(),
         };
         next();

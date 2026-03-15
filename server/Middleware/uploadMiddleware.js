@@ -1,4 +1,5 @@
 // Middleware/uploadMiddleware.js
+import crypto from 'node:crypto';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
@@ -12,7 +13,7 @@ const storage = multer.diskStorage({
             .catch((error) => cb(error));
     },
     filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const uniqueSuffix = crypto.randomUUID();
         cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
 });

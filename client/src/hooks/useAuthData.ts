@@ -38,6 +38,8 @@ type UseAuthDataArgs = {
   navigateToPage: NavigateToPage
 }
 
+type AuthUiAction = 'login' | 'provider' | 'otp' | null
+
 const unauthorizedSessionPattern =
   /invalid|expired|missing authorization|forbidden|unauthorized|mfa token required|mfa required|multi-factor|2fa|required for this role/i
 
@@ -46,10 +48,7 @@ const isUnauthorizedSessionError = (message: string) => unauthorizedSessionPatte
 const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const authProvider = getAuthProvider()
   const auth0Enabled = isAuth0Enabled()
-  const initialStoredToken =
-    authProvider === 'local' && typeof window !== 'undefined'
-      ? localStorage.getItem('pulse-ledger-token')
-      : null
+  const initialStoredToken = null
   const reservations = useSecureHealthStore((state) => state.reservations)
   const ledgerEntries = useSecureHealthStore((state) => state.ledgerEntries)
   const latestReservationId = useSecureHealthStore((state) => state.latestReservationId)
@@ -65,6 +64,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const [authUser, setAuthUser] = useState<AuthSession['user'] | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const [isAuthLoading, setIsAuthLoading] = useState(Boolean(initialStoredToken))
+  const [authUiAction, setAuthUiAction] = useState<AuthUiAction>(null)
   const [postLoginPage, setPostLoginPage] = useState<AppPage | null>(null)
   const [postLoginPath, setPostLoginPath] = useState<string | null>(null)
   const [pendingOtpChallenge, setPendingOtpChallenge] = useState<
@@ -73,6 +73,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const [isBiometricReady, setIsBiometricReady] = useState(false)
   const [idleWarningOpen, setIdleWarningOpen] = useState(false)
   const [idleRemainingSeconds, setIdleRemainingSeconds] = useState<number>(0)
+  const hasBootstrappedLocalSessionRef = useRef(false)
 
   const clearLocalTokenStorage = useCallback(() => {
     if (authProvider === 'local') {
@@ -84,6 +85,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setAuthTokenState(null)
     setAuthUser(null)
     setApiReady(false)
+    setAuthUiAction(null)
     clearLocalTokenStorage()
     clearSensitiveData()
   }, [clearLocalTokenStorage, clearSensitiveData])
@@ -193,9 +195,11 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
 
   useEffect(() => {
     if (!authToken) {
-      clearSensitiveData()
+      if (!authUser) {
+        clearSensitiveData()
+      }
     }
-  }, [authToken, clearSensitiveData])
+  }, [authToken, authUser, clearSensitiveData])
 
   useEffect(() => {
     let isMounted = true
@@ -212,12 +216,8 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
 
   useEffect(() => {
     if (authProvider !== 'local') return
-    const storedToken = localStorage.getItem('pulse-ledger-token')
-    if (storedToken && !authToken) {
-      setAuthTokenState(storedToken)
-      setIsAuthLoading(true)
-    }
-  }, [authProvider, authToken])
+    clearLocalTokenStorage()
+  }, [authProvider, clearLocalTokenStorage])
 
   useEffect(() => {
     if (!auth0Enabled) return
@@ -225,7 +225,10 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
 
     const bootstrapAuth0Session = async () => {
       const hasRedirect = hasAuth0RedirectParams()
-      if (hasRedirect) setIsAuthLoading(true)
+      if (hasRedirect) {
+        setAuthUiAction('provider')
+        setIsAuthLoading(true)
+      }
       try {
         const redirectTarget = hasRedirect ? await handleAuth0Redirect() : null
         if (hasRedirect) {
@@ -234,6 +237,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
         }
         const session = await getAuth0Session()
         if (!isMounted || !session) return
+        if (!session.token) {
+          throw new Error('Auth0 session missing token')
+        }
 
         setAuthTokenState(session.token)
         setAuthUser(session.user)
@@ -250,6 +256,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
         setAuthError(error instanceof Error ? error.message : 'Auth0 login failed')
       } finally {
         if (isMounted) {
+          setAuthUiAction(null)
           setIsAuthLoading(false)
         }
       }
@@ -263,45 +270,40 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   }, [auth0Enabled, navigateToPage])
 
   useEffect(() => {
+    if (authProvider !== 'local') return
+    if (auth0Enabled) return
+    if (hasBootstrappedLocalSessionRef.current) return
+    hasBootstrappedLocalSessionRef.current = true
+
+    let isMounted = true
+    ;(async () => {
+      try {
+        setIsAuthLoading(true)
+        const user = await api.getSession()
+        if (!isMounted || !user) return
+        setAuthUser(user)
+        setApiReady(true)
+      } catch {
+        if (!isMounted) return
+      } finally {
+        if (isMounted) {
+          setIsAuthLoading(false)
+        }
+      }
+    })()
+
+    return () => {
+      isMounted = false
+    }
+  }, [auth0Enabled, authProvider])
+
+  useEffect(() => {
     const needsAuth = Boolean(requiresAuth[currentPage])
     if (!needsAuth) return
     if (authUser) return
     if (authToken) return
     if (auth0Enabled && isAuthLoading) return
-
-    // If using local auth and we don't have a client-side token, attempt a one-time
-    // session introspection via cookie (useful after OAuth redirects which set a cookie).
-    if (authProvider === 'local') {
-      let isMounted = true
-      ;(async () => {
-        try {
-          setIsAuthLoading(true)
-          const user = await api.getSession()
-          if (!isMounted) return
-          if (user) {
-            setAuthUser(user)
-            setApiReady(true)
-            return
-          }
-        } catch (err) {
-          // ignore - will redirect to login below
-        } finally {
-          if (isMounted) setIsAuthLoading(false)
-        }
-        if (!isMounted) return
-        if (currentPage !== 'login' && currentPage !== 'admin_login' && currentPage !== 'otp') {
-          const targetPath = resolveWorkspaceCanonicalPath(window.location.pathname)
-          setPostLoginPage(currentPage)
-          setPostLoginPath(
-            targetPath && isWorkspacePathForPage(targetPath, currentPage) ? targetPath : null
-          )
-          navigateToPage(resolveAuthPageFromPath(window.location.pathname), { replace: true })
-        }
-      })()
-      return () => {
-        isMounted = false
-      }
-    }
+    if (authProvider === 'local' && isAuthLoading) return
 
     if (currentPage !== 'login' && currentPage !== 'admin_login' && currentPage !== 'otp') {
       const targetPath = resolveWorkspaceCanonicalPath(window.location.pathname)
@@ -311,13 +313,15 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       )
       navigateToPage(resolveAuthPageFromPath(window.location.pathname), { replace: true })
     }
-  }, [auth0Enabled, authToken, authUser, currentPage, isAuthLoading, navigateToPage])
+  }, [auth0Enabled, authProvider, authToken, authUser, currentPage, isAuthLoading, navigateToPage])
 
   useEffect(() => {
     let isMounted = true
 
     const loadProtectedData = async () => {
-      if (!authToken) return
+      const hasAuthenticatedSession =
+        Boolean(authToken) || (authProvider === 'local' && Boolean(authUser))
+      if (!hasAuthenticatedSession) return
       setIsAuthLoading(true)
       try {
         const user = await api.getSession()
@@ -367,7 +371,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       isMounted = false
     }
   }, [
+    authProvider,
     authToken,
+    authUser,
     clearUnauthorizedSession,
     setStoreLedgerEntries,
     setStoreReservations,
@@ -397,11 +403,13 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       throw new Error('Auth0 is not enabled in this environment.')
     }
     setAuthError(null)
+    setAuthUiAction('provider')
     setIsAuthLoading(true)
     try {
       await startAuth0Login(targetPage ?? postLoginPage ?? undefined)
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'Auth0 login failed')
+      setAuthUiAction(null)
       setIsAuthLoading(false)
     }
   }
@@ -422,11 +430,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     preferredTargetPage?: AppPage | null,
     preferredTargetPath?: string | null
   ) => {
-    setAuthTokenState(session.token)
+    const resolvedToken = authProvider === 'local' ? null : session.token ?? null
+    setAuthTokenState(resolvedToken)
     setAuthUser(session.user)
-    if (authProvider === 'local') {
-      localStorage.setItem('pulse-ledger-token', session.token)
-    }
     setApiReady(true)
 
     const defaultPageByRole = getDefaultDashboardPage(session.user.role, session.user.accountType)
@@ -479,6 +485,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       return
     }
     setAuthError(null)
+    setAuthUiAction('login')
     setIsAuthLoading(true)
     try {
       const result = await api.login(username, password)
@@ -512,6 +519,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'Login failed')
     } finally {
+      setAuthUiAction(null)
       setIsAuthLoading(false)
     }
   }
@@ -524,6 +532,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     }
 
     setAuthError(null)
+    setAuthUiAction('otp')
     setIsAuthLoading(true)
     try {
       const session = await api.verifyOtpLogin(pendingOtpChallenge.challengeId, code)
@@ -537,11 +546,13 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'OTP verification failed')
     } finally {
+      setAuthUiAction(null)
       setIsAuthLoading(false)
     }
   }
 
   const handleCancelOtp = () => {
+    setAuthUiAction(null)
     setPendingOtpChallenge(null)
     navigateToPage('login')
   }
@@ -561,15 +572,18 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     }
   }
 
-  const handleSignupSuccess = (session: AuthSession) => {
-    setAuthTokenState(session.token)
-    setAuthUser(session.user)
-    setAuthError(null)
-    if (authProvider === 'local') {
-      localStorage.setItem('pulse-ledger-token', session.token)
+  const handleSignupSuccess = (session?: AuthSession) => {
+    if (session) {
+      finalizeAuthenticatedSession(session)
+      return
     }
-    setApiReady(true)
-    navigateToPage(getDefaultDashboardPage(session.user.role, session.user.accountType))
+
+    setAuthError(null)
+    setAuthUiAction(null)
+    setPendingOtpChallenge(null)
+    setPostLoginPage(null)
+    setPostLoginPath(null)
+    navigateToPage('login')
   }
 
   const patchAuthUser = useCallback((updates: Partial<AuthSession['user']>) => {
@@ -598,6 +612,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setAuthTokenState(null)
     setAuthUser(null)
     setAuthError(null)
+    setAuthUiAction(null)
     clearLocalTokenStorage()
     clearSensitiveData()
     setPendingOtpChallenge(null)
@@ -621,7 +636,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
 
   const isCheckingSession = Boolean(
     !authUser &&
-      ((authToken && (isAuthLoading || !apiReady)) || (auth0Enabled && isAuthLoading))
+      (((authToken && (isAuthLoading || !apiReady)) ||
+        (authProvider === 'local' && isAuthLoading) ||
+        (auth0Enabled && isAuthLoading)))
   )
   const sessionStatus = authUser
     ? isAuthLoading
@@ -641,6 +658,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     authUser,
     authError,
     isAuthLoading,
+    authUiAction,
     isCheckingSession,
     reservations,
     ledgerEntries,

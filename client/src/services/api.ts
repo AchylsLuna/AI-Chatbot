@@ -16,6 +16,7 @@ import {
   authUserSchema,
   loginOtpChallengeSchema,
   parseApiSchema,
+  supportTicketReceiptResponseSchema,
 } from '../schemas/apiSchemas'
 import { normalizeRoleForSession } from '../utils/dashboardRoutes'
 
@@ -33,7 +34,7 @@ const resolveApiBase = () => {
         // In local Vite dev, default directly to backend origin to avoid proxy mismatch.
         const isLocalDev = window.location.hostname === 'localhost' && window.location.port === '5173'
         if (isLocalDev) {
-          return `http://localhost:5000${pathOnly}`
+          return `http://localhost:5001${pathOnly}`
         }
         return pathOnly
       }
@@ -49,6 +50,7 @@ const API_BASE = resolveApiBase()
 let authToken: string | null = null
 const NETWORK_ERROR_MESSAGE =
   'Cannot reach API server. Start the backend and verify your API URL.'
+const REQUEST_TIMEOUT_MS = 8000
 const EMPTY_LEDGER: LedgerEntry[] = []
 
 export const setAuthToken = (token: string | null) => {
@@ -116,12 +118,30 @@ const withAuth = (init?: RequestInit): RequestInit => {
 }
 
 const request = async (url: string, init?: RequestInit) => {
+  const controller = new AbortController()
+  const timeout = globalThis.setTimeout(() => {
+    controller.abort()
+  }, REQUEST_TIMEOUT_MS)
+
+  const abortWithCallerSignal = () => {
+    controller.abort()
+  }
+
+  init?.signal?.addEventListener?.('abort', abortWithCallerSignal, { once: true })
+
   try {
     // Ensure cross-origin cookies are included when the API sets auth cookies
-    const options: RequestInit = { credentials: 'include' as RequestCredentials, ...init }
+    const options: RequestInit = {
+      credentials: 'include' as RequestCredentials,
+      ...init,
+      signal: controller.signal,
+    }
     return await fetch(url, options)
   } catch {
     throw new Error(NETWORK_ERROR_MESSAGE)
+  } finally {
+    globalThis.clearTimeout(timeout)
+    init?.signal?.removeEventListener?.('abort', abortWithCallerSignal)
   }
 }
 
@@ -538,10 +558,15 @@ export const api = {
     // Server returns an OTP challenge when 2FA is required
     if ((payload as any)?.requires2FA) {
       const challenge: LoginOtpChallenge = {
-        challengeId: (payload as any).userId,
+        challengeId:
+          typeof (payload as any).challengeId === 'string'
+            ? (payload as any).challengeId
+            : (payload as any).userId,
         username,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        expiresInSeconds: 10 * 60,
+        expiresAt: new Date(
+          Date.now() + Number((payload as any).expiresInSeconds ?? 10 * 60) * 1000
+        ).toISOString(),
+        expiresInSeconds: Number((payload as any).expiresInSeconds ?? 10 * 60),
         otpPreview:
           typeof (payload as any).otpPreview === 'string'
             ? (payload as any).otpPreview
@@ -554,7 +579,7 @@ export const api = {
     // Map server user shape to client schema if necessary
     const payloadUser = (payload as Record<string, unknown>)?.user as Record<string, unknown> | undefined
     const mapped = {
-      token: (payload as any).token,
+      token: typeof (payload as any).token === 'string' ? (payload as any).token : undefined,
       user: {
         username: (payloadUser?.email as string | undefined) ?? username,
         firstName: (payloadUser?.firstName as string | undefined) ?? undefined,
@@ -581,18 +606,17 @@ export const api = {
     return parseApiSchema(loginOtpChallengeSchema, payload, 'OTP challenge')
   },
   verifyOtpLogin: async (challengeId: string, code: string): Promise<AuthSession> => {
-    // Server expects { userId, otp }
     const response = await request(`${API_BASE}/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: challengeId, otp: code }),
+      body: JSON.stringify({ challengeId, otp: code }),
     })
     const payload = await handleResponse(response)
 
     // Map server response to client authSession shape
     const payloadUser = (payload as Record<string, unknown>)?.user as Record<string, unknown> | undefined
     const mapped = {
-      token: (payload as any).token,
+      token: typeof (payload as any).token === 'string' ? (payload as any).token : undefined,
       user: {
         username:
           (payloadUser?.email as string | undefined) ??
@@ -612,11 +636,11 @@ export const api = {
     }
     return parseApiSchema(authSessionSchema, mapped, 'OTP verification')
   },
-  resendOtp: async (userId: string): Promise<void> => {
+  resendOtp: async (challengeId: string): Promise<void> => {
     const response = await request(`${API_BASE}/resend-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify({ challengeId }),
     })
     await handleResponse(response)
   },
@@ -1498,6 +1522,23 @@ export const api = {
     const payload = await handleResponse(await request(`${API_BASE}/access-requests`, withAuth()))
     const data = parseApiSchema(accessRequestsResponseSchema, payload, 'access requests')
     return data.requests
+  },
+  submitSupportTicket: async (payload: {
+    fullName: string
+    email: string
+    message: string
+  }): Promise<string> => {
+    const response = await request(`${API_BASE}/support/tickets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const data = parseApiSchema(
+      supportTicketReceiptResponseSchema,
+      await handleResponse(response),
+      'support ticket receipt'
+    )
+    return data.ticket.id
   },
   askAssistant: async (
     message: string,

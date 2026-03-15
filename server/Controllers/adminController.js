@@ -7,6 +7,7 @@ import archiver from "archiver";
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
+import { appConfig } from "../Config/env.js";
 
 async function resolveActorEmail(req) {
     const fallbackId = req.user?.id || req.user?._id;
@@ -212,7 +213,7 @@ export async function viewStaffApplicationLicense(req, res) {
 export async function getAllUsers(req, res) {
     try {
         const users = await User.find()
-            .select("-passwordHashed -otp -otpExpires")
+            .select("email firstName lastName role status department profile")
             .sort({ _id: -1 });
 
         // create audit log (non-fatal)
@@ -286,7 +287,7 @@ export async function updateUserByAdmin(req, res) {
             userId,
             { $set: update },
             { new: true }
-        ).select("-passwordHashed -otp -otpExpires");
+        ).select("email firstName lastName role status department profile");
 
         const adminEmail = await resolveActorEmail(req);
 
@@ -455,7 +456,7 @@ export async function downloadAuditBackup(req, res) {
 
         // 3. Setup Encryption (AES-256)
         const algorithm = 'aes-256-cbc';
-        const password = process.env.BACKUP_PASSWORD || 'default_secret_password';
+        const password = appConfig.backupPassword;
         // Create a 32-byte key from the password
         const key = crypto.scryptSync(password, 'salt', 32);
         // Create a random Initialization Vector (IV)
@@ -512,7 +513,7 @@ export async function downloadErrorBackup(req, res) {
         });
 
         const algorithm = 'aes-256-cbc';
-        const password = process.env.BACKUP_PASSWORD || 'default_secret_password';
+        const password = appConfig.backupPassword;
         const key = crypto.scryptSync(password, 'salt', 32);
         const iv = crypto.randomBytes(16);
 
@@ -570,7 +571,7 @@ export async function downloadSystemBackup(req, res) {
         });
 
         const algorithm = 'aes-256-cbc';
-        const password = process.env.BACKUP_PASSWORD || 'default_secret_password';
+        const password = appConfig.backupPassword;
         const key = crypto.scryptSync(password, 'salt', 32);
         const iv = crypto.randomBytes(16);
 

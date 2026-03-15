@@ -39,14 +39,24 @@ import {
 import {
     checkSymptoms,
 } from '../Controllers/BotController.js';
+import {
+    createSupportTicket,
+} from '../Controllers/SupportController.js';
 
 import authMiddleware from '../Middleware/authMiddleware.js';
 import { authorizeRoles } from '../Middleware/rbacMiddleware.js';
 import User from '../Models/UserModel.js';
 import { uploadLicense, handleUploadError } from '../Middleware/uploadMiddleware.js';
-import { loginLimiter } from '../Middleware/rateLimiter.js';
+import {
+    loginLimiter,
+    otpResendLimiter,
+    otpVerifyLimiter,
+    symptomCheckLimiter,
+    supportTicketLimiter,
+} from '../Middleware/rateLimiter.js';
 import { body, validationResult } from 'express-validator';
 import passport from 'passport';
+import { isGoogleAuthConfigured } from '../Config/passport.js';
 
 
 const router = Router();
@@ -80,15 +90,33 @@ const validate = (req, res, next) => {
     next();
 }
 
-const uploadStaffLicenses = uploadLicense.any();
+const sanitizePlainText = (value) =>
+    String(value || '')
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+        .replace(/<[^>]*>/g, '')
+        .trim();
+
+const uploadStaffLicenses = uploadLicense.fields([
+    { name: 'licenses', maxCount: 5 },
+    { name: 'license', maxCount: 5 },
+    { name: 'licenseFile', maxCount: 5 },
+]);
+const requireGoogleAuthConfig = (req, res, next) => {
+    if (!isGoogleAuthConfigured) {
+        return res.status(503).json({ message: 'Google sign-in is not configured for this environment.' });
+    }
+    next();
+};
 
 // Google Login
 router.get('/auth/google', 
-    passport.authenticate('google', { scope: ['profile', 'email'] })
+    requireGoogleAuthConfig,
+    passport.authenticate('google', { scope: ['profile', 'email'], state: true })
 );
 
 // Google Callback
 router.get('/auth/google/callback', 
+    requireGoogleAuthConfig,
     passport.authenticate('google', { session: false, failureRedirect: '/login-failed' }),
     googleCallback 
 );
@@ -133,15 +161,21 @@ router.post('/login',
     login
 );
 router.post('/verify-otp',
+    otpVerifyLimiter,
     [
-        body('otp').trim().isLength({ min: 6, max: 6 }).escape(),
-        body('userId').isMongoId()
+        body('otp')
+            .trim()
+            .matches(/^\d{6}$/)
+            .withMessage('OTP must be exactly 6 digits'),
+        body('challengeId').isUUID().withMessage('Invalid OTP challenge'),
     ],
+    validate,
     verifyOTP
 );
 router.post('/resend-otp',
+    otpResendLimiter,
     [
-        body('userId').isMongoId()
+        body('challengeId').isUUID().withMessage('Invalid OTP challenge'),
     ],
     validate,
     resendOTP
@@ -149,15 +183,47 @@ router.post('/resend-otp',
 
 router.post('/logout', authMiddleware, logout);
 
+router.post('/support/tickets',
+    supportTicketLimiter,
+    [
+        body('fullName')
+            .customSanitizer(sanitizePlainText)
+            .notEmpty()
+            .withMessage('Full name is required')
+            .isLength({ min: 2, max: 80 })
+            .withMessage('Full name must be between 2 and 80 characters'),
+        body('email')
+            .isEmail()
+            .normalizeEmail()
+            .withMessage('Invalid email'),
+        body('message')
+            .customSanitizer(sanitizePlainText)
+            .notEmpty()
+            .withMessage('Message is required')
+            .isLength({ min: 10, max: 1200 })
+            .withMessage('Message must be between 10 and 1200 characters'),
+    ],
+    validate,
+    createSupportTicket
+);
+
 //
 router.get('/session', authMiddleware, async (req, res) => {
     try {
         const userId = req.user?.id || req.user?._id
         if (!userId) return res.status(401).json({ message: 'Invalid session' })
-        const user = await User.findById(userId)
+        const user = await User.findById(userId).select('email firstName lastName role googleId')
         if (!user) return res.status(404).json({ message: 'User not found' })
 
-        return res.json({ username: user.email, role: user.role })
+        return res.json({
+            username: user.email,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            authMethod: user.googleId ? 'google' : 'local',
+            sessionId: req.user?.sessionId || null,
+        })
     } catch (error) {
         console.error('Session lookup failed', error)
         return res.status(500).json({ message: 'Session lookup failed' })
@@ -376,7 +442,20 @@ router.get('/admin/backups/system',
     downloadSystemBackup
 );
 
-router.post('/symptoms', checkSymptoms);
+router.post('/symptoms',
+    symptomCheckLimiter,
+    [
+        body('message')
+            .isString()
+            .trim()
+            .isLength({ min: 1, max: 1000 })
+            .withMessage('Message must be between 1 and 1000 characters.'),
+        body('isIdentified').optional().isBoolean(),
+        body('userRole').optional().trim().isLength({ max: 40 }).escape(),
+    ],
+    validate,
+    checkSymptoms
+);
 
 // Doctor dashboard routes appended for queue/timeline, triage overview, SOAP notes, and prescriptions.
 router.get('/doctor/dashboard/overview',

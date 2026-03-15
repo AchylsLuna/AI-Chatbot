@@ -20,6 +20,8 @@ const PAGE_ROUTES: Record<AppPage, string> = {
   forgot_password: ROUTES.forgotPassword,
   signup: ROUTES.signup,
   doctor_signup: ROUTES.doctorSignup,
+  terms: ROUTES.terms,
+  privacy_policy: ROUTES.privacyPolicy,
 }
 
 const LEGACY_ROUTE_ALIASES: Record<string, AppPage> = {
@@ -59,6 +61,10 @@ const LEGACY_ROUTE_ALIASES: Record<string, AppPage> = {
   '/admin_login': 'admin_login',
   '/forgot_password': 'forgot_password',
   '/signup-doctor': 'doctor_signup',
+  '/terms-and-conditions': 'terms',
+  '/terms_and_conditions': 'terms',
+  '/privacy': 'privacy_policy',
+  '/privacy_policy': 'privacy_policy',
   '/dashboard/clinical_reports': 'doctor_dashboard',
   '/dashboard/care_alerts': 'doctor_dashboard',
   '/dashboard/care_support': 'doctor_dashboard',

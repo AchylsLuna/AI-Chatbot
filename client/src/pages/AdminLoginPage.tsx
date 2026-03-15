@@ -4,7 +4,7 @@ import type { AppPage } from '../types/navigation'
 import type { AuthProvider, AuthSession } from '../types'
 import { formatRoleLabel } from '../utils/roles'
 
-const COM_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.com$/i
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i
 
 type AdminLoginPageProps = {
   authUser: AuthSession['user'] | null
@@ -35,12 +35,10 @@ const AdminLoginPage = ({
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  const hasAdminLoginAccess = authUser
-    ? authUser.role === 'doctor' || authUser.role === 'admin' || authUser.role === 'system_admin'
+  const hasAdminPortalAccess = authUser
+    ? authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
-  const hasAdminWorkspaceAccess = authUser
-    ? authUser.role === 'doctor' || authUser.role === 'admin' || authUser.role === 'system_admin'
-    : false
+  const hasDoctorWorkspaceAccess = authUser ? authUser.role === 'doctor' : false
 
   return (
     <AuthSplitLayout layout="center" centerBorderless>
@@ -65,7 +63,7 @@ const AdminLoginPage = ({
           </p>
           <h2 className="mt-3 text-3xl font-semibold text-[color:var(--agent-ink)]">Admin Login</h2>
           <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-            Use an Admin or Doctor account to continue.
+            Use an Admin account to continue.
           </p>
         </div>
 
@@ -76,24 +74,16 @@ const AdminLoginPage = ({
               {formatRoleLabel(authUser.role)}).
             </div>
 
-            {hasAdminLoginAccess ? (
+            {hasAdminPortalAccess ? (
               <div className="space-y-3">
                 <p className="text-sm text-emerald-300">
-                  Access verified. Continue to the Doctor Dashboard.
+                  Access verified. Continue to the Admin Workspace.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button w-full">
-                    Open Doctor Dashboard
+                  <button onClick={() => onNavigate?.('admin')} className="agent-button w-full">
+                    Open Admin Workspace
                   </button>
-                  {hasAdminWorkspaceAccess && (
-                    <button onClick={() => onNavigate?.('admin')} className="agent-button-ghost w-full">
-                      Open Admin Workspace
-                    </button>
-                  )}
-                  <button
-                    onClick={onLogout}
-                    className={`agent-button-ghost w-full ${hasAdminWorkspaceAccess ? 'sm:col-span-2' : 'sm:col-span-1'}`}
-                  >
+                  <button onClick={onLogout} className="agent-button-ghost w-full">
                     Sign out
                   </button>
                 </div>
@@ -101,16 +91,23 @@ const AdminLoginPage = ({
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-rose-300">
-                  This account does not have admin portal access. Sign out and use an Admin or
-                  Doctor account.
+                  {hasDoctorWorkspaceAccess
+                    ? 'This account does not have admin portal access. Open the Doctor Dashboard or sign out and use an Admin account.'
+                    : 'This account does not have admin portal access. Sign out and use an Admin account.'}
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <button onClick={onLogout} className="agent-button-ghost w-full">
                     Sign out
                   </button>
-                  <button onClick={() => onNavigate?.('login')} className="agent-button w-full">
-                    Staff login
-                  </button>
+                  {hasDoctorWorkspaceAccess ? (
+                    <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button w-full">
+                      Doctor Dashboard
+                    </button>
+                  ) : (
+                    <button onClick={() => onNavigate?.('login')} className="agent-button w-full">
+                      Staff login
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -121,11 +118,11 @@ const AdminLoginPage = ({
             onSubmit={(event) => {
               event.preventDefault()
               const email = username.trim().toLowerCase()
-              if (!COM_EMAIL_PATTERN.test(email)) {
-                setFormError('Use a valid .com email address before signing in.')
+              if (!EMAIL_PATTERN.test(email)) {
+                setFormError('Use a valid email address before signing in.')
                 return
               }
-              onLogin(email, password, 'doctor_dashboard')
+              onLogin(email, password, 'admin')
             }}
           >
             <div className="space-y-2">

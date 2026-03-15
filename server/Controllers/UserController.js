@@ -1,9 +1,20 @@
 import User from "../Models/UserModel.js";
 import AuditLog from "../Models/AuditLogModel.js";
+import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import Sessions from "../Models/SessionModel.js";
 import {sendOTP} from "../Utils/emailService.js";
 import Appointments from "../Models/AppointmentsModel.js";
+import { appConfig } from "../Config/env.js";
+import { hashSessionToken } from "../Utils/sessionTokens.js";
+
+const OTP_EXPIRY_MS = 10 * 60 * 1000;
+const OTP_MAX_FAILED_ATTEMPTS = 5;
+const OTP_LOCK_WINDOW_MS = 15 * 60 * 1000;
+const OTP_MAX_SENDS_PER_WINDOW = 3;
+const OTP_SEND_WINDOW_MS = 10 * 60 * 1000;
+const OTP_SELECT_FIELDS = "+otp +otpExpires +otpChallengeId +otpFailedAttempts +otpLockUntil +otpSendCount +otpSendWindowStartedAt";
+const LOGIN_SELECT_FIELDS = `+passwordHashed ${OTP_SELECT_FIELDS}`;
 
 const ALLOWED_DOCTOR_DEPARTMENTS = new Set([
     "Internal Medicine",
@@ -39,6 +50,97 @@ const extractUploadedLicenses = (req) => {
     }
     if (req.file) return [req.file];
     return [];
+};
+
+const generateOtpCode = () => crypto.randomInt(0, 1000000).toString().padStart(6, "0");
+
+const generateOtpChallengeId = () => crypto.randomUUID();
+
+const hashOtpCode = (challengeId, otpCode) =>
+    crypto
+        .createHmac("sha256", appConfig.jwtSecret)
+        .update(`${String(challengeId || "")}:${String(otpCode || "")}`)
+        .digest("hex");
+
+const clearOtpChallenge = (user, { keepChallengeId = false, keepRateLimitWindow = false } = {}) => {
+    user.otp = undefined;
+    user.otpExpires = undefined;
+    if (!keepChallengeId) {
+        user.otpChallengeId = undefined;
+    }
+    user.otpFailedAttempts = 0;
+    user.otpLockUntil = undefined;
+    if (!keepRateLimitWindow) {
+        user.otpSendCount = 0;
+        user.otpSendWindowStartedAt = undefined;
+    }
+};
+
+const resetOtpSendWindowIfNeeded = (user, now = new Date()) => {
+    const startedAt = user.otpSendWindowStartedAt
+        ? new Date(user.otpSendWindowStartedAt)
+        : null;
+
+    if (!startedAt || now.getTime() - startedAt.getTime() >= OTP_SEND_WINDOW_MS) {
+        user.otpSendWindowStartedAt = now;
+        user.otpSendCount = 0;
+    }
+};
+
+const getRetryAfterSeconds = (targetTime, now = Date.now()) => {
+    const remainingMs = new Date(targetTime).getTime() - now;
+    return Math.max(1, Math.ceil(remainingMs / 1000));
+};
+
+const ensureOtpCanBeIssued = (user, now = new Date()) => {
+    if (user.otpLockUntil && new Date(user.otpLockUntil).getTime() > now.getTime()) {
+        const error = new Error("Too many invalid OTP attempts. Please try again later.");
+        error.statusCode = 429;
+        error.retryAfterSeconds = getRetryAfterSeconds(user.otpLockUntil, now.getTime());
+        throw error;
+    }
+
+    resetOtpSendWindowIfNeeded(user, now);
+    const sendCount = Number(user.otpSendCount || 0);
+    if (sendCount >= OTP_MAX_SENDS_PER_WINDOW) {
+        const windowEndsAt = new Date(user.otpSendWindowStartedAt).getTime() + OTP_SEND_WINDOW_MS;
+        const error = new Error("Too many OTP requests. Please try again later.");
+        error.statusCode = 429;
+        error.retryAfterSeconds = getRetryAfterSeconds(windowEndsAt, now.getTime());
+        throw error;
+    }
+};
+
+const assignOtpChallenge = (user, { reuseChallengeId = false } = {}, now = new Date()) => {
+    resetOtpSendWindowIfNeeded(user, now);
+    const challengeId = reuseChallengeId && user.otpChallengeId
+        ? user.otpChallengeId
+        : generateOtpChallengeId();
+    const otpCode = generateOtpCode();
+
+    user.otp = hashOtpCode(challengeId, otpCode);
+    user.otpExpires = new Date(now.getTime() + OTP_EXPIRY_MS);
+    user.otpChallengeId = challengeId;
+    user.otpFailedAttempts = 0;
+    user.otpLockUntil = undefined;
+    user.otpSendCount = Number(user.otpSendCount || 0) + 1;
+    user.otpSendWindowStartedAt = user.otpSendWindowStartedAt || now;
+
+    return { otpCode, challengeId };
+};
+
+const applyRetryAfter = (res, error) => {
+    if (typeof error?.retryAfterSeconds === "number") {
+        res.set("Retry-After", String(error.retryAfterSeconds));
+    }
+};
+
+const persistSession = async (userId, token) => {
+    const session = await Sessions.create({
+        userId,
+        tokenHash: hashSessionToken(token),
+    });
+    return session;
 };
 
 export async function register(req, res) {
@@ -93,7 +195,7 @@ export async function login(req, res) {
             return res.status(400).json({message: "Missing Fields."});
         }
         // Search by phoneNumber or email
-        const user = await User.findOne({ email: email}).select("+passwordHashed");
+        const user = await User.findOne({ email: email}).select(LOGIN_SELECT_FIELDS);
 
         if(!user || !(await user.validatePassword(password))) {
             return res.status(401).json({message: "Wrong password or Email. Please try again."});
@@ -102,22 +204,36 @@ export async function login(req, res) {
             return res.status(401).json({message: "Account is disabled. Contact an Admin."});
         }
 
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const now = new Date();
+        try {
+            ensureOtpCanBeIssued(user, now);
+        } catch (otpError) {
+            applyRetryAfter(res, otpError);
+            return res.status(otpError.statusCode || 429).json({ message: otpError.message });
+        }
 
-        user.otp = otpCode;
-        user.otpExpires = Date.now() + 10 * 60 * 1000; 
+        const previousSendCount = Number(user.otpSendCount || 0);
+        const previousWindowStart = user.otpSendWindowStartedAt;
+        const { otpCode, challengeId } = assignOtpChallenge(user, { reuseChallengeId: false }, now);
         await user.save();
         
+        let otpDelivery = null;
         try {
-            await sendOTP(user.email, otpCode);
+            otpDelivery = await sendOTP(user.email, otpCode);
         } catch (emailError) {
             console.error("Email sending failed:", emailError);
+            clearOtpChallenge(user, { keepRateLimitWindow: true });
+            user.otpSendCount = previousSendCount;
+            user.otpSendWindowStartedAt = previousWindowStart;
+            await user.save().catch(() => {});
             return res.status(500).json({ message: "Failed to send OTP. Please try again." });
         }
 
         return res.status(200).json({
             message: "OTP sent to your email. Please verify to complete login.",
-            userId: user._id, // Send ID so client knows who is verifying
+            challengeId,
+            expiresInSeconds: OTP_EXPIRY_MS / 1000,
+            ...(otpDelivery?.preview && !appConfig.isProduction ? { otpPreview: otpDelivery.preview } : {}),
             requires2FA: true 
         });
     } catch (error){
@@ -133,7 +249,9 @@ export async function logout(req, res) {
         if (token) {
             try {
                 // find session to get userId for audit logging
-                const session = await Sessions.findOne({ token });
+                const session = await Sessions.findOne({
+                    $or: [{ tokenHash: hashSessionToken(token) }, { token }],
+                });
                 if (session) {
                     // create audit log for logout
                     try {
@@ -147,9 +265,13 @@ export async function logout(req, res) {
                     } catch (logErr) {
                         console.warn('Failed to write logout audit log', logErr);
                     }
-                }
 
-                await Sessions.deleteOne({ token });
+                    await Sessions.deleteOne({ _id: session._id });
+                } else {
+                    await Sessions.deleteMany({
+                        $or: [{ tokenHash: hashSessionToken(token) }, { token }],
+                    });
+                }
             } catch (e) {
                 // non-fatal, continue to clear cookie
                 console.warn('Failed to remove session record', e);
@@ -173,7 +295,7 @@ export async function logout(req, res) {
         res.clearCookie("token", {
             httpOnly: true,
             sameSite: "strict",
-            secure: process.env.NODE_ENV === 'production'
+            secure: appConfig.isProduction
         });
 
         return res.status(200).json({ message: "Logout successful." });
@@ -186,42 +308,65 @@ export async function logout(req, res) {
 export async function verifyOTP(req, res) {
     try {
 
-        const { userId, otp } = req.body;
+        const { challengeId, otp } = req.body;
 
-        if (!userId || !otp) {
-            return res.status(400).json({ message: "Missing userId or OTP." });
+        if (!challengeId || !otp) {
+            return res.status(400).json({ message: "Missing OTP challenge or OTP." });
         }
 
-        const user = await User.findById(userId).select('+otp +otpExpires');
+        const user = await User.findOne({ otpChallengeId: challengeId }).select(OTP_SELECT_FIELDS);
 
         if (!user) {
-            return res.status(404).json({ message: "User not found." });
+            return res.status(404).json({ message: "OTP challenge not found." });
         }
 
-        if (user.otp !== otp) {
+        if (user.otpLockUntil && new Date(user.otpLockUntil).getTime() > Date.now()) {
+            const retryAfterSeconds = getRetryAfterSeconds(user.otpLockUntil);
+            res.set("Retry-After", String(retryAfterSeconds));
+            return res.status(429).json({ message: "Too many invalid OTP attempts. Please try again later." });
+        }
+
+        if (!user.otp || !user.otpExpires) {
+            return res.status(400).json({ message: "OTP has expired. Please login again." });
+        }
+
+        if (new Date(user.otpExpires).getTime() < Date.now()) {
+            clearOtpChallenge(user, { keepChallengeId: true, keepRateLimitWindow: true });
+            await user.save();
+            return res.status(400).json({ message: "OTP has expired. Please request a new code." });
+        }
+
+        const providedOtpHash = hashOtpCode(challengeId, otp);
+        const isOtpValid = user.otp === providedOtpHash || user.otp === otp;
+
+        if (!isOtpValid) {
+            user.otpFailedAttempts = Number(user.otpFailedAttempts || 0) + 1;
+            if (user.otpFailedAttempts >= OTP_MAX_FAILED_ATTEMPTS) {
+                user.otp = undefined;
+                user.otpExpires = undefined;
+                user.otpLockUntil = new Date(Date.now() + OTP_LOCK_WINDOW_MS);
+                await user.save();
+                const retryAfterSeconds = getRetryAfterSeconds(user.otpLockUntil);
+                res.set("Retry-After", String(retryAfterSeconds));
+                return res.status(429).json({ message: "Too many invalid OTP attempts. Please try again later." });
+            }
+            await user.save();
             return res.status(400).json({ message: "Invalid OTP." });
         }
 
-        if (user.otpExpires < Date.now()) {
-            return res.status(400).json({ message: "OTP has expired. Please login again." });
-        }
-        user.otp = undefined;
-        user.otpExpires = undefined;
+        clearOtpChallenge(user);
         await user.save();
 
         const token = jwt.sign(
             {id: user._id, role: user.role, email: user.email},
-            process.env.JWT_SECRET,
+            appConfig.jwtSecret,
             {expiresIn: "7d"}
         );
-        await Sessions.create({
-            userId: user._id,
-            token: token,
-        });
+        const session = await persistSession(user._id, token);
 
         res.cookie("token", token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
+            secure: appConfig.isProduction,
             sameSite: "strict",
             maxAge: 7* 24 * 60 * 60 * 1000,
         });
@@ -233,17 +378,17 @@ export async function verifyOTP(req, res) {
             userAgent: req.headers['user-agent']
         });
 
-        console.log("[Successful Login]:", req.body.email);
-
         return res.status(200).json({
             message: "Login successful.",
-            token,
             user: {
                 id: user._id,
                 firstName: user.firstName,
                 lastName: user.lastName,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                authMethod: user.googleId ? "google" : "local",
+                mfa: true,
+                sessionId: session._id,
             }
         });
     } catch (error) {
@@ -254,38 +399,52 @@ export async function verifyOTP(req, res) {
 
 export async function resendOTP(req, res) {
     try {
-        const { userId } = req.body;
+        const { challengeId } = req.body;
 
-        if (!userId) {
-            return res.status(400).json({ message: "Missing userId." });
+        if (!challengeId) {
+            return res.status(400).json({ message: "Missing OTP challenge." });
         }
 
-        const user = await User.findById(userId);
+        const user = await User.findOne({ otpChallengeId: challengeId }).select(OTP_SELECT_FIELDS);
 
         if (!user) {
-            return res.status(404).json({ message: "User not found." });
+            return res.status(404).json({ message: "OTP challenge not found." });
         }
 
         if (user.status !== "active") {
             return res.status(401).json({ message: "Account is disabled. Contact an Admin." });
         }
 
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const now = new Date();
+        try {
+            ensureOtpCanBeIssued(user, now);
+        } catch (otpError) {
+            applyRetryAfter(res, otpError);
+            return res.status(otpError.statusCode || 429).json({ message: otpError.message });
+        }
 
-        user.otp = otpCode;
-        user.otpExpires = Date.now() + 10 * 60 * 1000;
+        const previousSendCount = Number(user.otpSendCount || 0);
+        const previousWindowStart = user.otpSendWindowStartedAt;
+        const { otpCode } = assignOtpChallenge(user, { reuseChallengeId: true }, now);
         await user.save();
 
+        let otpDelivery = null;
         try {
-            await sendOTP(user.email, otpCode);
+            otpDelivery = await sendOTP(user.email, otpCode);
         } catch (emailError) {
             console.error("Email sending failed:", emailError);
+            clearOtpChallenge(user, { keepChallengeId: true, keepRateLimitWindow: true });
+            user.otpSendCount = previousSendCount;
+            user.otpSendWindowStartedAt = previousWindowStart;
+            await user.save().catch(() => {});
             return res.status(500).json({ message: "Failed to send OTP. Please try again." });
         }
 
         return res.status(200).json({
             message: "OTP resent to your email.",
-            userId: user._id,
+            challengeId: user.otpChallengeId,
+            expiresInSeconds: OTP_EXPIRY_MS / 1000,
+            ...(otpDelivery?.preview && !appConfig.isProduction ? { otpPreview: otpDelivery.preview } : {}),
         });
     } catch (error) {
         console.error("Resend OTP Error:", error);
@@ -366,17 +525,12 @@ export async function googleCallback(req, res) {
         // 1. Generate Token
         const token = jwt.sign(
             { id: user._id, role: user.role, email: user.email },
-            process.env.JWT_SECRET,
+            appConfig.jwtSecret,
             { expiresIn: "7d" }
         );
 
         // 2. Create Session (This makes logout work!)
-        await Sessions.create({
-            userId: user._id,
-            token: token
-        });
-
-        // 3. [NEW] Audit Log
+        await persistSession(user._id, token);
         await AuditLog.create({
             userId: user._id,
             action: "LOGIN_GOOGLE",
@@ -388,17 +542,15 @@ export async function googleCallback(req, res) {
 
         // 4. Set Cookie
         // For cross-site OAuth flows the cookie must be SameSite=None and Secure in production
-        const isProd = process.env.NODE_ENV === 'production'
         res.cookie('token', token, {
             httpOnly: true,
-            secure: isProd,
-            sameSite: isProd ? 'none' : 'lax',
+            secure: appConfig.isProduction,
+            sameSite: appConfig.isProduction ? 'none' : 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
         // 5. Redirect to Frontend
-        const frontendUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
-        return res.redirect(`${frontendUrl.replace(/\/$/, '')}/appointments`);
+        return res.redirect(`${appConfig.frontendUrl.replace(/\/$/, '')}/appointments`);
 
     } catch (error) {
         console.error("Google Auth Error:", error);

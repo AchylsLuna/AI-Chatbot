@@ -21,7 +21,7 @@ export const authorizeRoles = (...allowedRoles) => {
 
             //Logs if user is denied
             await AuditLog.create({
-                userId: req.user?._id, // Logs ID if available
+                userId: req.user?.id || req.user?._id,
                 action: "ACCESS_DENIED",
                 details: `User ${requesterEmail} tried to access ${req.originalUrl} but lacks permissions.`,
                 ipAddress: req.ip,

@@ -7,24 +7,15 @@ import helmet from 'helmet'; //security headers
 import mongoSanitize from 'express-mongo-sanitize'; //Anti-NoSQL injection
 import passport from 'passport'; 
 import './Config/passport.js';
+import { appConfig } from './Config/env.js';
 import ErrorLog from './Models/ErrorLogModel.js';
 import User from './Models/UserModel.js';
 
 import router from './Routes/Routes.js';
 
 const app = express();
-
-const config = {
-    PORT: process.env.PORT || 5000,
-    MONGO_URI: process.env.MONGO_URI,
-    ORIGIN: process.env.CLIENT_ORIGIN || process.env.ORIGIN || 'http://localhost:5173',
-    DB_NAME: 'hospital_ai_blockchain',
-};
-
-if (!config.MONGO_URI) {
-    console.error('MONGO_URI is not defined');
-    process.exit(1);
-}
+let inMemoryMongoServer = null;
+let isUsingInMemoryMongo = appConfig.useInMemoryMongo;
 
 // Security headers
 app.use(
@@ -42,7 +33,7 @@ app.use(
 
 app.use(
     cors({
-        origin: config.ORIGIN,
+        origin: appConfig.clientOrigin,
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     })
@@ -56,6 +47,15 @@ app.use(passport.initialize());
 
 // Data sanitization
 app.use(mongoSanitize());
+
+app.get('/api/health', (req, res) => {
+    return res.status(200).json({
+        ok: true,
+        status: 'healthy',
+        dbState: mongoose.connection.readyState,
+        inMemoryMongo: isUsingInMemoryMongo,
+    });
+});
 
 app.use('/api', router);
 
@@ -82,10 +82,61 @@ app.use((err, req, res, next) => {
     });
 });
 
+const connectOptions = {
+    dbName: appConfig.dbName,
+    serverSelectionTimeoutMS: appConfig.isProduction ? 30000 : 5000,
+};
+
+const createInMemoryMongo = async () => {
+    const { MongoMemoryServer } = await import('mongodb-memory-server');
+    inMemoryMongoServer = await MongoMemoryServer.create({
+        binary: { version: '7.0.14' },
+    });
+    isUsingInMemoryMongo = true;
+    console.log(`Using in-memory MongoDB at ${inMemoryMongoServer.getUri()}`);
+    return inMemoryMongoServer.getUri();
+};
+
+const isLocalMongoUri = (mongoUri) => {
+    return /^mongodb:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?(?:\/|$)/i.test(String(mongoUri || '').trim());
+};
+
+const shouldFallbackToInMemoryMongo = (mongoUri, error) => {
+    if (appConfig.isProduction || appConfig.useInMemoryMongo || !isLocalMongoUri(mongoUri)) {
+        return false;
+    }
+
+    const message = error instanceof Error ? error.message : String(error || '');
+    return /ECONNREFUSED|MongooseServerSelectionError|Server selection timed out/i.test(message);
+};
+
+const connectToDatabase = async () => {
+    let mongoUri = appConfig.mongoUri;
+
+    if (appConfig.useInMemoryMongo) {
+        mongoUri = await createInMemoryMongo();
+    }
+
+    try {
+        await mongoose.connect(mongoUri, connectOptions);
+    } catch (error) {
+        if (!shouldFallbackToInMemoryMongo(mongoUri, error)) {
+            throw error;
+        }
+
+        console.warn(
+            `[DB] Unable to reach ${mongoUri}. Falling back to in-memory MongoDB for development.`
+        );
+        mongoUri = await createInMemoryMongo();
+        await mongoose.connect(mongoUri, connectOptions);
+    }
+
+    console.log('Connected to DB');
+};
+
 const startServer = async () => {
     try {
-        await mongoose.connect(config.MONGO_URI, { dbName: config.DB_NAME });
-        console.log('Connected to DB');
+        await connectToDatabase();
 
         // Migrate legacy nurse roles to doctor to keep auth flows consistent.
         const migrationResult = await User.updateMany(
@@ -96,8 +147,8 @@ const startServer = async () => {
             console.log(`Migrated ${migrationResult.modifiedCount} nurse accounts to doctor.`);
         }
 
-        app.listen(config.PORT, '0.0.0.0', () => {
-            console.log(`Server is running on http://localhost:${config.PORT}`);
+        app.listen(appConfig.port, '0.0.0.0', () => {
+            console.log(`Server is running on http://localhost:${appConfig.port}`);
             console.log('Registered admin endpoints: GET /api/ledger, GET /api/admin/audit-logs, GET /api/admin/error-logs');
         });
     } catch (error) {
@@ -105,5 +156,18 @@ const startServer = async () => {
         process.exit(1);
     }
 };
+
+const stopInMemoryMongo = async () => {
+    if (inMemoryMongoServer) {
+        await inMemoryMongoServer.stop();
+        inMemoryMongoServer = null;
+    }
+};
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, () => {
+        void stopInMemoryMongo().finally(() => process.exit(0));
+    });
+}
 
 startServer();

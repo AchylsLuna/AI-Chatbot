@@ -179,7 +179,9 @@ const useAppRouting = () => {
     currentPage === 'otp' ||
     currentPage === 'signup' ||
     currentPage === 'doctor_signup' ||
-    currentPage === 'forgot_password'
+    currentPage === 'forgot_password' ||
+    currentPage === 'terms' ||
+    currentPage === 'privacy_policy'
 
   return { currentPage, navigateToPage, navigateBack, isLanding, isAuthPage }
 }

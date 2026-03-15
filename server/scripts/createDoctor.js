@@ -24,7 +24,7 @@ const DOCTOR_EMAIL = String(process.env.DOCTOR_EMAIL || 'demo.doctor@aihealthcar
 const DOCTOR_PASSWORD = String(process.env.DOCTOR_PASSWORD || DEFAULT_DOCTOR_PASSWORD)
 const DOCTOR_FIRST_NAME = String(process.env.DOCTOR_FIRST_NAME || 'Demo').trim()
 const DOCTOR_LAST_NAME = String(process.env.DOCTOR_LAST_NAME || 'Doctor').trim()
-const DOCTOR_DEPARTMENT = String(process.env.DOCTOR_DEPARTMENT || 'General Medicine').trim()
+const DOCTOR_DEPARTMENT = String(process.env.DOCTOR_DEPARTMENT || 'Internal Medicine').trim()
 const DOCTOR_LICENSE_URL = String(
   process.env.DOCTOR_LICENSE_URL || '/uploads/licenses/placeholder-license.pdf'
 ).trim()
@@ -46,7 +46,7 @@ async function run() {
 
     if (existing) {
       const needsUpdate =
-        existing.role !== 'nurse' ||
+        existing.role !== 'doctor' ||
         existing.firstName !== DOCTOR_FIRST_NAME ||
         existing.lastName !== DOCTOR_LAST_NAME ||
         existing.department !== DOCTOR_DEPARTMENT ||
@@ -54,7 +54,7 @@ async function run() {
         existing.status !== 'active'
 
       if (needsUpdate) {
-        existing.role = 'nurse'
+        existing.role = 'doctor'
         existing.firstName = DOCTOR_FIRST_NAME
         existing.lastName = DOCTOR_LAST_NAME
         existing.department = DOCTOR_DEPARTMENT
@@ -62,7 +62,7 @@ async function run() {
         existing.status = 'active'
         await existing.setPassword(DOCTOR_PASSWORD)
         await existing.save()
-        console.log('Updated existing doctor account (nurse role):', DOCTOR_EMAIL)
+        console.log('Updated existing doctor account:', DOCTOR_EMAIL)
       } else {
         console.log('User already exists:', DOCTOR_EMAIL)
       }
@@ -74,7 +74,7 @@ async function run() {
       email: DOCTOR_EMAIL,
       firstName: DOCTOR_FIRST_NAME,
       lastName: DOCTOR_LAST_NAME,
-      role: 'nurse',
+      role: 'doctor',
       department: DOCTOR_DEPARTMENT,
       licenseUrl: DOCTOR_LICENSE_URL,
       status: 'active',
@@ -83,7 +83,7 @@ async function run() {
     await user.setPassword(DOCTOR_PASSWORD)
     await user.save()
 
-    console.log('Created doctor account successfully (nurse role):', DOCTOR_EMAIL)
+    console.log('Created doctor account successfully:', DOCTOR_EMAIL)
     process.exit(0)
   } catch (error) {
     console.error('Failed to create doctor account:', error)

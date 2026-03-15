@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import hre from "hardhat";
+import { network } from "hardhat";
 
 describe("AppointmentLedger", function () {
   let ledger: any;
@@ -9,10 +9,11 @@ describe("AppointmentLedger", function () {
 
   // This runs automatically before every single 'it' block
   beforeEach(async function () {
-    [systemWallet, otherAccount, doctorWallet] = await hre.ethers.getSigners();
-    
-    const Ledger = await hre.ethers.getContractFactory("AppointmentLedger");
-    ledger = await Ledger.deploy();
+    const { ethers } = await network.connect();
+    [systemWallet, otherAccount, doctorWallet] = await ethers.getSigners();
+
+    ledger = await ethers.deployContract("AppointmentLedger");
+    await ledger.waitForDeployment();
   });
 
   describe("Deployment", function () {

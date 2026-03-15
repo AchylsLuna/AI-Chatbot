@@ -20,7 +20,7 @@ const ALLOW_DEMO_CREDENTIALS =
 const IS_LOCAL_ENV = ['development', 'dev', 'local', 'test'].includes(NODE_ENV)
 
 const DEFAULT_CORE_ADMIN_PASSWORD = 'Admin123!'
-const DEFAULT_CORE_NURSE_PASSWORD = 'Doctor123!'
+const DEFAULT_CORE_DOCTOR_PASSWORD = 'Doctor123!'
 const DEFAULT_CORE_USER_PASSWORD = 'User123!'
 
 const seeds = [
@@ -36,18 +36,18 @@ const seeds = [
     status: 'active',
   },
   {
-    key: 'nurse',
-    email: String(process.env.CORE_NURSE_EMAIL || 'demo.doctor@aihealthcare.com').trim().toLowerCase(),
-    password: String(process.env.CORE_NURSE_PASSWORD || DEFAULT_CORE_NURSE_PASSWORD),
-    passwordEnvKey: 'CORE_NURSE_PASSWORD',
-    defaultPassword: DEFAULT_CORE_NURSE_PASSWORD,
-    firstName: String(process.env.CORE_NURSE_FIRST_NAME || 'Demo').trim(),
-    lastName: String(process.env.CORE_NURSE_LAST_NAME || 'Doctor').trim(),
-    role: 'nurse',
+    key: 'doctor',
+    email: String(process.env.CORE_DOCTOR_EMAIL || process.env.CORE_NURSE_EMAIL || 'demo.doctor@aihealthcare.com').trim().toLowerCase(),
+    password: String(process.env.CORE_DOCTOR_PASSWORD || process.env.CORE_NURSE_PASSWORD || DEFAULT_CORE_DOCTOR_PASSWORD),
+    passwordEnvKey: 'CORE_DOCTOR_PASSWORD',
+    defaultPassword: DEFAULT_CORE_DOCTOR_PASSWORD,
+    firstName: String(process.env.CORE_DOCTOR_FIRST_NAME || process.env.CORE_NURSE_FIRST_NAME || 'Demo').trim(),
+    lastName: String(process.env.CORE_DOCTOR_LAST_NAME || process.env.CORE_NURSE_LAST_NAME || 'Doctor').trim(),
+    role: 'doctor',
     status: 'active',
-    department: String(process.env.CORE_NURSE_DEPARTMENT || 'General Medicine').trim(),
+    department: String(process.env.CORE_DOCTOR_DEPARTMENT || process.env.CORE_NURSE_DEPARTMENT || 'Internal Medicine').trim(),
     licenseUrl: String(
-      process.env.CORE_NURSE_LICENSE_URL || '/uploads/licenses/placeholder-license.pdf'
+      process.env.CORE_DOCTOR_LICENSE_URL || process.env.CORE_NURSE_LICENSE_URL || '/uploads/licenses/placeholder-license.pdf'
     ).trim(),
   },
   {
@@ -83,7 +83,7 @@ async function upsertUser(seed) {
     existing.role = seed.role
     existing.status = seed.status
 
-    if (seed.role === 'nurse') {
+    if (seed.role === 'doctor') {
       existing.department = seed.department
       existing.licenseUrl = seed.licenseUrl
     }
@@ -99,8 +99,8 @@ async function upsertUser(seed) {
     lastName: seed.lastName,
     role: seed.role,
     status: seed.status,
-    department: seed.role === 'nurse' ? seed.department : undefined,
-    licenseUrl: seed.role === 'nurse' ? seed.licenseUrl : undefined,
+    department: seed.role === 'doctor' ? seed.department : undefined,
+    licenseUrl: seed.role === 'doctor' ? seed.licenseUrl : undefined,
   })
 
   await user.setPassword(seed.password)

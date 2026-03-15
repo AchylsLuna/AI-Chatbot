@@ -32,12 +32,6 @@ const RobotLogo = ({ className = 'h-5 w-5' }: { className?: string }) => (
   </svg>
 )
 
-const quickSupportPrompts = [
-  'Introduce the system',
-  'How do I book an appointment?',
-  'How do I use the system?',
-]
-
 const roleLabel = (role?: UserRole | null) => {
   if (role === 'system_admin') return 'Admin'
   if (role === 'admin') return 'Admin'
@@ -321,11 +315,6 @@ const GlobalAssistantChat = ({
     await appendAssistantReply(text)
   }
 
-  const sendPresetPrompt = async (text: string) => {
-    if (isSending) return
-    await appendAssistantReply(text)
-  }
-
   return (
     <div
       className={`fixed right-2 z-50 flex max-w-[calc(100vw-1rem)] flex-col items-end gap-2 transition-[bottom] duration-200 sm:right-4 sm:max-w-[calc(100vw-2rem)] ${
@@ -382,22 +371,6 @@ const GlobalAssistantChat = ({
         </div>
 
         <div className="border-t border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] px-3.5 py-3.5">
-          <div className="mb-3 flex flex-wrap gap-2">
-            {quickSupportPrompts.map((prompt) => (
-              <button
-                key={prompt}
-                type="button"
-                onClick={() => {
-                  void sendPresetPrompt(prompt)
-                }}
-                disabled={isSending}
-                className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--agent-muted)] transition hover:border-[color:var(--agent-line)] hover:bg-[color:var(--agent-accent-soft)] hover:text-[color:var(--agent-ink)]"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-
           <div className="flex items-end gap-2">
             <input
               ref={inputRef}

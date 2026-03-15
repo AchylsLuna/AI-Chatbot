@@ -2,20 +2,21 @@ const BASE_URL = String(process.env.SMOKE_BASE_URL || 'http://localhost:5001/api
 
 const DEFAULT_ACCOUNTS = {
   admin: {
-    email: String(process.env.CORE_ADMIN_EMAIL || 'test.admin@aihealthcare.com').trim().toLowerCase(),
-    password: String(process.env.CORE_ADMIN_PASSWORD || 'AdminTest2026'),
+    email: String(process.env.CORE_ADMIN_EMAIL || 'demo.admin@aihealthcare.com').trim().toLowerCase(),
+    password: String(process.env.CORE_ADMIN_PASSWORD || 'Admin123!'),
   },
-  nurse: {
-    email: String(process.env.CORE_NURSE_EMAIL || 'test.doctor@aihealthcare.com').trim().toLowerCase(),
-    password: String(process.env.CORE_NURSE_PASSWORD || 'DoctorTest2026'),
+  doctor: {
+    email: String(process.env.CORE_DOCTOR_EMAIL || process.env.CORE_NURSE_EMAIL || 'demo.doctor@aihealthcare.com').trim().toLowerCase(),
+    password: String(process.env.CORE_DOCTOR_PASSWORD || process.env.CORE_NURSE_PASSWORD || 'Doctor123!'),
   },
   user: {
-    email: String(process.env.CORE_USER_EMAIL || 'test.patient@aihealthcare.com').trim().toLowerCase(),
-    password: String(process.env.CORE_USER_PASSWORD || 'PatientTest2026'),
+    email: String(process.env.CORE_USER_EMAIL || 'demo.user@aihealthcare.com').trim().toLowerCase(),
+    password: String(process.env.CORE_USER_PASSWORD || 'User123!'),
   },
 }
 
 const REQUEST_TIMEOUT_MS = 12000
+const CLINIC_UTC_OFFSET_MINUTES = 8 * 60
 
 const safeJsonParse = (value) => {
   try {
@@ -30,6 +31,50 @@ const maskToken = (token) => {
   return `${token.slice(0, 8)}...${token.slice(-8)}`
 }
 
+const pad2 = (value) => String(value).padStart(2, '0')
+
+const getClinicParts = (dateInput) => {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput)
+  const shifted = new Date(date.getTime() + CLINIC_UTC_OFFSET_MINUTES * 60 * 1000)
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+    weekday: shifted.getUTCDay(),
+  }
+}
+
+const formatDateKey = ({ year, month, day }) => `${year}-${pad2(month)}-${pad2(day)}`
+
+const getWeekStartDateKeyFromDateKey = (dateKey) => {
+  const [yearRaw, monthRaw, dayRaw] = dateKey.split('-')
+  const year = Number(yearRaw)
+  const month = Number(monthRaw)
+  const day = Number(dayRaw)
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+  const daysSinceMonday = (weekday + 6) % 7
+  const monday = new Date(Date.UTC(year, month - 1, day - daysSinceMonday))
+  return formatDateKey({
+    year: monday.getUTCFullYear(),
+    month: monday.getUTCMonth() + 1,
+    day: monday.getUTCDate(),
+  })
+}
+
+const getDayKeyFromDateKey = (dateKey) => {
+  const [yearRaw, monthRaw, dayRaw] = dateKey.split('-')
+  const weekday = new Date(Date.UTC(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw))).getUTCDay()
+  return ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][weekday]
+}
+
+const toUtcIsoFromClinicDateTime = (dateKey, hour, minute) => {
+  const [yearRaw, monthRaw, dayRaw] = dateKey.split('-')
+  const utcMs =
+    Date.UTC(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw), hour, minute, 0, 0) -
+    CLINIC_UTC_OFFSET_MINUTES * 60 * 1000
+  return new Date(utcMs).toISOString()
+}
+
 const request = async (path, options = {}) => {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -42,7 +87,11 @@ const request = async (path, options = {}) => {
     })
     const text = await response.text()
     const json = safeJsonParse(text)
-    return { status: response.status, text, json }
+    const setCookies = typeof response.headers.getSetCookie === 'function'
+      ? response.headers.getSetCookie()
+      : [response.headers.get('set-cookie')].filter(Boolean)
+    const cookieHeader = setCookies.map((entry) => entry.split(';')[0]).join('; ')
+    return { status: response.status, text, json, cookieHeader }
   } finally {
     clearTimeout(timeout)
   }
@@ -56,9 +105,13 @@ const expectStatus = ({ actual, expected, label, details = '' }) => {
   console.log(`[ok] ${label}: ${actual}`)
 }
 
-const authHeaders = (token, withJson = false) => {
-  const headers = {
-    Authorization: `Bearer ${token}`,
+const authHeaders = (session, withJson = false) => {
+  const headers = {}
+  if (session?.token) {
+    headers.Authorization = `Bearer ${session.token}`
+  }
+  if (session?.cookieHeader) {
+    headers.Cookie = session.cookieHeader
   }
   if (withJson) {
     headers['Content-Type'] = 'application/json'
@@ -80,16 +133,16 @@ const loginWithOtp = async (role, { email, password }) => {
     details: loginResponse.text,
   })
 
-  const userId = loginResponse.json?.userId
+  const challengeId = loginResponse.json?.challengeId ?? loginResponse.json?.userId
   const otp = loginResponse.json?.otpPreview
-  if (!userId || !otp) {
-    throw new Error(`POST /login (${role}): missing userId or otpPreview in response`)
+  if (!challengeId || !otp) {
+    throw new Error(`POST /login (${role}): missing challengeId or otpPreview in response`)
   }
 
   const verifyResponse = await request('/verify-otp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, otp }),
+    body: JSON.stringify({ challengeId, otp }),
   })
 
   expectStatus({
@@ -99,18 +152,108 @@ const loginWithOtp = async (role, { email, password }) => {
     details: verifyResponse.text,
   })
 
-  const token = verifyResponse.json?.token
-  if (!token) {
-    throw new Error(`POST /verify-otp (${role}): missing token`)
+  if (!verifyResponse.cookieHeader) {
+    throw new Error(`POST /verify-otp (${role}): missing session cookie`)
   }
-  console.log(`[ok] token issued (${role}): ${maskToken(token)}`)
-  return token
+  const token = verifyResponse.cookieHeader
+    .split('; ')
+    .find((entry) => entry.startsWith('token='))
+    ?.slice('token='.length)
+  if (token) {
+    console.log(`[ok] token issued (${role}): ${maskToken(token)}`)
+  }
+  return { cookieHeader: verifyResponse.cookieHeader, token }
 }
 
-const clearActiveUserAppointments = async (token) => {
+const prepareBookingPrerequisites = async ({ userSession, doctorSession }) => {
+  const profileResponse = await request('/users/me/profile', {
+    method: 'PUT',
+    headers: authHeaders(userSession, true),
+    body: JSON.stringify({
+      dateOfBirth: '1995-05-20',
+      phoneNumber: '+639171234567',
+      address: '123 Test Street, Manila',
+      gender: 'Prefer not to say',
+    }),
+  })
+  expectStatus({
+    actual: profileResponse.status,
+    expected: 200,
+    label: 'PUT /users/me/profile (user)',
+    details: profileResponse.text,
+  })
+
+  const healthInfoResponse = await request('/users/me/personal-health-info', {
+    method: 'PUT',
+    headers: authHeaders(userSession, true),
+    body: JSON.stringify({
+      bloodType: 'O+',
+      emergencyContact: {
+        name: 'Emergency Contact',
+        phone: '+639181112222',
+        relationship: 'Sibling',
+      },
+      notes: 'Smoke test profile',
+    }),
+  })
+  expectStatus({
+    actual: healthInfoResponse.status,
+    expected: 200,
+    label: 'PUT /users/me/personal-health-info (user)',
+    details: healthInfoResponse.text,
+  })
+
+  const doctorsResponse = await request('/appointments/available-doctors?department=Internal%20Medicine', {
+    method: 'GET',
+    headers: authHeaders(userSession),
+  })
+  expectStatus({
+    actual: doctorsResponse.status,
+    expected: 200,
+    label: 'GET /appointments/available-doctors (user)',
+    details: doctorsResponse.text,
+  })
+
+  const doctors = Array.isArray(doctorsResponse.json?.doctors) ? doctorsResponse.json.doctors : []
+  const doctor = doctors[0]
+  if (!doctor?.id) {
+    throw new Error('No available doctor returned for Internal Medicine')
+  }
+
+  const targetDate = new Date(Date.now() + 48 * 60 * 60 * 1000)
+  const clinicParts = getClinicParts(targetDate)
+  const dateKey = formatDateKey(clinicParts)
+  const weekStart = getWeekStartDateKeyFromDateKey(dateKey)
+  const dayKey = getDayKeyFromDateKey(dateKey)
+  const scheduledDate = toUtcIsoFromClinicDateTime(dateKey, 8, 0)
+
+  const scheduleResponse = await request(`/doctor/schedules/${weekStart}`, {
+    method: 'PUT',
+    headers: authHeaders(doctorSession, true),
+    body: JSON.stringify({
+      days: {
+        [dayKey]: { morning: true, afternoon: false },
+      },
+    }),
+  })
+  expectStatus({
+    actual: scheduleResponse.status,
+    expected: 200,
+    label: `PUT /doctor/schedules/${weekStart} (doctor)`,
+    details: scheduleResponse.text,
+  })
+
+  return {
+    doctorId: String(doctor.id),
+    department: 'Internal Medicine',
+    scheduledDate,
+  }
+}
+
+const clearActiveUserAppointments = async (session) => {
   const listResponse = await request('/appointments', {
     method: 'GET',
-    headers: authHeaders(token),
+    headers: authHeaders(session),
   })
   expectStatus({
     actual: listResponse.status,
@@ -125,7 +268,7 @@ const clearActiveUserAppointments = async (token) => {
   for (const appointment of booked) {
     const patchResponse = await request(`/appointments/${appointment.id}`, {
       method: 'PATCH',
-      headers: authHeaders(token, true),
+      headers: authHeaders(session, true),
       body: JSON.stringify({ status: 'Recorded' }),
     })
     expectStatus({
@@ -148,20 +291,20 @@ const run = async () => {
     details: health.text,
   })
 
-  const adminToken = await loginWithOtp('admin', DEFAULT_ACCOUNTS.admin)
-  const nurseToken = await loginWithOtp('nurse', DEFAULT_ACCOUNTS.nurse)
-  const userToken = await loginWithOtp('user', DEFAULT_ACCOUNTS.user)
+  const adminSession = await loginWithOtp('admin', DEFAULT_ACCOUNTS.admin)
+  const doctorSession = await loginWithOtp('doctor', DEFAULT_ACCOUNTS.doctor)
+  const userSession = await loginWithOtp('user', DEFAULT_ACCOUNTS.user)
 
   const roles = [
-    { name: 'admin', token: adminToken },
-    { name: 'nurse', token: nurseToken },
-    { name: 'user', token: userToken },
+    { name: 'admin', session: adminSession },
+    { name: 'doctor', session: doctorSession },
+    { name: 'user', session: userSession },
   ]
 
   for (const role of roles) {
     const sessionResponse = await request('/session', {
       method: 'GET',
-      headers: authHeaders(role.token),
+      headers: authHeaders(role.session),
     })
     expectStatus({
       actual: sessionResponse.status,
@@ -171,7 +314,7 @@ const run = async () => {
     })
   }
 
-  const usersAdmin = await request('/users', { method: 'GET', headers: authHeaders(adminToken) })
+  const usersAdmin = await request('/users', { method: 'GET', headers: authHeaders(adminSession) })
   expectStatus({
     actual: usersAdmin.status,
     expected: 200,
@@ -179,15 +322,15 @@ const run = async () => {
     details: usersAdmin.text,
   })
 
-  const usersNurse = await request('/users', { method: 'GET', headers: authHeaders(nurseToken) })
+  const usersDoctor = await request('/users', { method: 'GET', headers: authHeaders(doctorSession) })
   expectStatus({
-    actual: usersNurse.status,
+    actual: usersDoctor.status,
     expected: 403,
-    label: 'GET /users (nurse)',
-    details: usersNurse.text,
+    label: 'GET /users (doctor)',
+    details: usersDoctor.text,
   })
 
-  const usersUser = await request('/users', { method: 'GET', headers: authHeaders(userToken) })
+  const usersUser = await request('/users', { method: 'GET', headers: authHeaders(userSession) })
   expectStatus({
     actual: usersUser.status,
     expected: 403,
@@ -198,7 +341,7 @@ const run = async () => {
   for (const role of roles) {
     const appointmentsResponse = await request('/appointments', {
       method: 'GET',
-      headers: authHeaders(role.token),
+      headers: authHeaders(role.session),
     })
     expectStatus({
       actual: appointmentsResponse.status,
@@ -208,18 +351,22 @@ const run = async () => {
     })
   }
 
-  await clearActiveUserAppointments(userToken)
+  await clearActiveUserAppointments(userSession)
 
-  const scheduledDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  const bookingSetup = await prepareBookingPrerequisites({
+    userSession,
+    doctorSession,
+  })
   const createPayload = {
-    department: 'General Medicine',
-    scheduledDate,
+    doctorId: bookingSetup.doctorId,
+    department: bookingSetup.department,
+    scheduledDate: bookingSetup.scheduledDate,
     reason: 'Route smoke test booking',
   }
 
   const createUser = await request('/appointments', {
     method: 'POST',
-    headers: authHeaders(userToken, true),
+    headers: authHeaders(userSession, true),
     body: JSON.stringify(createPayload),
   })
   expectStatus({
@@ -229,21 +376,21 @@ const run = async () => {
     details: createUser.text,
   })
 
-  const createNurse = await request('/appointments', {
+  const createDoctor = await request('/appointments', {
     method: 'POST',
-    headers: authHeaders(nurseToken, true),
+    headers: authHeaders(doctorSession, true),
     body: JSON.stringify(createPayload),
   })
   expectStatus({
-    actual: createNurse.status,
+    actual: createDoctor.status,
     expected: 403,
-    label: 'POST /appointments (nurse)',
-    details: createNurse.text,
+    label: 'POST /appointments (doctor)',
+    details: createDoctor.text,
   })
 
   const createAdmin = await request('/appointments', {
     method: 'POST',
-    headers: authHeaders(adminToken, true),
+    headers: authHeaders(adminSession, true),
     body: JSON.stringify(createPayload),
   })
   expectStatus({
@@ -254,14 +401,14 @@ const run = async () => {
   })
 
   for (const role of roles) {
-    const reservationsResponse = await request('/reservations', {
+    const reservationsResponse = await request('/users/me/appointments/history', {
       method: 'GET',
-      headers: authHeaders(role.token),
+      headers: authHeaders(role.session),
     })
     expectStatus({
       actual: reservationsResponse.status,
       expected: 200,
-      label: `GET /reservations (${role.name})`,
+      label: `GET /users/me/appointments/history (${role.name})`,
       details: reservationsResponse.text,
     })
   }
@@ -269,7 +416,7 @@ const run = async () => {
   for (const role of roles) {
     const logoutResponse = await request('/logout', {
       method: 'POST',
-      headers: authHeaders(role.token),
+      headers: authHeaders(role.session),
     })
     expectStatus({
       actual: logoutResponse.status,

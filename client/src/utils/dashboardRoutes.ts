@@ -3,7 +3,7 @@ import type { UserRole } from '../types'
 
 const normalize = (value?: string | null) => String(value || '').trim().toLowerCase()
 
-const DOCTOR_ROLE_ALIASES = new Set(['doctor'])
+const DOCTOR_ROLE_ALIASES = new Set(['doctor', 'nurse'])
 const ADMIN_ROLE_ALIASES = new Set(['admin', 'system_admin'])
 const PATIENT_ROLE_ALIASES = new Set(['patient', 'user'])
 

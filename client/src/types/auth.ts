@@ -2,7 +2,7 @@ export type UserRole = 'user' | 'doctor' | 'admin' | 'system_admin'
 export type AuthProvider = 'local' | 'auth0'
 
 export type AuthSession = {
-  token: string
+  token?: string
   user: {
     username: string
     firstName?: string

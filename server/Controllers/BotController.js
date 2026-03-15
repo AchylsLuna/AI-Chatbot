@@ -2,10 +2,10 @@ import { fetchBotResponse } from '../Models/BotModel.js';
 
 export const checkSymptoms = async (req, res) => {
     try {
-        const userMessage = req.body.message;
+        const userMessage = String(req.body.message || '').trim();
         const context = {
-            isIdentified: Boolean(req.body.isIdentified),
-            userRole: req.body.userRole || null,
+            isIdentified: req.body.isIdentified === true,
+            userRole: req.body.userRole ? String(req.body.userRole).trim() : null,
         }
 
         if (!userMessage) {

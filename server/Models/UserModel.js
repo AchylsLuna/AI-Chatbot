@@ -65,8 +65,31 @@ const UserSchema = new mongoose.Schema(
         otpExpires: {
             type: Date,
             select: false
-        }
-        ,
+        },
+        otpChallengeId: {
+            type: String,
+            select: false
+        },
+        otpFailedAttempts: {
+            type: Number,
+            default: 0,
+            min: 0,
+            select: false
+        },
+        otpLockUntil: {
+            type: Date,
+            select: false
+        },
+        otpSendCount: {
+            type: Number,
+            default: 0,
+            min: 0,
+            select: false
+        },
+        otpSendWindowStartedAt: {
+            type: Date,
+            select: false
+        },
         settings: {
             notifications: {
                 email: { type: Boolean, default: true },
