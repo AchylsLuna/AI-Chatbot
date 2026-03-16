@@ -7,6 +7,7 @@ import {sendOTP} from "../Utils/emailService.js";
 import Appointments from "../Models/AppointmentsModel.js";
 import { appConfig } from "../Config/env.js";
 import { hashSessionToken } from "../Utils/sessionTokens.js";
+import { isAdminRole, normalizeRole } from "../Utils/roles.js";
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
 const OTP_MAX_FAILED_ATTEMPTS = 5;
@@ -356,9 +357,10 @@ export async function verifyOTP(req, res) {
 
         clearOtpChallenge(user);
         await user.save();
+        const normalizedRole = normalizeRole(user.role) || 'user';
 
         const token = jwt.sign(
-            {id: user._id, role: user.role, email: user.email},
+            {id: user._id, role: normalizedRole, email: user.email},
             appConfig.jwtSecret,
             {expiresIn: "7d"}
         );
@@ -385,7 +387,7 @@ export async function verifyOTP(req, res) {
                 firstName: user.firstName,
                 lastName: user.lastName,
                 email: user.email,
-                role: user.role,
+                role: normalizedRole,
                 authMethod: user.googleId ? "google" : "local",
                 mfa: true,
                 sessionId: session._id,
@@ -523,8 +525,9 @@ export async function googleCallback(req, res) {
         }
 
         // 1. Generate Token
+        const normalizedRole = normalizeRole(user.role) || 'user';
         const token = jwt.sign(
-            { id: user._id, role: user.role, email: user.email },
+            { id: user._id, role: normalizedRole, email: user.email },
             appConfig.jwtSecret,
             { expiresIn: "7d" }
         );
@@ -633,7 +636,7 @@ export async function getMyProfile(req, res) {
                 email: user.email,
                 firstName: user.firstName,
                 lastName: user.lastName,
-                role: user.role,
+                role: normalizeRole(user.role) || 'user',
                 status: user.status,
                 department: user.department,
                 ...(user.profile || {}),
@@ -689,7 +692,7 @@ export async function updateMyProfile(req, res) {
                 email: user.email,
                 firstName: user.firstName,
                 lastName: user.lastName,
-                role: user.role,
+                role: normalizeRole(user.role) || 'user',
                 status: user.status,
                 department: user.department,
                 ...(user.profile || {})
@@ -785,17 +788,20 @@ export async function upsertPersonalHealthInfo(req, res) {
 
 export async function getPatientMedicalProfile(req, res) {
     try {
-        const doctorId = req.user?.id || req.user?._id
+        const actorId = req.user?.id || req.user?._id
+        const actorRole = normalizeRole(req.user?.role) || 'user'
         const { patientId } = req.params
-        if (!doctorId) return res.status(401).json({ message: 'Invalid session' })
+        if (!actorId) return res.status(401).json({ message: 'Invalid session' })
 
-        const appointment = await Appointments.findOne({
-            doctor: doctorId,
-            patient: patientId
-        }).select('_id')
+        if (!isAdminRole(actorRole)) {
+            const appointment = await Appointments.findOne({
+                doctor: actorId,
+                patient: patientId
+            }).select('_id')
 
-        if (!appointment) {
-            return res.status(403).json({ message: 'You do not have access to this patient record.' })
+            if (!appointment) {
+                return res.status(403).json({ message: 'You do not have access to this patient record.' })
+            }
         }
 
         const patient = await User.findById(patientId).select(
@@ -804,9 +810,9 @@ export async function getPatientMedicalProfile(req, res) {
         if (!patient) return res.status(404).json({ message: 'Patient not found' })
 
         await AuditLog.create({
-            userId: doctorId,
+            userId: actorId,
             action: 'VIEWED_PATIENT_MEDICAL_PROFILE',
-            details: `Doctor viewed patient profile for patientId=${patientId}`,
+            details: `${isAdminRole(actorRole) ? 'Admin' : 'Doctor'} viewed patient profile for patientId=${patientId}`,
             ipAddress: req.ip,
             userAgent: req.headers['user-agent']
         })

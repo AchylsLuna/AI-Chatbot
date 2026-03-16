@@ -11,7 +11,8 @@ export const APPOINTMENTS_TAB_PATHS = {
 } as const
 
 export const DOCTOR_TAB_PATHS = {
-  appointments: ROUTES.doctor.dashboard,
+  dashboard: ROUTES.doctor.dashboard,
+  appointments: `${ROUTES.doctor.root}/appointments`,
   calendar: `${ROUTES.doctor.root}/calendar`,
   schedule: `${ROUTES.doctor.root}/schedule`,
   queue: `${ROUTES.doctor.root}/queue`,
@@ -97,7 +98,7 @@ export const resolveDoctorTabFromPath = (path: string): DoctorTab | null => {
   const normalized = normalizePath(path)
   const direct = findTabForPath(DOCTOR_TAB_PATHS, normalized)
   if (direct) return direct
-  if (DOCTOR_DEFAULT_COMPAT_PATHS.has(normalized)) return 'appointments'
+  if (DOCTOR_DEFAULT_COMPAT_PATHS.has(normalized)) return 'dashboard'
   return null
 }
 
@@ -141,7 +142,7 @@ export const resolveTabCanonicalPath = (path: string): string | null => {
 
   const page = resolveTabPageFromPath(normalized)
   if (page === 'appointments') return getAppointmentsTabPath('booking_appointments')
-  if (page === 'doctor_dashboard') return getDoctorTabPath('appointments')
+  if (page === 'doctor_dashboard') return getDoctorTabPath('dashboard')
   if (page === 'admin') return getAdminTabPath('user_management')
 
   return null

@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import Sessions from "../Models/SessionModel.js";
 import { appConfig } from "../Config/env.js";
 import { hashSessionToken } from "../Utils/sessionTokens.js";
+import { normalizeRole } from "../Utils/roles.js";
 
 const verifyToken = async (req, res, next) => {
     // Check for token in Authorization header or cookies
@@ -27,7 +28,7 @@ const verifyToken = async (req, res, next) => {
         req.user = {
             ...decoded,
             id: decoded?.id || decoded?._id || activeSession.userId?.toString?.(),
-            role: decoded?.role,
+            role: normalizeRole(decoded?.role) || 'user',
             sessionId: activeSession._id?.toString?.(),
         };
         next();

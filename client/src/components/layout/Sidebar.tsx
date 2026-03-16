@@ -221,6 +221,14 @@ const Sidebar = ({
       : ''
   const showCollapsedState = Boolean(isCollapsed)
   const allowCollapse = Boolean(onToggleCollapse)
+  const brandBadgeClassName =
+    variant === 'patient'
+      ? 'h-8 w-8 rounded-xl border-0 bg-cyan-500 shadow-none'
+      : 'h-10 w-10'
+  const brandMarkClassName =
+    variant === 'patient'
+      ? 'h-4 w-4 text-white'
+      : 'h-5 w-5 text-[color:var(--agent-accent)]'
 
   const handleAuxSelect = (key: string) => {
     if (onSelectAuxiliary) {
@@ -281,7 +289,7 @@ const Sidebar = ({
               className="tab-sidebar-brand-main"
               data-sidebar-nav-item="true"
             >
-              <AppLogoBadge className="h-10 w-10" />
+              <AppLogoBadge className={brandBadgeClassName} markClassName={brandMarkClassName} />
               <span className="min-w-0 text-left">
                 <span className="tab-sidebar-brand-title">{brandTitle}</span>
                 <span className="tab-sidebar-brand-subtitle">{brandSubtitle}</span>
@@ -289,7 +297,7 @@ const Sidebar = ({
             </button>
           ) : (
             <span className="tab-sidebar-brand-main is-static">
-              <AppLogoBadge className="h-10 w-10" />
+              <AppLogoBadge className={brandBadgeClassName} markClassName={brandMarkClassName} />
               <span className="min-w-0 text-left">
                 <span className="tab-sidebar-brand-title">{brandTitle}</span>
                 <span className="tab-sidebar-brand-subtitle">{brandSubtitle}</span>

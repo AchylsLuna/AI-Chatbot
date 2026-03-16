@@ -1,5 +1,6 @@
 import AuditLog from "../Models/AuditLogModel.js";
 import User from "../Models/UserModel.js";
+import { normalizeRole, normalizeRoleList } from "../Utils/roles.js";
 
 const resolveRequesterEmail = async (req) => {
     if (req.user?.email) return req.user.email;
@@ -15,8 +16,12 @@ const resolveRequesterEmail = async (req) => {
 };
 
 export const authorizeRoles = (...allowedRoles) => {
+    const normalizedAllowedRoles = normalizeRoleList(allowedRoles);
+
     return async (req, res, next) => {
-        if (!req.user || !allowedRoles.includes(req.user.role)) {
+        const requesterRole = normalizeRole(req.user?.role);
+
+        if (!req.user || !requesterRole || !normalizedAllowedRoles.includes(requesterRole)) {
             const requesterEmail = await resolveRequesterEmail(req);
 
             //Logs if user is denied

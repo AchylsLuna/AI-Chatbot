@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AuthSplitLayout from '../../components/auth/AuthSplitLayout'
 import type { AppPage } from '../../types/navigation'
 import type { AuthProvider, AuthSession } from '../../types'
@@ -31,14 +31,24 @@ const AdminLoginPage = ({
   onNavigate,
 }: AdminLoginPageProps) => {
   const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const passwordInputRef = useRef<HTMLInputElement | null>(null)
 
   const hasAdminPortalAccess = authUser
     ? authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
   const hasDoctorDashboardAccess = authUser ? authUser.role === 'doctor' : false
+
+  const clearPasswordField = () => {
+    if (passwordInputRef.current) {
+      passwordInputRef.current.value = ''
+    }
+  }
+
+  useEffect(() => {
+    if (!authError) return
+    clearPasswordField()
+  }, [authError])
 
   return (
     <AuthSplitLayout layout="center" centerBorderless>
@@ -118,11 +128,18 @@ const AdminLoginPage = ({
             onSubmit={(event) => {
               event.preventDefault()
               const email = username.trim().toLowerCase()
+              const passwordValue = passwordInputRef.current?.value ?? ''
               if (!EMAIL_PATTERN.test(email)) {
                 setFormError('Use a valid email address before signing in.')
                 return
               }
-              onLogin(email, password, 'admin')
+              if (!passwordValue.trim()) {
+                setFormError('Enter your password before signing in.')
+                return
+              }
+              setFormError(null)
+              onLogin(email, passwordValue, 'admin')
+              clearPasswordField()
             }}
           >
             <div className="space-y-2">
@@ -152,6 +169,9 @@ const AdminLoginPage = ({
                   id="admin-login-username"
                   type="email"
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={username}
                   onChange={(event) => {
                     setUsername(event.target.value)
@@ -186,53 +206,19 @@ const AdminLoginPage = ({
                   </svg>
                 </span>
                 <input
+                  ref={passwordInputRef}
                   id="admin-login-password"
-                  type={showPassword ? 'text' : 'password'}
+                  type="password"
                   autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => {
-                    setPassword(event.target.value)
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  onInput={() => {
                     if (formError) setFormError(null)
                   }}
                   placeholder="Password"
-                  className="agent-input agent-input-icon agent-input-icon-right"
+                  className="agent-input agent-input-icon"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--agent-muted-soft)] transition hover:text-[color:var(--agent-ink)]"
-                >
-                  {showPassword ? (
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M3 3l18 18" />
-                      <path d="M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58" />
-                      <path d="M9.88 4.24A9.9 9.9 0 0112 4c5.05 0 9.27 3.11 11 8-0.6 1.69-1.61 3.2-2.92 4.41" />
-                      <path d="M6.23 6.23C4.04 7.48 2.4 9.46 1 12c1.73 4.89 5.95 8 11 8 1.62 0 3.15-0.32 4.53-0.9" />
-                    </svg>
-                  ) : (
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  )}
-                </button>
               </div>
             </div>
 

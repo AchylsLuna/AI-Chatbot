@@ -4,6 +4,7 @@ import DoctorSchedule from "../Models/DoctorScheduleModel.js";
 import User from "../Models/UserModel.js";
 import crypto from 'crypto';
 import { blockchainService } from '../Utils/blockchainService.js';
+import { DOCTOR_ROLE_ALIASES, isAdminRole, isDoctorRole, normalizeRole } from '../Utils/roles.js';
 import {
     CLINIC_TIMEZONE,
     EMPTY_WEEK_DAYS,
@@ -18,6 +19,14 @@ import {
 } from '../Utils/schedulingService.js';
 
 const ACTIVE_BOOKING_STATUSES = ['Pending', 'Confirmed']
+const DOCTOR_ROLE_FILTER = { $in: DOCTOR_ROLE_ALIASES }
+
+const getActorId = (req) => {
+    const actorId = req.user?.id || req.user?._id
+    return actorId ? String(actorId) : ''
+}
+
+const getActorRole = (req) => normalizeRole(req.user?.role) || 'user'
 
 const formatDateKeyFromUtcDate = (value) => {
     const date = value instanceof Date ? value : new Date(value)
@@ -168,7 +177,7 @@ export async function createAppointment(req, res) {
 
         const doctor = await User.findOne({
             _id: doctorId,
-            role: 'doctor',
+            role: DOCTOR_ROLE_FILTER,
             status: 'active',
             department: normalizedDepartment,
         }).select('_id email department');
@@ -270,15 +279,12 @@ export async function createAppointment(req, res) {
 
 export async function getDoctorWeeklySchedule(req, res) {
     try {
-        const actorId = req.user?.id || req.user?._id
-        const actorRole = req.user?.role
+        const actorId = getActorId(req)
+        const actorRole = getActorRole(req)
         if (!actorId) return res.status(401).json({ message: 'Invalid session' })
 
         const requestedDoctorId = String(req.query?.doctorId || '').trim()
-        const doctorId =
-            actorRole === 'admin' || actorRole === 'system_admin'
-                ? (requestedDoctorId || String(actorId))
-                : String(actorId)
+        const doctorId = isAdminRole(actorRole) ? requestedDoctorId : actorId
 
         if (!doctorId) {
             return res.status(400).json({ message: 'doctorId is required for this role.' })
@@ -289,7 +295,7 @@ export async function getDoctorWeeklySchedule(req, res) {
             return res.status(400).json({ message: 'Invalid weekStart value. Use YYYY-MM-DD.' })
         }
 
-        const doctor = await User.findOne({ _id: doctorId, role: 'doctor' }).select('_id status')
+        const doctor = await User.findOne({ _id: doctorId, role: DOCTOR_ROLE_FILTER }).select('_id status')
         if (!doctor) {
             return res.status(404).json({ message: 'Doctor not found.' })
         }
@@ -312,21 +318,18 @@ export async function getDoctorWeeklySchedule(req, res) {
 
 export async function upsertDoctorWeeklySchedule(req, res) {
     try {
-        const actorId = req.user?.id || req.user?._id
-        const actorRole = req.user?.role
+        const actorId = getActorId(req)
+        const actorRole = getActorRole(req)
         if (!actorId) return res.status(401).json({ message: 'Invalid session' })
 
         const requestedDoctorId = String(req.body?.doctorId || '').trim()
-        const doctorId =
-            actorRole === 'admin' || actorRole === 'system_admin'
-                ? requestedDoctorId
-                : String(actorId)
+        const doctorId = isAdminRole(actorRole) ? requestedDoctorId : actorId
 
         if (!doctorId) {
             return res.status(400).json({ message: 'doctorId is required.' })
         }
 
-        if (actorRole === 'doctor' && requestedDoctorId && requestedDoctorId !== String(actorId)) {
+        if (isDoctorRole(actorRole) && requestedDoctorId && requestedDoctorId !== actorId) {
             return res.status(403).json({ message: 'Doctors can only modify their own schedules.' })
         }
 
@@ -335,7 +338,7 @@ export async function upsertDoctorWeeklySchedule(req, res) {
             return res.status(400).json({ message: 'Invalid weekStart value. Use YYYY-MM-DD.' })
         }
 
-        const doctor = await User.findOne({ _id: doctorId, role: 'doctor' }).select('_id email status')
+        const doctor = await User.findOne({ _id: doctorId, role: DOCTOR_ROLE_FILTER }).select('_id email status')
         if (!doctor) {
             return res.status(404).json({ message: 'Doctor not found.' })
         }
@@ -401,7 +404,7 @@ export async function getDoctorAvailableSlots(req, res) {
 
         const doctor = await User.findOne({
             _id: doctorId,
-            role: 'doctor',
+            role: DOCTOR_ROLE_FILTER,
             status: 'active',
         }).select('_id')
         if (!doctor) {
@@ -495,7 +498,7 @@ export async function getAvailableDoctorsByDepartment(req, res) {
         const department = departmentInput === 'General Medicine' ? 'Internal Medicine' : departmentInput
 
         const doctors = await User.find({
-            role: 'doctor',
+            role: DOCTOR_ROLE_FILTER,
             status: 'active',
             department,
         }).select('_id firstName lastName email department')
@@ -517,15 +520,15 @@ export async function getAvailableDoctorsByDepartment(req, res) {
 
 export async function getAppointments(req, res) {
     try {
-        const userId = req.user?.id || req.user?._id
+        const userId = getActorId(req)
         if (!userId) return res.status(401).json({ message: 'Invalid session' })
 
         const actor = await User.findById(userId).select('role')
-        const role = actor?.role || req.user?.role || 'user'
+        const role = normalizeRole(actor?.role || req.user?.role) || 'user'
 
         const query =
-            role === 'doctor' ? { doctor: userId } :
-            role === 'admin' || role === 'system_admin' ? {} :
+            isDoctorRole(role) ? { doctor: userId } :
+            isAdminRole(role) ? {} :
             { patient: userId }
 
         const appointments = await Appointments.find(query)
@@ -582,8 +585,8 @@ const DOCTOR_ALLOWED_TRANSITIONS = {
 
 export async function updateAppointmentStatus(req, res) {
     try {
-        const userId = req.user?.id || req.user?._id
-        const role = req.user?.role
+        const userId = getActorId(req)
+        const role = getActorRole(req)
         const { appointmentId } = req.params
         const { status } = req.body
 
@@ -599,13 +602,13 @@ export async function updateAppointmentStatus(req, res) {
             return res.status(404).json({ message: 'Appointment not found.' })
         }
 
-        if (role === 'doctor' && String(appointment.doctor?._id || appointment.doctor) !== String(userId)) {
+        if (isDoctorRole(role) && String(appointment.doctor?._id || appointment.doctor) !== String(userId)) {
             return res.status(403).json({ message: 'You can only update your own appointments.' })
         }
-        if (!['doctor', 'admin', 'system_admin'].includes(role)) {
+        if (!isDoctorRole(role) && !isAdminRole(role)) {
             return res.status(403).json({ message: 'You are not allowed to update appointment status.' })
         }
-        if (role === 'doctor' && !DOCTOR_ALLOWED_TRANSITIONS[appointment.status]?.includes(status)) {
+        if (isDoctorRole(role) && !DOCTOR_ALLOWED_TRANSITIONS[appointment.status]?.includes(status)) {
             return res.status(400).json({ message: `Invalid status transition: ${appointment.status} -> ${status}` })
         }
 
@@ -696,8 +699,16 @@ const endOfDay = (date = new Date()) => {
 
 export async function getDoctorDashboardOverview(req, res) {
     try {
-        const doctorId = req.user?.id || req.user?._id
-        if (!doctorId) return res.status(401).json({ message: 'Invalid session' })
+        const actorId = getActorId(req)
+        if (!actorId) return res.status(401).json({ message: 'Invalid session' })
+
+        const actorRole = getActorRole(req)
+        const requestedDoctorId = String(req.query?.doctorId || '').trim()
+        if (isAdminRole(actorRole) && !requestedDoctorId) {
+            return res.status(400).json({ message: 'doctorId is required for this role.' })
+        }
+
+        const doctorId = isAdminRole(actorRole) ? requestedDoctorId : actorId
 
         const now = new Date()
         const dayStart = startOfDay(now)
@@ -778,8 +789,16 @@ export async function getDoctorDashboardOverview(req, res) {
 
 export async function getDoctorQueueTimeline(req, res) {
     try {
-        const doctorId = req.user?.id || req.user?._id
-        if (!doctorId) return res.status(401).json({ message: 'Invalid session' })
+        const actorId = getActorId(req)
+        if (!actorId) return res.status(401).json({ message: 'Invalid session' })
+
+        const actorRole = getActorRole(req)
+        const requestedDoctorId = String(req.query?.doctorId || '').trim()
+        if (isAdminRole(actorRole) && !requestedDoctorId) {
+            return res.status(400).json({ message: 'doctorId is required for this role.' })
+        }
+
+        const doctorId = isAdminRole(actorRole) ? requestedDoctorId : actorId
 
         const now = new Date()
         const dayStart = startOfDay(now)
@@ -832,8 +851,9 @@ export async function getDoctorQueueTimeline(req, res) {
 
 export async function updateDoctorQueueStatus(req, res) {
     try {
-        const doctorId = req.user?.id || req.user?._id
-        if (!doctorId) return res.status(401).json({ message: 'Invalid session' })
+        const actorId = getActorId(req)
+        const actorRole = getActorRole(req)
+        if (!actorId) return res.status(401).json({ message: 'Invalid session' })
 
         const { appointmentId } = req.params
         const { queueStatus } = req.body
@@ -842,7 +862,11 @@ export async function updateDoctorQueueStatus(req, res) {
             return res.status(400).json({ message: 'Invalid queue status.' })
         }
 
-        const appointment = await Appointments.findOne({ _id: appointmentId, doctor: doctorId })
+        const appointment = await Appointments.findOne(
+            isAdminRole(actorRole)
+                ? { _id: appointmentId }
+                : { _id: appointmentId, doctor: actorId }
+        )
         if (!appointment) {
             return res.status(404).json({ message: 'Appointment not found.' })
         }
@@ -861,7 +885,7 @@ export async function updateDoctorQueueStatus(req, res) {
         }
 
         await AuditLog.create({
-            userId: doctorId,
+            userId: actorId,
             action: 'UPDATED_DOCTOR_QUEUE_STATUS',
             details: `Appointment ${appointment._id} queue status -> ${queueStatus}`,
             ipAddress: req.ip,
@@ -884,13 +908,18 @@ export async function updateDoctorQueueStatus(req, res) {
 
 export async function saveAppointmentSoapNote(req, res) {
     try {
-        const doctorId = req.user?.id || req.user?._id
-        if (!doctorId) return res.status(401).json({ message: 'Invalid session' })
+        const actorId = getActorId(req)
+        const actorRole = getActorRole(req)
+        if (!actorId) return res.status(401).json({ message: 'Invalid session' })
 
         const { appointmentId } = req.params
         const { subjective, objective, assessment, plan } = req.body || {}
 
-        const appointment = await Appointments.findOne({ _id: appointmentId, doctor: doctorId })
+        const appointment = await Appointments.findOne(
+            isAdminRole(actorRole)
+                ? { _id: appointmentId }
+                : { _id: appointmentId, doctor: actorId }
+        )
         if (!appointment) {
             return res.status(404).json({ message: 'Appointment not found.' })
         }
@@ -910,7 +939,7 @@ export async function saveAppointmentSoapNote(req, res) {
         // 3. Update the MongoDB document
         appointment.soapNote = {
             ...soapData,
-            updatedBy: doctorId,
+            updatedBy: actorId,
             updatedAt: new Date(),
         }
         appointment.soapNoteHashRecord = soapHash; // Ensure this field exists in your Mongoose Schema!
@@ -922,7 +951,7 @@ export async function saveAppointmentSoapNote(req, res) {
             .catch(err => console.error('Blockchain sync failed for SOAP note:', err));
 
         await AuditLog.create({
-            userId: doctorId,
+            userId: actorId,
             action: 'SAVED_APPOINTMENT_SOAP_NOTE',
             details: `Appointment ${appointment._id} SOAP note updated. Blockchain Hash: ${soapHash.substring(0,8)}...`,
             ipAddress: req.ip,
@@ -943,13 +972,18 @@ export async function saveAppointmentSoapNote(req, res) {
 
 export async function saveAppointmentPrescriptions(req, res) {
     try {
-        const doctorId = req.user?.id || req.user?._id
-        if (!doctorId) return res.status(401).json({ message: 'Invalid session' })
+        const actorId = getActorId(req)
+        const actorRole = getActorRole(req)
+        if (!actorId) return res.status(401).json({ message: 'Invalid session' })
 
         const { appointmentId } = req.params
         const prescriptions = Array.isArray(req.body?.prescriptions) ? req.body.prescriptions : []
 
-        const appointment = await Appointments.findOne({ _id: appointmentId, doctor: doctorId })
+        const appointment = await Appointments.findOne(
+            isAdminRole(actorRole)
+                ? { _id: appointmentId }
+                : { _id: appointmentId, doctor: actorId }
+        )
         if (!appointment) {
             return res.status(404).json({ message: 'Appointment not found.' })
         }
@@ -975,7 +1009,7 @@ export async function saveAppointmentPrescriptions(req, res) {
         // 2. Add metadata (dates, doctorId) AFTER hashing to preserve clean content hashing
         const dbPrescriptions = normalized.map(item => ({
             ...item,
-            prescribedBy: doctorId,
+            prescribedBy: actorId,
             createdAt: new Date()
         }))
 
@@ -989,7 +1023,7 @@ export async function saveAppointmentPrescriptions(req, res) {
             .catch(err => console.error('Blockchain sync failed for prescriptions:', err));
 
         await AuditLog.create({
-            userId: doctorId,
+            userId: actorId,
             action: 'SAVED_APPOINTMENT_PRESCRIPTIONS',
             details: `Appointment ${appointment._id} prescriptions updated (${normalized.length}). Blockchain Hash: ${prescriptionsHash.substring(0,8)}...`,
             ipAddress: req.ip,
@@ -1024,8 +1058,16 @@ export async function getMedicationSearch(req, res) {
 
 export async function getFrequentPrescriptions(req, res) {
     try {
-        const doctorId = req.user?.id || req.user?._id
-        if (!doctorId) return res.status(401).json({ message: 'Invalid session' })
+        const actorId = getActorId(req)
+        if (!actorId) return res.status(401).json({ message: 'Invalid session' })
+
+        const actorRole = getActorRole(req)
+        const requestedDoctorId = String(req.query?.doctorId || '').trim()
+        if (isAdminRole(actorRole) && !requestedDoctorId) {
+            return res.status(400).json({ message: 'doctorId is required for this role.' })
+        }
+
+        const doctorId = isAdminRole(actorRole) ? requestedDoctorId : actorId
 
         const appointments = await Appointments.find({ doctor: doctorId }).select('prescriptions')
         const counter = new Map()

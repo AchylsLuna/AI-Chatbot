@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import PageCanvas from '../../components/layout/PageCanvas'
 import Sidebar, { type SidebarItem } from '../../components/layout/Sidebar'
@@ -21,7 +21,13 @@ import type { AuthSession, Reservation } from '../../types'
 import { formatPhilippineDateTime } from '../../utils/dateTime'
 import { maskIdentifier, maskPersonName } from '../../utils/privacy'
 import { formatRoleLabel, getRoleLabel } from '../../utils/roles'
-import { reservationStatusChipClass } from '../../utils/statusStyles'
+import {
+  dangerStatusChipClass,
+  infoStatusChipClass,
+  reservationStatusChipClass,
+  successStatusChipClass,
+  warningStatusChipClass,
+} from '../../utils/statusStyles'
 import {
   api,
   type AdminAuditLogRecord,
@@ -123,14 +129,12 @@ const formatDateTime = (value: string | null | undefined) => {
 }
 
 const accountChipClass = (status: AdminUserRecord['status']) =>
-  status === 'disabled'
-    ? 'border-rose-300/70 bg-rose-100 text-rose-700'
-    : 'border-emerald-300/70 bg-emerald-100 text-emerald-700'
+  status === 'disabled' ? dangerStatusChipClass : successStatusChipClass
 
 const severityChipClass = (severity: 'Info' | 'Warning' | 'Critical') => {
-  if (severity === 'Critical') return 'border-rose-300/70 bg-rose-100 text-rose-700'
-  if (severity === 'Warning') return 'border-amber-300/70 bg-amber-100 text-amber-700'
-  return 'border-sky-300/70 bg-sky-100 text-sky-700'
+  if (severity === 'Critical') return dangerStatusChipClass
+  if (severity === 'Warning') return warningStatusChipClass
+  return infoStatusChipClass
 }
 
 const buildBookingSummary = (
@@ -218,28 +222,7 @@ const AdminDashboardPage = ({
   const [selectedStaffApplication, setSelectedStaffApplication] = useState<AdminStaffApplicationRecord | null>(null)
   const [isReviewActionPending, setIsReviewActionPending] = useState(false)
 
-  const INACTIVITY_MS = 15 * 60 * 1000
-  const timerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
-
-  const resetInactivityTimer = () => {
-    if (timerRef.current) window.clearTimeout(timerRef.current)
-    timerRef.current = window.setTimeout(() => {
-      setShowLogoutConfirm(false)
-      onLogout()
-    }, INACTIVITY_MS)
-  }
-
-  useEffect(() => {
-    resetInactivityTimer()
-    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart']
-    const handler = () => resetInactivityTimer()
-    for (const ev of events) window.addEventListener(ev, handler)
-    return () => {
-      for (const ev of events) window.removeEventListener(ev, handler)
-      if (timerRef.current) window.clearTimeout(timerRef.current)
-    }
-  }, [onLogout])
 
   const fetchAdminData = async () => {
     setLoadingData(true)
@@ -784,7 +767,7 @@ const AdminDashboardPage = ({
   }
 
   return (
-    <PageCanvas>
+    <PageCanvas className="staff-theme">
       <div className="w-full">
         <SidebarShell
           className={`page-shell--full-side${isSidebarCollapsed ? ' page-shell--rail-collapsed' : ''}`}

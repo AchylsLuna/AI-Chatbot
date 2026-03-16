@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
 import type { AuthProvider, AuthSession } from '../types'
@@ -35,11 +35,11 @@ const LoginPage = ({
   defaultRoleTab = 'patient',
 }: LoginPageProps) => {
   const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [emailError, setEmailError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
   const [roleTab, setRoleTab] = useState<LoginRoleTab>(defaultRoleTab)
   const [doctorLicenseId, setDoctorLicenseId] = useState('')
+  const passwordInputRef = useRef<HTMLInputElement | null>(null)
   const homePage: AppPage = getDefaultPageForRole(authUser?.role)
   const homeLabel =
     homePage === 'appointments'
@@ -49,6 +49,18 @@ const LoginPage = ({
         : homePage === 'admin'
           ? 'Go to admin dashboard'
           : 'Go to dashboard'
+
+  const clearPasswordField = () => {
+    if (passwordInputRef.current) {
+      passwordInputRef.current.value = ''
+    }
+  }
+
+  useEffect(() => {
+    if (!authError) return
+    clearPasswordField()
+    setPasswordError(null)
+  }, [authError])
 
   return (
     <AuthSplitLayout variant="lovable">
@@ -104,12 +116,19 @@ const LoginPage = ({
             onSubmit={(event) => {
               event.preventDefault()
               const email = username.trim().toLowerCase()
+              const passwordValue = passwordInputRef.current?.value ?? ''
               if (!EMAIL_PATTERN.test(email)) {
                 setEmailError('Use a valid email address before signing in.')
                 return
               }
+              if (!passwordValue.trim()) {
+                setPasswordError('Enter your password before signing in.')
+                return
+              }
               setEmailError(null)
-              onLogin(email, password, roleTab === 'doctor' ? 'doctor_dashboard' : 'appointments')
+              setPasswordError(null)
+              onLogin(email, passwordValue, roleTab === 'doctor' ? 'doctor_dashboard' : 'appointments')
+              clearPasswordField()
             }}
         >
           <p className="auth-lovable-section-label">
@@ -122,6 +141,8 @@ const LoginPage = ({
               onClick={() => {
                 setRoleTab('patient')
                 if (emailError) setEmailError(null)
+                if (passwordError) setPasswordError(null)
+                clearPasswordField()
               }}
               className={`auth-lovable-role-button ${roleTab === 'patient' ? 'is-active' : ''}`}
             >
@@ -144,6 +165,8 @@ const LoginPage = ({
               onClick={() => {
                 setRoleTab('doctor')
                 if (emailError) setEmailError(null)
+                if (passwordError) setPasswordError(null)
+                clearPasswordField()
               }}
               className={`auth-lovable-role-button ${roleTab === 'doctor' ? 'is-active' : ''}`}
             >
@@ -180,6 +203,10 @@ const LoginPage = ({
             </span>
             <input
               type="email"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={username}
               onChange={(event) => {
                 setUsername(event.target.value)
@@ -236,51 +263,21 @@ const LoginPage = ({
               </svg>
             </span>
             <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value)
+              ref={passwordInputRef}
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              onInput={() => {
+                if (passwordError) setPasswordError(null)
               }}
               placeholder="Password"
-              className="auth-lovable-input pl-10 pr-10"
+              className="auth-lovable-input pl-10"
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="auth-lovable-password-toggle"
-            >
-              {showPassword ? (
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 3l18 18" />
-                  <path d="M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58" />
-                  <path d="M9.88 4.24A9.9 9.9 0 0112 4c5.05 0 9.27 3.11 11 8-0.6 1.69-1.61 3.2-2.92 4.41" />
-                  <path d="M6.23 6.23C4.04 7.48 2.4 9.46 1 12c1.73 4.89 5.95 8 11 8 1.62 0 3.15-0.32 4.53-0.9" />
-                </svg>
-              ) : (
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              )}
-            </button>
           </div>
+          {passwordError ? <p className="auth-lovable-field-error" role="alert">{passwordError}</p> : null}
 
           <div className="flex justify-end">
             <button

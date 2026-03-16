@@ -58,17 +58,17 @@ const PageTopShell = ({
   const showRightRail = showControlRow || Boolean(quickActions)
 
   return (
-    <section className={`${pagePanelClass} overflow-hidden`}>
-      <div className="border-b border-[color:var(--card-border)] px-5 py-5 sm:px-6">
+    <section className={`${pagePanelClass} page-top-shell overflow-hidden`}>
+      <div className="page-top-shell-header sm:px-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             {eyebrow ? (
-              <span className={`rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${pageSubtleTextClass}`}>
+              <span className={`page-top-shell-chip ${pageSubtleTextClass}`}>
                 {eyebrow}
               </span>
             ) : null}
             {statusLabel ? (
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
+              <span className="page-top-shell-chip is-status">
                 {statusLabel}
               </span>
             ) : null}
@@ -77,7 +77,7 @@ const PageTopShell = ({
           {showControlRow ? (
             <div className="flex w-full flex-col gap-3 sm:flex-row xl:w-auto xl:min-w-[340px] xl:max-w-[460px]">
               {showSearch ? (
-                <div className="min-w-0 flex-1">
+                <div className="page-top-shell-search-wrap">
                   <label className="sr-only" htmlFor="page-shell-search">
                     Search records
                   </label>
@@ -85,7 +85,7 @@ const PageTopShell = ({
                     id="page-shell-search"
                     value={searchValue}
                     onChange={(event) => onSearchChange(event.target.value)}
-                    className={pageFieldClass}
+                    className={`${pageFieldClass} page-top-shell-search`}
                     placeholder={searchPlaceholder ?? 'Search records'}
                   />
                 </div>
@@ -108,10 +108,10 @@ const PageTopShell = ({
           className={`mt-5 grid gap-4 ${showRightRail ? 'lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end' : ''}`}
         >
           <div>
-            <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${pageHeadingTextClass}`}>
+            <h1 className={`page-top-shell-title ${pageHeadingTextClass}`}>
               {title}
             </h1>
-            <p className={`mt-2 max-w-3xl text-sm sm:text-base ${pageMutedTextClass}`}>{description}</p>
+            <p className={`page-top-shell-description ${pageMutedTextClass}`}>{description}</p>
           </div>
 
           {quickActions ? (
@@ -121,7 +121,7 @@ const PageTopShell = ({
       </div>
 
       {metrics.length > 0 ? (
-        <div className="bg-[color:var(--agent-surface-strong)]/65 px-5 py-4 sm:px-6">
+        <div className="page-top-shell-metrics sm:px-6">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {metrics.map((metric) => {
               const isLongTextValue = typeof metric.value === 'string' && metric.value.length > 20

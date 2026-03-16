@@ -57,6 +57,7 @@ import {
 import { body, validationResult } from 'express-validator';
 import passport from 'passport';
 import { isGoogleAuthConfigured } from '../Config/passport.js';
+import { normalizeRole } from '../Utils/roles.js';
 
 
 const router = Router();
@@ -220,7 +221,7 @@ router.get('/session', authMiddleware, async (req, res) => {
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
-            role: user.role,
+            role: normalizeRole(user.role) || 'user',
             authMethod: user.googleId ? 'google' : 'local',
             sessionId: req.user?.sessionId || null,
         })
@@ -388,7 +389,11 @@ router.put('/admin/users/:userId',
     authMiddleware,
     authorizeRoles('admin', 'system_admin'),
     [
-        body('role').optional().isIn(['user', 'doctor', 'admin', 'system_admin']),
+        body('role')
+            .optional()
+            .custom((value) => Boolean(normalizeRole(value)))
+            .withMessage('Invalid role value.')
+            .customSanitizer((value) => normalizeRole(value)),
         body('status').optional().isIn(['active', 'disabled']),
         body('department').optional().trim().isLength({ max: 120 }).escape(),
     ],

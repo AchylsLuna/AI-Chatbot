@@ -44,14 +44,6 @@ const meetsPasswordPolicy = (value: string) => {
   return true
 }
 
-const LEGAL_TERMS_VIEWED_KEY = 'pulse-ledger-legal-terms-viewed'
-const LEGAL_PRIVACY_VIEWED_KEY = 'pulse-ledger-legal-privacy-viewed'
-
-const getInitialLegalViewedState = (key: string) => {
-  if (typeof window === 'undefined') return false
-  return window.sessionStorage.getItem(key) === 'true'
-}
-
 const SignupPage = ({
   onNavigate,
   onSignupSuccess,
@@ -67,13 +59,8 @@ const SignupPage = ({
   const [doctorDepartment, setDoctorDepartment] = useState('')
   const [licenseFiles, setLicenseFiles] = useState<File[]>([])
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
-  const [hasViewedTerms, setHasViewedTerms] = useState<boolean>(() =>
-    getInitialLegalViewedState(LEGAL_TERMS_VIEWED_KEY)
-  )
-  const [hasViewedPrivacy, setHasViewedPrivacy] = useState<boolean>(() =>
-    getInitialLegalViewedState(LEGAL_PRIVACY_VIEWED_KEY)
-  )
   const [signupResult, setSignupResult] = useState<{
     username: string
     role: SignupRoleTab
@@ -108,31 +95,9 @@ const SignupPage = ({
     setLicenseFiles([])
     setRoleTab(defaultRoleTab)
     setAcceptedTerms(false)
-    setHasViewedTerms(false)
-    setHasViewedPrivacy(false)
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem(LEGAL_TERMS_VIEWED_KEY)
-      window.sessionStorage.removeItem(LEGAL_PRIVACY_VIEWED_KEY)
-    }
     if (licenseInputRef.current) {
       licenseInputRef.current.value = ''
     }
-  }
-
-  const markTermsViewedAndOpen = () => {
-    setHasViewedTerms(true)
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(LEGAL_TERMS_VIEWED_KEY, 'true')
-    }
-    onNavigate?.('terms')
-  }
-
-  const markPrivacyViewedAndOpen = () => {
-    setHasViewedPrivacy(true)
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(LEGAL_PRIVACY_VIEWED_KEY, 'true')
-    }
-    onNavigate?.('privacy_policy')
   }
 
   if (signupResult) {
@@ -151,6 +116,24 @@ const SignupPage = ({
     return (
       <AuthSplitLayout variant="lovable">
         <div className="auth-lovable-page">
+          <button
+            type="button"
+            onClick={resetSignupForm}
+            className="auth-lovable-back-link"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            Back
+          </button>
           <h2 className="auth-lovable-title">
             {isDoctorSignup ? 'Registration submitted' : 'Account created'}
           </h2>
@@ -263,24 +246,16 @@ const SignupPage = ({
               )}
             </div>
           ) : null}
-          <div className="auth-lovable-actions mt-5">
-            <button
-              onClick={() => onNavigate?.(isDoctorSignup ? 'doctor_login' : 'login')}
-              className="auth-lovable-primary-button px-4 py-2.5"
-            >
-              {isDoctorSignup
-                ? 'Go to doctor login'
-                : challenge
-                  ? 'Go to login instead'
-                  : 'Go to login'}
-            </button>
-            <button
-              onClick={resetSignupForm}
-              className="auth-lovable-secondary-button px-4 py-2.5"
-            >
-              Create another account
-            </button>
-          </div>
+          {!challenge ? (
+            <div className="auth-lovable-actions mt-5">
+              <button
+                onClick={() => onNavigate?.(isDoctorSignup ? 'doctor_login' : 'login')}
+                className="auth-lovable-primary-button px-4 py-2.5"
+              >
+                {isDoctorSignup ? 'Go to doctor login' : 'Go to login'}
+              </button>
+            </div>
+          ) : null}
         </div>
       </AuthSplitLayout>
     )
@@ -391,12 +366,6 @@ const SignupPage = ({
           }
           if (cleanedPassword !== cleanedConfirmPassword) {
             setSubmitError('Password and confirm password do not match.')
-            return
-          }
-          if (!hasViewedTerms || !hasViewedPrivacy) {
-            setSubmitError(
-              'Please open Terms and Conditions and Privacy Policy (RA 10173) before continuing.'
-            )
             return
           }
           if (!acceptedTerms) {
@@ -690,12 +659,48 @@ const SignupPage = ({
             </svg>
           </span>
           <input
-            type={showPassword ? 'text' : 'password'}
+            type={showConfirmPassword ? 'text' : 'password'}
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             placeholder="Confirm password"
-            className="auth-lovable-input pl-10"
+            className="auth-lovable-input pl-10 pr-10"
           />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPassword((prev) => !prev)}
+            aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+            className="auth-lovable-password-toggle"
+          >
+            {showConfirmPassword ? (
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 3l18 18" />
+                <path d="M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58" />
+                <path d="M9.88 4.24A9.9 9.9 0 0112 4c5.05 0 9.27 3.11 11 8-0.6 1.69-1.61 3.2-2.92 4.41" />
+                <path d="M6.23 6.23C4.04 7.48 2.4 9.46 1 12c1.73 4.89 5.95 8 11 8 1.62 0 3.15-0.32 4.53-0.9" />
+              </svg>
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            )}
+          </button>
         </div>
 
         <label className="flex items-start gap-2 rounded-xl border border-[color:var(--auth-lovable-border)] bg-[color:var(--auth-lovable-surface-soft)] px-3 py-3 text-xs text-[color:var(--auth-lovable-muted)]">
@@ -712,7 +717,7 @@ const SignupPage = ({
               className="auth-lovable-link underline underline-offset-2"
               onClick={(event) => {
                 event.preventDefault()
-                markTermsViewedAndOpen()
+                onNavigate?.('terms')
               }}
             >
               Terms and Conditions
@@ -723,17 +728,12 @@ const SignupPage = ({
               className="auth-lovable-link underline underline-offset-2"
               onClick={(event) => {
                 event.preventDefault()
-                markPrivacyViewedAndOpen()
+                onNavigate?.('privacy_policy')
               }}
             >
               Privacy Policy
             </button>{' '}
             (Data Privacy Act of 2012, Republic Act No. 10173).
-            {!hasViewedTerms || !hasViewedPrivacy ? (
-              <span className="mt-1 block text-[11px] text-[color:var(--auth-lovable-muted)]">
-                Open both links before submitting.
-              </span>
-            ) : null}
           </span>
         </label>
 

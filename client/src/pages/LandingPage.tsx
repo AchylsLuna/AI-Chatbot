@@ -259,7 +259,7 @@ const LandingPage = ({
           >
             <AppLogoBadge className="h-9 w-9" />
             <div>
-              <p className="text-sm font-extrabold text-[color:var(--agent-ink)]">AI Health Care</p>
+              <p className="text-sm font-semibold tracking-[-0.01em] text-[color:var(--agent-ink)]">AI Health Care</p>
               <p className="text-xs text-[color:var(--agent-muted)]">
                 Clinical scheduling and role-safe workflows
               </p>

@@ -14,7 +14,7 @@ const AuthShowcase = () => (
     <div className="flex items-center gap-3">
       <AppLogoBadge className="h-10 w-10" />
       <div>
-        <p className="text-sm font-extrabold text-[color:var(--agent-ink)]">AI Health Care</p>
+        <p className="text-sm font-semibold tracking-[-0.01em] text-[color:var(--agent-ink)]">AI Health Care</p>
         <p className="text-xs text-[color:var(--agent-muted)]">Clinical access and appointment operations</p>
       </div>
     </div>

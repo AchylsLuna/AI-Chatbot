@@ -10,7 +10,12 @@ import {
 import type { AppPage } from '../../types/navigation'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import type { AuthSession, Reservation, ReservationDraft } from '../../types'
-import { formatPhilippineDateTime } from '../../utils/dateTime'
+import {
+  pageFieldClass,
+  pageGhostButtonClass,
+  pagePanelClass,
+  pagePrimaryButtonClass,
+} from '../../styles/pageUi'
 import { maskPersonName } from '../../utils/privacy'
 import { getRoleLabel } from '../../utils/roles'
 import {
@@ -76,11 +81,6 @@ type HistoryFilter = 'all' | 'upcoming' | 'completed' | 'cancelled'
 const sidebarItems: SidebarItem[] = [
   { key: 'booking_appointments', label: 'Book Appointment', icon: 'calendar' },
   { key: 'history', label: 'History', icon: 'report' },
-  { key: 'notifications', label: 'Notifications', icon: 'alert' },
-]
-
-const utilityItems: SidebarItem[] = [
-  { key: 'settings', label: 'Account Settings', icon: 'settings' },
 ]
 
 const notificationPrefKey = 'pulse-ledger-notification-preferences'
@@ -125,18 +125,23 @@ const notificationBookingItems: Array<{
   },
 ]
 
-const patientPageCardClass = 'rounded-2xl border border-slate-100 bg-white shadow-sm'
-const patientFieldClass =
-  'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-const patientMutedFieldClass = `${patientFieldClass} bg-slate-50 text-slate-500`
-const patientPrimaryButtonClass =
-  'inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60'
-const patientSecondaryButtonClass =
-  'inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60'
-const patientInlineStatusClass =
-  'rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-500'
+const patientPageCardClass = pagePanelClass
+const patientFieldClass = pageFieldClass
+const patientMutedFieldClass =
+  `${pageFieldClass} bg-[color:var(--agent-surface-strong)] text-[color:var(--agent-muted)]`
+const patientPrimaryButtonClass = pagePrimaryButtonClass
+const patientSecondaryButtonClass = pageGhostButtonClass
+const patientCompactActionButtonClass =
+  'inline-flex items-center justify-center rounded-[0.95rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3.5 py-2 text-xs font-semibold text-[color:var(--agent-ink)] transition hover:bg-[color:var(--agent-overlay)]'
+const patientCompactPrimaryActionButtonClass =
+  'inline-flex items-center justify-center rounded-[0.95rem] bg-[color:var(--agent-accent)] px-3.5 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]'
 const patientHistoryFilterClass =
   'px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize'
+const patientPageHeaderClass = 'border-b border-[color:var(--card-border)] pb-4 pt-1'
+const patientPageTitleClass =
+  'text-[clamp(1.95rem,1.72rem+0.62vw,2.35rem)] font-semibold tracking-[-0.03em] leading-[1.02] text-[color:var(--agent-ink)]'
+const patientPageSubtitleClass =
+  'mt-2 text-[clamp(0.98rem,0.94rem+0.18vw,1.08rem)] leading-[1.45] text-[color:var(--agent-muted)]'
 
 const departmentIconMap: Record<string, string> = {
   'Internal Medicine': '🩺',
@@ -200,6 +205,28 @@ const buildDefaultBookingDate = () => {
   return formatDateInput(nextDay)
 }
 
+const formatPatientDate = (value: string) => {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Date unavailable'
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'Asia/Manila',
+  }).format(parsed)
+}
+
+const formatPatientTime = (value: string) => {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Time unavailable'
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Manila',
+  }).format(parsed)
+}
+
 const emptyDaySessions: DoctorScheduleDay = { morning: false, afternoon: false }
 
 const resolvePatientDisplayName = (user: AuthSession['user'] | null) => {
@@ -207,6 +234,13 @@ const resolvePatientDisplayName = (user: AuthSession['user'] | null) => {
   if (fullName) return fullName
   return 'Patient'
 }
+
+const renderPatientPageHeader = (title: string, subtitle: string) => (
+  <section className={patientPageHeaderClass}>
+    <h1 className={patientPageTitleClass}>{title}</h1>
+    <p className={patientPageSubtitleClass}>{subtitle}</p>
+  </section>
+)
 
 const resolvePatientInitials = (name: string) => {
   const tokens = name.trim().split(/\s+/).filter(Boolean)
@@ -265,14 +299,6 @@ const requiredFieldClass = (isMissing: boolean, shouldValidate: boolean) =>
 
 const isUserSidebarSection = (key: string): key is UserSidebarSection =>
   USER_SIDEBAR_SECTIONS.includes(key as UserSidebarSection)
-
-const sectionEyebrowMap: Record<UserSidebarSection, string> = {
-  booking_appointments: 'Patient care',
-  profile: 'Profile',
-  history: 'Booking history',
-  notifications: 'Notifications',
-  settings: 'Account settings',
-}
 
 const resolveDepartmentIcon = (department: string) => departmentIconMap[department] ?? '🩺'
 
@@ -621,11 +647,6 @@ const PatientAppointmentsPage = ({
     })
   }, [historyFilter, searchQuery, sortedReservations])
 
-  const activeBookedAppointment = useMemo(
-    () => sortedReservations.find((item) => item.status === 'Booked') ?? null,
-    [sortedReservations]
-  )
-
   const activeNotificationPreferenceCount = useMemo(
     () => Object.values(notificationPrefs).filter(Boolean).length,
     [notificationPrefs]
@@ -649,6 +670,55 @@ const PatientAppointmentsPage = ({
       cancelled: sortedReservations.filter((item) => item.status === 'Failed').length,
     }),
     [sortedReservations]
+  )
+
+  const emergencyContactReady = useMemo(
+    () =>
+      Boolean(
+        healthForm.emergencyContactName.trim() &&
+          healthForm.emergencyContactPhone.trim() &&
+          healthForm.emergencyContactRelationship.trim()
+      ),
+    [
+      healthForm.emergencyContactName,
+      healthForm.emergencyContactPhone,
+      healthForm.emergencyContactRelationship,
+    ]
+  )
+
+  const profileChecklist = useMemo(
+    () => [
+      {
+        key: 'basic',
+        label: 'Basic details',
+        description: 'Name, birth date, phone, gender, and address',
+        complete: hasRequiredProfile(profileForm),
+      },
+      {
+        key: 'blood',
+        label: 'Blood type',
+        description: 'Required for intake records',
+        complete: Boolean(healthForm.bloodType.trim()),
+      },
+      {
+        key: 'contact',
+        label: 'Emergency contact',
+        description: 'A reachable contact for urgent updates',
+        complete: emergencyContactReady,
+      },
+      {
+        key: 'booking',
+        label: 'Booking access',
+        description: 'Profile is ready for appointment requests',
+        complete: isProfileComplete,
+      },
+    ],
+    [emergencyContactReady, healthForm.bloodType, isProfileComplete, profileForm]
+  )
+
+  const completedProfileChecklistCount = useMemo(
+    () => profileChecklist.filter((item) => item.complete).length,
+    [profileChecklist]
   )
 
   const toggleNotificationPreference = (key: keyof NotificationPreferences) => {
@@ -827,957 +897,1063 @@ const PatientAppointmentsPage = ({
     }
   }
 
-  const renderProfileSection = () => (
-    <section className="space-y-4">
-      <article className={`${pagePanelClass} patient-flow-card p-6`}>
-        <div className="patient-profile-hero">
-          <div className="patient-profile-avatar" aria-hidden="true">
-            {profileInitials}
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Profile</h2>
-            <p className="mt-2 text-sm leading-6 text-[color:var(--agent-muted)]">
-              Manage your personal information and medical intake details before booking care.
-            </p>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span className="patient-role-badge">Patient</span>
-              <span className="text-sm text-[color:var(--agent-muted)]">
-                {authUser?.username ?? 'No login email on file'}
-              </span>
+  const renderProfileSection = () => {
+    const fullName = `${profileForm.firstName} ${profileForm.lastName}`.trim() || profileName
+
+    return (
+      <div className="max-w-6xl p-6 md:p-10">
+        <div className={`${patientPageCardClass} mb-6 overflow-hidden p-6 sm:p-7`}>
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[1.75rem] bg-yellow-400 text-2xl font-bold text-white shadow-sm">
+                {profileInitials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  Profile
+                </p>
+                <h1 className="mt-2 text-3xl font-bold tracking-[-0.03em] text-slate-900">
+                  {fullName || 'Demo User'}
+                </h1>
+                <p className="mt-2 text-sm text-slate-500">{authUser?.username ?? 'No email on file'}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600">
+                    Patient
+                  </span>
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                    {completedProfileChecklistCount}/{profileChecklist.length} sections complete
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 lg:max-w-[24rem] lg:justify-end">
+              <button
+                type="button"
+                className={patientCompactActionButtonClass}
+                onClick={() => setSection('notifications')}
+              >
+                Notifications
+              </button>
+              <button
+                type="button"
+                className={patientCompactActionButtonClass}
+                onClick={() => setSection('settings')}
+              >
+                Account Settings
+              </button>
+              <button
+                type="button"
+                className={patientCompactPrimaryActionButtonClass}
+                onClick={() => setSection('booking_appointments')}
+              >
+                Book Appointment
+              </button>
             </div>
           </div>
         </div>
+
         {!isProfileComplete ? (
-          <p className="mt-3 text-sm font-semibold text-amber-600">
-            Profile is incomplete. Booking is locked until all required fields are filled.
-          </p>
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700">
+            Complete the required fields below before booking an appointment.
+          </div>
         ) : null}
-      </article>
 
-      {isProfileLoading ? (
-        <article className={`${pagePanelClass} patient-flow-card p-5`}>
-          <p className="text-sm text-[color:var(--agent-muted)]">Loading profile data...</p>
-        </article>
-      ) : (
-        <>
-          <article className={`${pagePanelClass} patient-flow-card p-5`}>
-            <h3 className="text-lg font-semibold text-[color:var(--agent-ink)]">Basic Information</h3>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <input
-                value={profileForm.firstName}
-                onChange={(event) =>
-                  setProfileForm((prev) => ({ ...prev, firstName: event.target.value }))
-                }
-                placeholder="First name *"
-                readOnly
-                disabled
-                className={requiredFieldClass(!profileForm.firstName.trim(), profileSaveAttempted)}
-              />
-              <input
-                value={profileForm.lastName}
-                onChange={(event) =>
-                  setProfileForm((prev) => ({ ...prev, lastName: event.target.value }))
-                }
-                placeholder="Last name *"
-                readOnly
-                disabled
-                className={requiredFieldClass(!profileForm.lastName.trim(), profileSaveAttempted)}
-              />
-              <input
-                type="date"
-                value={profileForm.dateOfBirth}
-                onChange={(event) =>
-                  setProfileForm((prev) => ({ ...prev, dateOfBirth: event.target.value }))
-                }
-                className={requiredFieldClass(!profileForm.dateOfBirth.trim(), profileSaveAttempted)}
-              />
-              <input
-                value={profileForm.phoneNumber}
-                onChange={(event) =>
-                  setProfileForm((prev) => ({ ...prev, phoneNumber: event.target.value }))
-                }
-                placeholder="Phone number *"
-                className={requiredFieldClass(!profileForm.phoneNumber.trim(), profileSaveAttempted)}
-              />
-              <input
-                value={profileForm.gender}
-                onChange={(event) =>
-                  setProfileForm((prev) => ({ ...prev, gender: event.target.value }))
-                }
-                placeholder="Gender *"
-                className={requiredFieldClass(!profileForm.gender.trim(), profileSaveAttempted)}
-              />
-              <input
-                value={profileForm.address}
-                onChange={(event) =>
-                  setProfileForm((prev) => ({ ...prev, address: event.target.value }))
-                }
-                placeholder="Address *"
-                className={requiredFieldClass(!profileForm.address.trim(), profileSaveAttempted)}
-              />
-            </div>
-          </article>
+        {isProfileLoading ? (
+          <div className={`${patientPageCardClass} p-6 text-sm text-slate-500`}>
+            Loading profile data...
+          </div>
+        ) : (
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_20rem]">
+            <div className="space-y-6">
+              <div className={`${patientPageCardClass} p-6`}>
+                <div className="mb-5">
+                  <h2 className="text-xl font-semibold text-slate-900">Personal Information</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Update your primary details used for appointment intake.
+                  </p>
+                </div>
 
-          <article className={`${pagePanelClass} patient-flow-card p-5`}>
-            <h3 className="text-lg font-semibold text-[color:var(--agent-ink)]">Personal Health Information</h3>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <input
-                value={healthForm.bloodType}
-                onChange={(event) =>
-                  setHealthForm((prev) => ({ ...prev, bloodType: event.target.value }))
-                }
-                placeholder="Blood type *"
-                className={requiredFieldClass(!healthForm.bloodType.trim(), profileSaveAttempted)}
-              />
-            </div>
-
-            <div className="mt-4 grid gap-4">
-              {renderHealthListEditor('allergies', 'Allergies', 'Allergy', 'Add allergy')}
-              {renderHealthListEditor('medications', 'Medications', 'Medication', 'Add medication')}
-              {renderHealthListEditor(
-                'chronicConditions',
-                'Chronic Conditions',
-                'Condition',
-                'Add condition'
-              )}
-              {renderHealthListEditor('surgeries', 'Surgeries', 'Surgery', 'Add surgery')}
-            </div>
-
-            <label className="mt-3 block space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-                Notes (optional)
-              </span>
-              <textarea
-                value={healthForm.notes}
-                onChange={(event) =>
-                  setHealthForm((prev) => ({ ...prev, notes: event.target.value }))
-                }
-                rows={3}
-                className={pageFieldClass}
-              />
-            </label>
-          </article>
-
-          <article className={`${pagePanelClass} patient-flow-card p-5`}>
-            <h3 className="text-lg font-semibold text-[color:var(--agent-ink)]">Emergency Contact</h3>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <input
-                value={healthForm.emergencyContactName}
-                onChange={(event) =>
-                  setHealthForm((prev) => ({ ...prev, emergencyContactName: event.target.value }))
-                }
-                placeholder="Emergency contact name *"
-                className={requiredFieldClass(!healthForm.emergencyContactName.trim(), profileSaveAttempted)}
-              />
-              <input
-                value={healthForm.emergencyContactPhone}
-                onChange={(event) =>
-                  setHealthForm((prev) => ({ ...prev, emergencyContactPhone: event.target.value }))
-                }
-                placeholder="Emergency contact phone *"
-                className={requiredFieldClass(!healthForm.emergencyContactPhone.trim(), profileSaveAttempted)}
-              />
-              <input
-                value={healthForm.emergencyContactRelationship}
-                onChange={(event) =>
-                  setHealthForm((prev) => ({
-                    ...prev,
-                    emergencyContactRelationship: event.target.value,
-                  }))
-                }
-                placeholder="Emergency contact relationship *"
-                className={requiredFieldClass(!healthForm.emergencyContactRelationship.trim(), profileSaveAttempted)}
-              />
-            </div>
-
-            {profileError ? <p className="mt-3 text-sm font-semibold text-rose-600">{profileError}</p> : null}
-            {profileMessage ? (
-              <p className="mt-3 text-sm font-semibold text-emerald-600">{profileMessage}</p>
-            ) : null}
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={pagePrimaryButtonClass}
-                onClick={() => void handleSavePatientProfile()}
-                disabled={isSavingProfile}
-              >
-                {isSavingProfile ? 'Saving...' : 'Save profile'}
-              </button>
-              <button
-                type="button"
-                className={pageGhostButtonClass}
-                onClick={() => setSection('booking_appointments')}
-              >
-                Go to book appointment
-              </button>
-            </div>
-          </article>
-        </>
-      )}
-    </section>
-  )
-
-  const renderBookingAppointments = () => (
-    <section className="space-y-5">
-      {renderPatientSectionHeader({
-        title: 'Book Appointment',
-        eyebrow: sectionEyebrowMap.booking_appointments,
-        description:
-          'Schedule a visit with the right department, doctor, and time slot before sending your request.',
-        supporting: (
-          <>
-            <span className={`${pageChipButtonClass} bg-[color:var(--agent-overlay-strong)]`}>
-              {isProfileComplete ? 'Profile ready' : 'Profile required'}
-            </span>
-            <span className={`${pageChipButtonClass} bg-[color:var(--agent-overlay-strong)]`}>
-              {availableDoctors.length} doctor{availableDoctors.length === 1 ? '' : 's'} in{' '}
-              {bookingDepartment}
-            </span>
-          </>
-        ),
-        controls: (
-          <div className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-4`}>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--agent-muted-soft)]">
-              Appointment summary
-            </p>
-            <div className="patient-summary-list mt-4">
-              <div>
-                <span>Department</span>
-                <strong>{bookingDepartment}</strong>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Full Name</label>
+                    <input value={fullName} disabled className={patientMutedFieldClass} />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Email Address</label>
+                    <input value={authUser?.username ?? ''} disabled className={patientMutedFieldClass} />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Phone Number</label>
+                    <input
+                      value={profileForm.phoneNumber}
+                      onChange={(event) =>
+                        setProfileForm((prev) => ({ ...prev, phoneNumber: event.target.value }))
+                      }
+                      placeholder="+63 900 000 0000"
+                      className={requiredFieldClass(!profileForm.phoneNumber.trim(), profileSaveAttempted)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={profileForm.dateOfBirth}
+                      onChange={(event) =>
+                        setProfileForm((prev) => ({ ...prev, dateOfBirth: event.target.value }))
+                      }
+                      className={requiredFieldClass(!profileForm.dateOfBirth.trim(), profileSaveAttempted)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Gender</label>
+                    <input
+                      value={profileForm.gender}
+                      onChange={(event) =>
+                        setProfileForm((prev) => ({ ...prev, gender: event.target.value }))
+                      }
+                      placeholder="Gender"
+                      className={requiredFieldClass(!profileForm.gender.trim(), profileSaveAttempted)}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Address</label>
+                    <input
+                      value={profileForm.address}
+                      onChange={(event) =>
+                        setProfileForm((prev) => ({ ...prev, address: event.target.value }))
+                      }
+                      placeholder="Street, city, province"
+                      className={requiredFieldClass(!profileForm.address.trim(), profileSaveAttempted)}
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <span>Doctor</span>
-                <strong>
-                  {selectedDoctor
-                    ? `${selectedDoctor.firstName} ${selectedDoctor.lastName}`.trim()
-                    : 'Not selected'}
-                </strong>
+
+              <div className={`${patientPageCardClass} p-6`}>
+                <div className="mb-5">
+                  <h2 className="text-xl font-semibold text-slate-900">Health Information</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Keep your intake details updated before scheduling care.
+                  </p>
+                </div>
+
+                <div className="space-y-5">
+                  <div className="max-w-xs">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Blood Type</label>
+                    <input
+                      value={healthForm.bloodType}
+                      onChange={(event) =>
+                        setHealthForm((prev) => ({ ...prev, bloodType: event.target.value }))
+                      }
+                      placeholder="Blood type"
+                      className={requiredFieldClass(!healthForm.bloodType.trim(), profileSaveAttempted)}
+                    />
+                  </div>
+
+                  <div className="grid gap-5 lg:grid-cols-2">
+                    {renderHealthListEditor('allergies', 'Allergies', 'Allergy', 'Add allergy')}
+                    {renderHealthListEditor('medications', 'Medications', 'Medication', 'Add medication')}
+                    {renderHealthListEditor(
+                      'chronicConditions',
+                      'Chronic Conditions',
+                      'Condition',
+                      'Add condition'
+                    )}
+                    {renderHealthListEditor('surgeries', 'Surgeries', 'Surgery', 'Add surgery')}
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Notes</label>
+                    <textarea
+                      value={healthForm.notes}
+                      onChange={(event) =>
+                        setHealthForm((prev) => ({ ...prev, notes: event.target.value }))
+                      }
+                      rows={4}
+                      className={patientFieldClass}
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <span>Date</span>
-                <strong>{bookingDate || 'Not selected'}</strong>
+
+              <div className={`${patientPageCardClass} p-6`}>
+                <div className="mb-5">
+                  <h2 className="text-xl font-semibold text-slate-900">Emergency Contact</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Required so the care team can contact the right person if needed.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Contact Name</label>
+                    <input
+                      value={healthForm.emergencyContactName}
+                      onChange={(event) =>
+                        setHealthForm((prev) => ({
+                          ...prev,
+                          emergencyContactName: event.target.value,
+                        }))
+                      }
+                      placeholder="Contact name"
+                      className={requiredFieldClass(
+                        !healthForm.emergencyContactName.trim(),
+                        profileSaveAttempted
+                      )}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Phone Number</label>
+                    <input
+                      value={healthForm.emergencyContactPhone}
+                      onChange={(event) =>
+                        setHealthForm((prev) => ({
+                          ...prev,
+                          emergencyContactPhone: event.target.value,
+                        }))
+                      }
+                      placeholder="+63 900 000 0000"
+                      className={requiredFieldClass(
+                        !healthForm.emergencyContactPhone.trim(),
+                        profileSaveAttempted
+                      )}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Relationship</label>
+                    <input
+                      value={healthForm.emergencyContactRelationship}
+                      onChange={(event) =>
+                        setHealthForm((prev) => ({
+                          ...prev,
+                          emergencyContactRelationship: event.target.value,
+                        }))
+                      }
+                      placeholder="Relationship"
+                      className={requiredFieldClass(
+                        !healthForm.emergencyContactRelationship.trim(),
+                        profileSaveAttempted
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {profileError ? <p className="mt-4 text-sm font-medium text-rose-600">{profileError}</p> : null}
+                {profileMessage ? <p className="mt-4 text-sm font-medium text-emerald-600">{profileMessage}</p> : null}
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className={patientPrimaryButtonClass}
+                    onClick={() => void handleSavePatientProfile()}
+                    disabled={isSavingProfile}
+                  >
+                    {isSavingProfile ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    type="button"
+                    className={patientSecondaryButtonClass}
+                    onClick={() => setSection('booking_appointments')}
+                  >
+                    Open booking
+                  </button>
+                </div>
               </div>
-              <div>
-                <span>Slot</span>
-                <strong>{selectedSlot ? selectedSlot.label : 'Not selected'}</strong>
+            </div>
+
+            <div className="space-y-6">
+              <div className={`${patientPageCardClass} p-6`}>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Completion Status
+                </p>
+                <p className="mt-3 text-3xl font-bold tracking-[-0.03em] text-slate-900">
+                  {completedProfileChecklistCount}/{profileChecklist.length}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">Required sections completed</p>
+
+                <div className="mt-5 space-y-3">
+                  {profileChecklist.map((item) => (
+                    <div
+                      key={item.key}
+                      className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-800">{item.label}</p>
+                          <p className="mt-1 text-sm text-slate-500">{item.description}</p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${item.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}
+                        >
+                          {item.complete ? 'Ready' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className={`${patientPageCardClass} p-6`}>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Preferences
+                </p>
+                <h3 className="mt-3 text-lg font-semibold text-slate-900">
+                  Settings and notifications
+                </h3>
+                <p className="mt-2 text-sm text-slate-500">
+                  Manage reminders, password changes, theme, and account controls from the lower menu.
+                </p>
+
+                <div className="mt-5 grid gap-3">
+                  <button
+                    type="button"
+                    className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left transition hover:bg-slate-50"
+                    onClick={() => setSection('notifications')}
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-800">Notifications</span>
+                      <span className="mt-1 block text-sm text-slate-500">
+                        Email alerts, browser alerts, and reminders
+                      </span>
+                    </span>
+                    <span className="text-slate-400">›</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left transition hover:bg-slate-50"
+                    onClick={() => setSection('settings')}
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-800">Account Settings</span>
+                      <span className="mt-1 block text-sm text-slate-500">
+                        Theme, password, session, and sign out controls
+                      </span>
+                    </span>
+                    <span className="text-slate-400">›</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className={`${patientPageCardClass} p-6`}>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Booking Access
+                </p>
+                <p className="mt-3 text-lg font-semibold text-slate-900">
+                  {isProfileComplete ? 'You can book appointments now.' : 'Booking is still locked.'}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  {isProfileComplete
+                    ? 'Your required profile and emergency details are complete.'
+                    : 'Finish the required profile blocks before moving back to appointment booking.'}
+                </p>
+                <button
+                  type="button"
+                  className={`mt-5 w-full ${isProfileComplete ? patientPrimaryButtonClass : patientSecondaryButtonClass}`}
+                  onClick={() => setSection('booking_appointments')}
+                >
+                  Go to booking
+                </button>
               </div>
             </div>
           </div>
-        ),
-      })}
+        )}
+      </div>
+    )
+  }
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.08fr)_22rem]">
+  const renderBookingAppointments = () => {
+    const selectedDoctorName = selectedDoctor
+      ? `${selectedDoctor.firstName} ${selectedDoctor.lastName}`.trim()
+      : 'Not selected'
+    const selectedSlotLabel = selectedSlot
+      ? `${formatPatientDate(selectedSlot.startIso)} · ${formatPatientTime(selectedSlot.startIso)}`
+      : 'Choose a date and slot'
+    const canContinueFromStepOne = isProfileComplete && bookingSymptoms.trim().length >= 5
+    const bookingReadinessItems = [
+      { label: 'Complete patient profile', ready: isProfileComplete },
+      { label: 'Add visit reason', ready: bookingSymptoms.trim().length >= 5 },
+      { label: 'Select specialist and doctor', ready: Boolean(selectedDoctorId) },
+      { label: 'Pick an available slot', ready: Boolean(selectedSlotStartIso) },
+    ]
+    const currentStepContent =
+      bookingStep === 1 ? (
+        <div className="space-y-6">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Patient details
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-900">
+                Your Information
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                Make sure your contact details are correct and tell us why you need this appointment.
+              </p>
+            </div>
+
+            {!isProfileComplete ? (
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-white"
+                onClick={() => setSection('profile')}
+              >
+                Complete Profile
+              </button>
+            ) : null}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-600">Full Name</label>
+              <input value={profileName} disabled className={patientMutedFieldClass} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-600">Email Address</label>
+              <input value={authUser?.username ?? ''} disabled className={patientMutedFieldClass} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1.5 block text-sm font-medium text-slate-600">Phone Number</label>
+              <input
+                value={profileForm.phoneNumber}
+                disabled
+                placeholder="Update in Profile"
+                className={patientMutedFieldClass}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5">
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Reason for Visit</label>
+            <textarea
+              placeholder="Describe the symptoms, concern, or follow-up you need."
+              value={bookingSymptoms}
+              onChange={(event) => setBookingSymptoms(event.target.value)}
+              rows={5}
+              className={patientFieldClass}
+            />
+            <p className="mt-2 text-xs text-slate-400">
+              Add at least a short summary so triage can route you correctly.
+            </p>
+          </div>
+
+          {!isProfileComplete ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+              Complete your profile and health information before continuing.
+            </div>
+          ) : null}
+          {bookingError ? <p className="text-sm font-medium text-rose-600">{bookingError}</p> : null}
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className={patientPrimaryButtonClass}
+              onClick={() => {
+                setBookingError(null)
+                if (!isProfileComplete) {
+                  setSection('profile')
+                  return
+                }
+                if (bookingSymptoms.trim().length < 5) {
+                  setBookingError('Add more details in symptoms so the care team can triage your booking.')
+                  return
+                }
+                setBookingStep(2)
+              }}
+            >
+              {isProfileComplete ? 'Continue to Specialists' : 'Complete Profile First'}
+            </button>
+          </div>
+        </div>
+      ) : bookingStep === 2 ? (
+        <div className="space-y-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Specialist selection
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-900">
+              Choose Specialist
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              Select a department first, then pick the doctor you want to consult with.
+            </p>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5">
+              <label className="mb-3 block text-sm font-medium text-slate-700">Select Specialty</label>
+              <div className="grid grid-cols-2 gap-3">
+                {departmentOptions.map((department) => (
+                  <button
+                    key={department}
+                    type="button"
+                    onClick={() => setBookingDepartment(department)}
+                    className={`rounded-2xl border p-4 text-left text-sm font-medium transition-all ${bookingDepartment === department ? 'border-blue-500 bg-white text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
+                  >
+                    <span className="mb-2 block text-xl">{resolveDepartmentIcon(department)}</span>
+                    <span className="block leading-5">{department}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-5">
+                <label className="mb-3 block text-sm font-medium text-slate-700">Priority</label>
+                <div className="flex flex-wrap gap-2">
+                  {(['Low', 'Routine', 'High'] as Array<Reservation['priority']>).map((priority) => (
+                    <button
+                      key={priority}
+                      type="button"
+                      onClick={() => setBookingPriority(priority)}
+                      className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${bookingPriority === priority ? 'border-blue-500 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
+                    >
+                      {priority}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-3 block text-sm font-medium text-slate-700">Available Doctors</label>
+              <div className="space-y-3">
+                {isLoadingDoctors ? (
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 text-sm text-slate-500">
+                    Loading available doctors...
+                  </div>
+                ) : availableDoctors.length > 0 ? (
+                  availableDoctors.map((doctor) => {
+                    const doctorName = `${doctor.firstName} ${doctor.lastName}`.trim()
+                    const isSelected = doctor.id === selectedDoctorId
+                    return (
+                      <button
+                        key={doctor.id}
+                        type="button"
+                        onClick={() => setSelectedDoctorId(doctor.id)}
+                        className={`flex w-full items-start gap-4 rounded-[1.5rem] border p-5 text-left transition-all ${isSelected ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
+                      >
+                        <div
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-sm font-bold ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                        >
+                          {resolvePatientInitials(doctorName)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-base font-semibold text-slate-900">{doctorName}</p>
+                            {isSelected ? (
+                              <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white">
+                                Selected
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-sm text-slate-500">{doctor.department || bookingDepartment}</p>
+                          <p className="mt-3 text-sm text-slate-400">
+                            Available for new booking requests in this department.
+                          </p>
+                        </div>
+                      </button>
+                    )
+                  })
+                ) : (
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 text-sm text-slate-500">
+                    No available doctors were found for this department.
+                  </div>
+                )}
+              </div>
+              {doctorLoadError ? <p className="mt-3 text-sm text-rose-600">{doctorLoadError}</p> : null}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className={patientSecondaryButtonClass}
+              onClick={() => setBookingStep(1)}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={!selectedDoctorId}
+              className={patientPrimaryButtonClass}
+              onClick={() => {
+                setBookingError(null)
+                setBookingStep(3)
+              }}
+            >
+              Continue to Schedule
+            </button>
+          </div>
+        </div>
+      ) : (
         <form
-          className={`${pagePanelClass} patient-flow-card p-6 sm:p-7`}
+          className="space-y-6"
           onSubmit={(event) => {
             event.preventDefault()
             void submitBooking()
           }}
         >
-          <div className="patient-step-row">
-            {[
-              { key: 1, label: 'Your Details', hint: isProfileComplete ? 'Ready' : 'Profile required' },
-              {
-                key: 2,
-                label: 'Choose Specialist',
-                hint: selectedDoctor ? 'Doctor selected' : 'Pick a doctor',
-              },
-              {
-                key: 3,
-                label: 'Date & Time',
-                hint: selectedSlot ? 'Slot selected' : 'Choose a slot',
-              },
-            ].map((step) => {
-              const isActive = bookingProgressStep === step.key
-              const isComplete =
-                step.key === 1
-                  ? isProfileComplete
-                  : step.key === 2
-                    ? Boolean(selectedDoctor)
-                    : Boolean(selectedSlot)
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Date and time
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-900">
+              Pick a Date &amp; Time
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              Review schedule availability, choose a slot, and add final notes before submitting.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5">
+              <label className="mb-2 block text-sm font-medium text-slate-700">Appointment Date</label>
+              <input
+                type="date"
+                min={formatDateInput(new Date())}
+                value={bookingDate}
+                onChange={(event) => setBookingDate(event.target.value)}
+                className={patientFieldClass}
+              />
+            </div>
+
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5">
+              <p className="mb-2 text-sm font-medium text-slate-700">Schedule Status</p>
+              <div className="flex flex-wrap gap-2">
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${selectedDaySessions.morning ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                  Morning {selectedDaySessions.morning ? 'Open' : 'Closed'}
+                </span>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${selectedDaySessions.afternoon ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'}`}>
+                  Afternoon {selectedDaySessions.afternoon ? 'Open' : 'Closed'}
+                </span>
+              </div>
+              {slotStatusMessage ? <p className="mt-3 text-sm text-slate-500">{slotStatusMessage}</p> : null}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-3 block text-sm font-medium text-slate-700">Available Time Slots</label>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+              {!selectedDoctorId ? (
+                <p className="col-span-full text-sm text-slate-500">Select a doctor first.</p>
+              ) : isLoadingSlots ? (
+                <p className="col-span-full text-sm text-slate-500">Loading schedule slots...</p>
+              ) : availableSlots.length > 0 ? (
+                availableSlots.map((slot) => (
+                  <button
+                    key={slot.startIso}
+                    type="button"
+                    onClick={() => setSelectedSlotStartIso(slot.startIso)}
+                    className={`rounded-2xl border px-4 py-3 text-left transition-all ${selectedSlotStartIso === slot.startIso ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
+                  >
+                    <span className="block text-sm font-semibold">{slot.label}</span>
+                    <span className="mt-1 block text-xs uppercase tracking-[0.12em] text-slate-400">
+                      {slot.session}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="col-span-full text-sm text-slate-500">No available slots for this date.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5">
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Additional Notes</label>
+            <textarea
+              value={bookingNote}
+              onChange={(event) => setBookingNote(event.target.value)}
+              placeholder="Add anything important for scheduling or care context."
+              rows={4}
+              className={patientFieldClass}
+            />
+          </div>
+
+          {slotLoadError ? <p className="text-sm text-rose-600">{slotLoadError}</p> : null}
+          {bookingError ? <p className="text-sm font-medium text-rose-600">{bookingError}</p> : null}
+          {bookingMessage ? <p className="text-sm font-medium text-emerald-600">{bookingMessage}</p> : null}
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className={patientSecondaryButtonClass}
+              onClick={() => setBookingStep(2)}
+            >
+              Back
+            </button>
+            <button
+              type="submit"
+              disabled={!selectedSlotStartIso || isSubmittingBooking}
+              className={patientPrimaryButtonClass}
+            >
+              {isSubmittingBooking ? 'Booking...' : 'Confirm Booking'}
+            </button>
+          </div>
+        </form>
+      )
+
+    return (
+      <div className="p-6 md:p-8 xl:p-10">
+        <div className="mx-auto max-w-[84rem] space-y-5">
+          {renderPatientPageHeader(
+            'Book an Appointment',
+            'Schedule your visit with our specialists'
+          )}
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.12fr)_23rem] xl:items-start">
+            <section className={`${patientPageCardClass} overflow-hidden border-slate-200/90 p-6 shadow-[0_22px_50px_rgba(15,23,42,0.05)] md:p-8`}>
+              <div className="mb-6 grid gap-3 lg:grid-cols-3">
+                {[
+                  { step: 1, label: 'Your Details', hint: canContinueFromStepOne ? 'Ready' : 'Needs review' },
+                  { step: 2, label: 'Choose Specialist', hint: selectedDoctorId ? 'Doctor picked' : 'Select one' },
+                  { step: 3, label: 'Date & Time', hint: selectedSlotStartIso ? 'Slot chosen' : 'Choose a time' },
+                ].map((item) => (
+                  <div
+                    key={item.step}
+                    className={`min-w-[12rem] rounded-[1.35rem] border px-4 py-3 transition-all ${bookingStep === item.step ? 'border-blue-200 bg-[linear-gradient(140deg,#eff6ff_0%,#f8fbff_100%)] shadow-[0_12px_28px_rgba(59,130,246,0.12)]' : bookingStep > item.step ? 'border-emerald-200 bg-[linear-gradient(140deg,#ecfdf5_0%,#f8fffb_100%)]' : 'border-slate-200 bg-white'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${bookingStep === item.step ? 'bg-blue-600 text-white' : bookingStep > item.step ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                      >
+                        {item.step}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                        <p className="text-xs text-slate-500">{item.hint}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {currentStepContent}
+            </section>
+
+            <aside className="space-y-4 xl:sticky xl:top-8 xl:self-start">
+              <div className={`${patientPageCardClass} border-slate-200/90 bg-[linear-gradient(180deg,#ffffff_0%,#fbfdff_100%)] p-5 shadow-[0_16px_36px_rgba(15,23,42,0.05)]`}>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Appointment Preview
+                </p>
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-2xl border border-slate-200/80 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Patient</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{profileName}</p>
+                    <p className="mt-1 text-sm text-slate-500">{authUser?.username ?? 'No email on file'}</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {[
+                      { label: 'Department', value: bookingDepartment },
+                      { label: 'Doctor', value: selectedDoctorName },
+                      { label: 'Priority', value: bookingPriority },
+                      { label: 'Schedule', value: selectedSlotLabel },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3"
+                      >
+                        <span className="text-sm text-slate-500">{item.label}</span>
+                        <strong className="text-right text-sm font-semibold text-slate-900">{item.value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-[1.7rem] border border-blue-100 bg-[radial-gradient(circle_at_top_right,rgba(191,219,254,0.45),transparent_34%),linear-gradient(160deg,#eff6ff_0%,#f8fbff_56%,#ffffff_100%)] p-5 shadow-[0_18px_36px_rgba(59,130,246,0.10)]">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700/70">
+                  Booking Checklist
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Keep everything in one place while you finish the request. The sidebar stays pinned and
+                  this checklist updates as you complete each requirement.
+                </p>
+                <div className="mt-4 space-y-3">
+                  {bookingReadinessItems.map((item) => (
+                    <div
+                      key={item.label}
+                      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${item.ready ? 'border-emerald-100 bg-white text-slate-900' : 'border-blue-100 bg-white/90 text-slate-700'}`}
+                    >
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${item.ready ? 'bg-emerald-500 text-white' : 'bg-blue-100 text-blue-700'}`}
+                      >
+                        {item.ready ? '✓' : '•'}
+                      </span>
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {!isProfileComplete ? (
+                  <button
+                    type="button"
+                    className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                    onClick={() => setSection('profile')}
+                  >
+                    Finish Profile
+                  </button>
+                ) : null}
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderHistoryList = () => (
+    <div className="p-6 md:p-8 xl:p-10">
+      <div className="mx-auto max-w-[84rem] space-y-8">
+        {renderPatientPageHeader('History', 'View and track all your medical appointments')}
+
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {[
+            { key: 'total', label: 'Total', value: historyStats.total, color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200' },
+            { key: 'upcoming', label: 'Upcoming', value: historyStats.upcoming, color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
+            { key: 'completed', label: 'Completed', value: historyStats.completed, color: 'text-green-700', bg: 'bg-green-50 border-green-200' },
+            { key: 'cancelled', label: 'Cancelled', value: historyStats.cancelled, color: 'text-red-700', bg: 'bg-red-50 border-red-200' },
+          ].map((item) => (
+            <div key={item.key} className={`rounded-xl border p-4 ${item.bg}`}>
+              <p className={`text-2xl font-bold ${item.color}`}>{item.value}</p>
+              <p className="mt-0.5 text-sm text-slate-500">{item.label}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1">
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search by id, department, summary, or name..."
+              className={`${patientFieldClass} pl-4`}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1">
+              {(['all', 'upcoming', 'completed', 'cancelled'] as HistoryFilter[]).map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setHistoryFilter(filter)}
+                  className={`${patientHistoryFilterClass} ${historyFilter === filter ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {visibleReservations.length === 0 ? (
+          <div className="py-16 text-center text-slate-400">
+            <div className="mx-auto mb-3 text-4xl opacity-40">📂</div>
+            <p className="font-medium text-slate-500">No appointments found</p>
+            <p className="mt-1 text-sm">
+              {sortedReservations.length === 0
+                ? "You haven't booked any appointments yet."
+                : 'Try adjusting your search or filters.'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {visibleReservations.map((item) => {
+              const statusMeta = getReservationStatusMeta(item.status)
+              const prescriptionSummary =
+                item.prescriptions && item.prescriptions.length > 0
+                  ? item.prescriptions
+                      .map((prescription) => `${prescription.medication} ${prescription.dosage}`)
+                      .join(', ')
+                  : null
 
               return (
                 <div
-                  key={step.key}
-                  className={`patient-step ${isActive ? 'is-active' : ''} ${isComplete ? 'is-complete' : ''}`}
+                  key={item.id}
+                  className={`${patientPageCardClass} p-5 transition-shadow hover:shadow-md`}
                 >
-                  <span className="patient-step-index">{step.key}</span>
-                  <span className="patient-step-copy">
-                    <strong>{step.label}</strong>
-                    <small>{step.hint}</small>
-                  </span>
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-2xl">
+                      {resolveDepartmentIcon(item.department)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-slate-800">{item.department}</p>
+                          <p className="text-sm text-slate-500">
+                            {dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${statusMeta.color}`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
+                          {statusMeta.label}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-500">
+                        <span>{formatPatientDate(item.requestedTime)}</span>
+                        <span>{formatPatientTime(item.requestedTime)}</span>
+                        <span>{item.id}</span>
+                      </div>
+                      {item.summary ? <p className="mt-2 text-sm text-slate-400">📝 {item.summary}</p> : null}
+                      {prescriptionSummary ? (
+                        <p className="mt-2 text-sm text-slate-400">💊 {prescriptionSummary}</p>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               )
             })}
           </div>
-
-          <div className="mt-6 space-y-5">
-            <section className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-5`}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="patient-panel-kicker">Step 1</p>
-                  <h2 className="text-lg font-semibold text-[color:var(--agent-ink)]">Your Details</h2>
-                  <p className={`mt-2 text-sm leading-6 ${pageSubtleTextClass}`}>
-                    Patient profile and personal health information must be complete before a
-                    booking can be submitted.
-                  </p>
-                </div>
-                {!isProfileComplete ? (
-                  <button
-                    type="button"
-                    className={pageGhostButtonClass}
-                    onClick={() => setSection('profile')}
-                  >
-                    Complete profile
-                  </button>
-                ) : (
-                  <span className="patient-inline-note is-ready">Profile is complete</span>
-                )}
-              </div>
-            </section>
-
-            <section className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-5`}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="patient-panel-kicker">Step 2</p>
-                  <h2 className="text-lg font-semibold text-[color:var(--agent-ink)]">
-                    Choose Specialist
-                  </h2>
-                </div>
-                <label className="w-full sm:max-w-[15rem]">
-                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-                    Department
-                  </span>
-                  <select
-                    value={bookingDepartment}
-                    onChange={(event) =>
-                      setBookingDepartment(event.target.value as (typeof departmentOptions)[number])
-                    }
-                    className={pageFieldClass}
-                  >
-                    {departmentOptions.map((department) => (
-                      <option key={department} value={department}>
-                        {department}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <label className="mt-4 block">
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-                  Priority
-                </span>
-                <select
-                  value={bookingPriority}
-                  onChange={(event) =>
-                    setBookingPriority(event.target.value as Reservation['priority'])
-                  }
-                  className={pageFieldClass}
-                >
-                  <option value="Low">Low</option>
-                  <option value="Routine">Routine</option>
-                  <option value="High">High</option>
-                </select>
-              </label>
-
-              <div className="patient-select-grid mt-5">
-                {isLoadingDoctors ? (
-                  <p className={`text-sm ${pageSubtleTextClass}`}>Loading available doctors...</p>
-                ) : availableDoctors.length > 0 ? (
-                  availableDoctors.map((doctor) => {
-                    const doctorName = `${doctor.firstName} ${doctor.lastName}`.trim()
-                    const isActive = doctor.id === selectedDoctorId
-
-                    return (
-                      <button
-                        key={doctor.id}
-                        type="button"
-                        className={`patient-select-card ${isActive ? 'is-active' : ''}`}
-                        onClick={() => setSelectedDoctorId(doctor.id)}
-                      >
-                        <span className="patient-select-avatar">
-                          {resolvePatientInitials(doctorName)}
-                        </span>
-                        <span className="patient-select-copy">
-                          <strong>{doctorName}</strong>
-                          <small>{doctor.department || bookingDepartment}</small>
-                        </span>
-                      </button>
-                    )
-                  })
-                ) : (
-                  <p className={`text-sm ${pageSubtleTextClass}`}>
-                    No available doctors were found for this department.
-                  </p>
-                )}
-              </div>
-              {doctorLoadError ? (
-                <p className="mt-3 text-xs font-semibold text-rose-600">{doctorLoadError}</p>
-              ) : null}
-            </section>
-
-            <section className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-5`}>
-              <p className="patient-panel-kicker">Step 3</p>
-              <h2 className="text-lg font-semibold text-[color:var(--agent-ink)]">Date &amp; Time</h2>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="space-y-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-                    Preferred date
-                  </span>
-                  <input
-                    type="date"
-                    value={bookingDate}
-                    min={formatDateInput(new Date())}
-                    onChange={(event) => setBookingDate(event.target.value)}
-                    className={pageFieldClass}
-                  />
-                </label>
-
-                <div className="patient-inline-note">
-                  <strong>Schedule status</strong>
-                  <span>
-                    Morning {selectedDaySessions.morning ? 'open' : 'closed'} · Afternoon{' '}
-                    {selectedDaySessions.afternoon ? 'open' : 'closed'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-4 patient-slot-grid">
-                {!selectedDoctorId ? (
-                  <p className={`text-sm ${pageSubtleTextClass}`}>Select a doctor first.</p>
-                ) : isLoadingSlots ? (
-                  <p className={`text-sm ${pageSubtleTextClass}`}>Loading schedule slots...</p>
-                ) : availableSlots.length > 0 ? (
-                  availableSlots.map((slot) => (
-                    <button
-                      key={slot.startIso}
-                      type="button"
-                      className={`patient-slot-chip ${slot.startIso === selectedSlotStartIso ? 'is-active' : ''}`}
-                      onClick={() => setSelectedSlotStartIso(slot.startIso)}
-                    >
-                      <strong>{slot.label}</strong>
-                      <small>{slot.session}</small>
-                    </button>
-                  ))
-                ) : (
-                  <p className={`text-sm ${pageSubtleTextClass}`}>No available slots for this date.</p>
-                )}
-              </div>
-
-              {slotStatusMessage ? (
-                <p className="mt-3 text-sm font-semibold text-[color:var(--agent-ink)]">
-                  {slotStatusMessage}
-                </p>
-              ) : null}
-              {slotLoadError ? (
-                <p className="mt-2 text-xs font-semibold text-rose-600">{slotLoadError}</p>
-              ) : null}
-            </section>
-
-            <section className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-5`}>
-              <p className="patient-panel-kicker">Visit Notes</p>
-              <h2 className="text-lg font-semibold text-[color:var(--agent-ink)]">Symptoms and notes</h2>
-
-              <div className="mt-4 space-y-4">
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-                    Symptoms
-                  </span>
-                  <textarea
-                    value={bookingSymptoms}
-                    onChange={(event) => setBookingSymptoms(event.target.value)}
-                    placeholder="Describe symptoms and how long you've experienced them."
-                    rows={4}
-                    className={pageFieldClass}
-                  />
-                </label>
-
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted-soft)]">
-                    Additional notes
-                  </span>
-                  <textarea
-                    value={bookingNote}
-                    onChange={(event) => setBookingNote(event.target.value)}
-                    placeholder="Add anything important for scheduling or care context."
-                    rows={3}
-                    className={pageFieldClass}
-                  />
-                </label>
-              </div>
-            </section>
-          </div>
-
-          {bookingError ? (
-            <p className="mt-5 text-sm font-semibold text-rose-600">{bookingError}</p>
-          ) : null}
-          {bookingMessage ? (
-            <p className="mt-5 text-sm font-semibold text-emerald-600">{bookingMessage}</p>
-          ) : null}
-
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              type="submit"
-              className={pagePrimaryButtonClass}
-              disabled={isSubmittingBooking || !isProfileComplete}
-            >
-              {isSubmittingBooking ? 'Submitting...' : 'Submit appointment request'}
-            </button>
-            <button
-              type="button"
-              className={pageGhostButtonClass}
-              onClick={() => setSection('history')}
-            >
-              View history
-            </button>
-          </div>
-        </form>
-
-        <div className="space-y-5">
-          <article className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-5`}>
-            <h3 className="text-lg font-semibold text-[color:var(--agent-ink)]">
-              Before you submit
-            </h3>
-            <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--agent-muted)]">
-              <li>Complete Profile and Personal Health Information first.</li>
-              <li>Select a department, then choose an available doctor.</li>
-              <li>Pick a date and tap one open schedule slot.</li>
-              <li>Describe symptoms clearly for faster triage.</li>
-            </ul>
-          </article>
-
-          <article className={`${pagePanelClass} patient-flow-card p-5`}>
-            <h3 className="text-lg font-semibold text-[color:var(--agent-ink)]">
-              Current selection
-            </h3>
-            <div className="patient-summary-list mt-4">
-              <div>
-                <span>Doctor</span>
-                <strong>
-                  {selectedDoctor
-                    ? `${selectedDoctor.firstName} ${selectedDoctor.lastName}`.trim()
-                    : 'None yet'}
-                </strong>
-              </div>
-              <div>
-                <span>Priority</span>
-                <strong>{bookingPriority}</strong>
-              </div>
-              <div>
-                <span>Slot</span>
-                <strong>{selectedSlot ? `${selectedSlot.label} (${selectedSlot.session})` : 'None yet'}</strong>
-              </div>
-            </div>
-          </article>
-
-          <article className={`${pagePanelClass} patient-flow-card p-5`}>
-            <h3 className="text-lg font-semibold text-[color:var(--agent-ink)]">
-              Upcoming booking
-            </h3>
-            {activeBookedAppointment ? (
-              <div className="mt-4 space-y-3 text-sm text-[color:var(--agent-muted)]">
-                <p className="font-semibold text-[color:var(--agent-ink)]">
-                  {activeBookedAppointment.department}
-                </p>
-                <p>{formatPhilippineDateTime(activeBookedAppointment.requestedTime)}</p>
-                <p>{activeBookedAppointment.summary}</p>
-                <span
-                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(activeBookedAppointment.status)}`}
-                >
-                  {activeBookedAppointment.status}
-                </span>
-              </div>
-            ) : (
-              <p className={`mt-3 text-sm leading-6 ${pageSubtleTextClass}`}>
-                No active booking yet. Submit your first appointment request from this page.
-              </p>
-            )}
-          </article>
-        </div>
+        )}
       </div>
-    </section>
+    </div>
   )
 
-  const renderHistoryList = () => {
-    const searchControl = (
-      <label className="block">
-        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--agent-muted-soft)]">
-          Search history
-        </span>
-        <input
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search by appointment ID, patient, department, or summary"
-          className={pageFieldClass}
-        />
-      </label>
-    )
-
-    const historyStatCards = (
-      <div className="patient-kpi-grid">
-        {[
-          { key: 'total', label: 'Total', value: historyStats.total, tone: 'slate' },
-          { key: 'booked', label: 'Booked', value: historyStats.booked, tone: 'blue' },
-          { key: 'recorded', label: 'Recorded', value: historyStats.recorded, tone: 'green' },
-          { key: 'failed', label: 'Failed', value: historyStats.failed, tone: 'rose' },
-        ].map((item) => (
-          <article key={item.key} className={`patient-kpi-card tone-${item.tone}`}>
-            <p>{item.label}</p>
-            <strong>{item.value}</strong>
-          </article>
-        ))}
-      </div>
-    )
-
-    if (visibleReservations.length === 0) {
-      return (
-        <section className="space-y-5">
-          {renderPatientSectionHeader({
-            title: 'History',
-            eyebrow: sectionEyebrowMap.history,
-            description:
-              'Review previous appointment requests, statuses, and e-prescription details in one place.',
-            controls: searchControl,
-            supporting: (
-              <span className={`${pageChipButtonClass} bg-[color:var(--agent-overlay-strong)]`}>
-                {sortedReservations.length} total record{sortedReservations.length === 1 ? '' : 's'}
-              </span>
-            ),
-          })}
-
-          {historyStatCards}
-
-          <article className={`${pagePanelClass} patient-flow-card p-6`}>
-            <h2 className="text-xl font-semibold text-[color:var(--agent-ink)]">
-              No appointments found
-            </h2>
-            <p className={`mt-3 text-sm leading-6 ${pageSubtleTextClass}`}>
-              {searchQuery
-                ? 'No records match this search. Clear or adjust your query.'
-                : "You haven't booked any appointments yet."}
-            </p>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                type="button"
-                className={pagePrimaryButtonClass}
-                onClick={() => setSection('booking_appointments')}
-              >
-                Open book appointment
-              </button>
-              {searchQuery ? (
-                <button
-                  type="button"
-                  className={pageGhostButtonClass}
-                  onClick={() => setSearchQuery('')}
-                >
-                  Clear search
-                </button>
-              ) : null}
-            </div>
-          </article>
-        </section>
-      )
-    }
-
-    return (
-      <section className="space-y-5">
-        {renderPatientSectionHeader({
-          title: 'History',
-          eyebrow: sectionEyebrowMap.history,
-          description:
-            'Review previous appointment requests, statuses, and e-prescription details in one place.',
-          controls: searchControl,
-          supporting: (
-            <span className={`${pageChipButtonClass} bg-[color:var(--agent-overlay-strong)]`}>
-              Showing {visibleReservations.length} of {sortedReservations.length}
-            </span>
-          ),
-        })}
-
-        {historyStatCards}
-
-        <section className="space-y-4">
-          {visibleReservations.map((item) => (
-            <article key={item.id} className={`${pagePanelClass} patient-flow-card p-5`}>
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-overlay-strong)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--agent-muted)]">
-                      {item.id}
-                    </span>
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(item.status)}`}
-                    >
-                      {item.status}
-                    </span>
-                  </div>
-                  <h3 className="mt-4 text-lg font-semibold text-[color:var(--agent-ink)]">
-                    {dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName}
-                  </h3>
-                  <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-                    {item.department} · {formatPhilippineDateTime(item.requestedTime)}
-                  </p>
-                </div>
-                <div className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft min-w-[14rem] p-4`}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-                    Summary
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-[color:var(--agent-muted)]">
-                    {item.summary || 'No summary recorded.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-                    Symptoms
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-[color:var(--agent-muted)]">
-                    {item.symptoms || item.summary || 'No symptoms recorded.'}
-                  </p>
-                </div>
-
-                <div className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-4`}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-                    E-Prescription
-                  </p>
-                  {item.prescriptions && item.prescriptions.length > 0 ? (
-                    <div className="mt-3 space-y-2">
-                      {item.prescriptions.map((prescription, index) => (
-                        <p
-                          key={`${item.id}-rx-${index}`}
-                          className="text-sm leading-6 text-[color:var(--agent-muted)]"
-                        >
-                          {prescription.medication} - {prescription.dosage}
-                          {prescription.frequency ? ` · ${prescription.frequency}` : ''}
-                          {prescription.durationDays
-                            ? ` · ${prescription.durationDays} day(s)`
-                            : ''}
-                        </p>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-sm text-[color:var(--agent-muted)]">
-                      No e-prescriptions yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </article>
-          ))}
-        </section>
-      </section>
-    )
-  }
-
   const renderNotificationsSection = () => (
-    <section className="space-y-5">
-      {renderPatientSectionHeader({
-        title: 'Notifications',
-        eyebrow: sectionEyebrowMap.notifications,
-        description:
-          'Control how booking alerts, reminders, and security updates reach you across this device and your email inbox.',
-        supporting: (
-          <span className={`${pageChipButtonClass} bg-[color:var(--agent-overlay-strong)]`}>
-            Session status: {sessionStatus}
-          </span>
-        ),
-        controls: (
-          <div className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-4`}>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--agent-muted-soft)]">
-              Quick access
+    <div className="p-6 md:p-8 xl:p-10">
+      <div className="mx-auto max-w-[84rem] space-y-8">
+        {renderPatientPageHeader(
+          'Notifications',
+          'Manage how booking alerts and account updates are delivered.'
+        )}
+
+        <div className={`max-w-3xl ${patientPageCardClass} space-y-6 p-6`}>
+          {renderNotificationPreferenceGroup('Delivery Channels', notificationDeliveryItems)}
+          {renderNotificationPreferenceGroup('Booking Updates', notificationBookingItems)}
+
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
+              Notification Status
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={pageGhostButtonClass}
-                onClick={() => setSection('history')}
-              >
-                View history
-              </button>
-              <button
-                type="button"
-                className={pageGhostButtonClass}
-                onClick={() => setSection('settings')}
-              >
-                Open settings
-              </button>
-            </div>
+            <p className="mb-3 text-sm text-slate-500">
+              Current sync status: <span className="font-medium text-slate-700">{sessionStatus}</span>
+            </p>
+            <p className="mb-4 text-sm text-slate-500">
+              {activeNotificationPreferenceCount} active notification preference
+              {activeNotificationPreferenceCount === 1 ? '' : 's'}.
+            </p>
+            <button
+              type="button"
+              className={patientSecondaryButtonClass}
+              onClick={() => setSection('history')}
+            >
+              View booking history
+            </button>
           </div>
-        ),
-      })}
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="space-y-5">
-          {renderNotificationPreferenceGroup('Delivery channels', notificationDeliveryItems)}
-          {renderNotificationPreferenceGroup('Booking updates', notificationBookingItems)}
-        </div>
-
-        <div className="space-y-5">
-          <article className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-5`}>
-            <h3 className="text-lg font-semibold text-[color:var(--agent-ink)]">
-              Current delivery setup
-            </h3>
-            <div className="mt-4 grid gap-3">
-              <div>
-                <p className="text-2xl font-semibold text-[color:var(--agent-ink)]">
-                  {activeNotificationPreferenceCount}
-                </p>
-                <p className={`mt-1 text-sm ${pageSubtleTextClass}`}>
-                  active notification preference{activeNotificationPreferenceCount === 1 ? '' : 's'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[color:var(--agent-ink)]">
-                  Booking reminders are {notificationPrefs.appointmentReminders ? 'on' : 'off'}
-                </p>
-                <p className={`mt-1 text-sm ${pageSubtleTextClass}`}>
-                  Security alerts are {notificationPrefs.securityAlerts ? 'enabled' : 'disabled'}
-                </p>
-              </div>
-            </div>
-          </article>
-
-          <article className={`${pagePanelClass} patient-flow-card p-5`}>
-            <h3 className="text-lg font-semibold text-[color:var(--agent-ink)]">
-              Sync status
-            </h3>
-            <p className={`mt-3 text-sm leading-6 ${pageSubtleTextClass}`}>
-              Preferences are stored locally for this patient session and update immediately when
-              you toggle them.
-            </p>
-            <p className="mt-4 text-sm font-semibold text-[color:var(--agent-ink)]">
-              {sessionStatus}
-            </p>
-          </article>
         </div>
       </div>
-    </section>
+    </div>
   )
 
   const renderAccountSettingsSection = () => (
-    <section className={`${pagePanelClass} patient-flow-card p-5`}>
-      <h2 className="text-2xl font-semibold text-[color:var(--agent-ink)]">Account settings</h2>
-      <p className="mt-2 text-sm leading-6 text-[color:var(--agent-muted)]">
-        Manage your session controls, privacy preferences, and password.
-      </p>
+    <div className="p-6 md:p-8 xl:p-10">
+      <div className="mx-auto max-w-[84rem] space-y-8">
+        {renderPatientPageHeader(
+          'Account settings',
+          'Manage your session controls, privacy preferences, and password.'
+        )}
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-4`}>
-          <p className="text-sm text-[color:var(--agent-muted)]">
-            Signed in as{' '}
-            <span className="font-semibold text-[color:var(--agent-ink)]">
-              {authUser?.username ?? 'Unknown'}
-            </span>
-          </p>
-          <p className="mt-1 text-sm text-[color:var(--agent-muted)]">
-            Role:{' '}
-            <span className="font-semibold text-[color:var(--agent-ink)]">
-              {getRoleLabel(authUser?.role)}
-            </span>
-          </p>
-          <p className="mt-2 text-xs text-[color:var(--agent-muted-soft)]">Session: {sessionStatus}</p>
-        </div>
+        <div className={`max-w-3xl ${patientPageCardClass} space-y-8 p-6`}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1 rounded-xl border border-slate-100 p-4">
+              <p className="text-sm text-slate-500">
+                Signed in as <span className="font-medium text-slate-700">{authUser?.username ?? '—'}</span>
+              </p>
+              <p className="text-sm text-slate-500">
+                Role: <span className="font-medium text-slate-700">{getRoleLabel(authUser?.role)}</span>
+              </p>
+              <p className="text-sm text-slate-400">Session: {sessionStatus}</p>
+            </div>
+            <div className="rounded-xl border border-slate-100 p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                Quick Controls
+              </p>
+              <button
+                type="button"
+                onClick={onToggleTheme}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                Theme: {theme === 'dark' ? 'Dark' : 'Light'}
+              </button>
+            </div>
+          </div>
 
-        <div className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-4`}>
-          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-            Quick controls
-          </p>
-          <div className="mt-3 grid gap-2">
-            <button type="button" className={pageGhostButtonClass} onClick={onToggleTheme}>
-              Theme: {theme === 'dark' ? 'Dark' : 'Light'}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              setPasswordError(null)
+              setPasswordMessage(null)
+
+              if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+                setPasswordError('Fill in current, new, and confirm password.')
+                return
+              }
+
+              if (!meetsPasswordPolicy(newPassword.trim())) {
+                setPasswordError(
+                  'New password must be at least 8 characters and include uppercase, lowercase, and number.'
+                )
+                return
+              }
+
+              if (newPassword.trim() !== confirmPassword.trim()) {
+                setPasswordError('New password and confirm password do not match.')
+                return
+              }
+
+              setPasswordMessage('Password updated successfully for this session.')
+              setCurrentPassword('')
+              setNewPassword('')
+              setConfirmPassword('')
+            }}
+          >
+            <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-400">
+              Change Password
+            </p>
+            <div className="grid gap-3 md:grid-cols-3">
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                placeholder="Current password"
+                className={patientFieldClass}
+              />
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                placeholder="New password"
+                className={patientFieldClass}
+              />
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Confirm password"
+                className={patientFieldClass}
+              />
+            </div>
+            {passwordError ? <p className="mt-3 text-sm text-rose-600">{passwordError}</p> : null}
+            {passwordMessage ? <p className="mt-3 text-sm text-emerald-600">{passwordMessage}</p> : null}
+            <button type="submit" className={`mt-4 ${patientPrimaryButtonClass}`}>
+              Update password
             </button>
-          </div>
-        </div>
+          </form>
 
-        <form
-          className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-4 xl:col-span-2`}
-          onSubmit={(event) => {
-            event.preventDefault()
-            setPasswordError(null)
-            setPasswordMessage(null)
-
-            if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
-              setPasswordError('Fill in current, new, and confirm password.')
-              return
-            }
-
-            if (!meetsPasswordPolicy(newPassword.trim())) {
-              setPasswordError(
-                'New password must be at least 8 characters and include uppercase, lowercase, and number.'
-              )
-              return
-            }
-
-            if (newPassword.trim() !== confirmPassword.trim()) {
-              setPasswordError('New password and confirm password do not match.')
-              return
-            }
-
-            setPasswordMessage('Password updated successfully for this session.')
-            setCurrentPassword('')
-            setNewPassword('')
-            setConfirmPassword('')
-          }}
-        >
-          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-            Change password
-          </p>
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
-              placeholder="Current password"
-              className={pageFieldClass}
-            />
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              placeholder="New password"
-              className={pageFieldClass}
-            />
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              placeholder="Confirm password"
-              className={pageFieldClass}
-            />
-          </div>
-          {passwordError ? <p className="mt-3 text-xs font-semibold text-rose-500">{passwordError}</p> : null}
-          {passwordMessage ? (
-            <p className="mt-3 text-xs font-semibold text-emerald-600">{passwordMessage}</p>
-          ) : null}
-          <button type="submit" className={`mt-4 ${pagePrimaryButtonClass}`}>
-            Update password
-          </button>
-        </form>
-
-        <div className={`${pagePanelSoftClass} patient-flow-card patient-flow-card--soft p-4 xl:col-span-2`}>
-          <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">
-            Session
-          </p>
-          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-            Sign out from this device when you finish reviewing appointments and profile updates.
-          </p>
-          <div className="mt-4">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Session</p>
             <button
               type="button"
-              className="patient-danger-button"
               onClick={() => setShowLogoutConfirm(true)}
+              className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
             >
               Sign out
             </button>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   )
 
   const profileName = resolvePatientDisplayName(authUser)
@@ -1788,7 +1964,7 @@ const PatientAppointmentsPage = ({
       <div className="w-full">
         <SidebarShell
           className={`page-shell--full-side patient-shell${isSidebarCollapsed ? ' page-shell--rail-collapsed' : ''}`}
-          contentClassName="patient-shell-content px-4 pb-10 pt-5 sm:px-6 lg:px-8 xl:px-10"
+          contentClassName="patient-shell-content"
           mobileTitle="Patient menu"
           stickyOffsetMode="auto"
           sidebar={
@@ -1804,13 +1980,6 @@ const PatientAppointmentsPage = ({
               items={sidebarItems}
               activeKey={activeSection}
               onSelect={(key) => {
-                if (isUserSidebarSection(key)) {
-                  setSection(key)
-                }
-              }}
-              auxiliaryLabel="Account"
-              secondaryItems={utilityItems}
-              onSelectAuxiliary={(key) => {
                 if (isUserSidebarSection(key)) {
                   setSection(key)
                 }

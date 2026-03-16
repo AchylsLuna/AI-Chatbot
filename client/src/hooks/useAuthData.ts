@@ -126,8 +126,8 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   }, [authToken])
 
   // Idle/session timeout handling
-  const WARNING_MS = 5 * 60 * 1000 // 10 minutes
-  const LOGOUT_MS = 10 * 60 * 1000 // 15 minutes
+  const WARNING_MS = 3 * 60 * 1000
+  const LOGOUT_MS = 5 * 60 * 1000
   const warningTimerRef = useRef<number | null>(null)
   const logoutTimerRef = useRef<number | null>(null)
   const countdownIntervalRef = useRef<number | null>(null)
@@ -154,7 +154,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     clearIdleTimers()
     // schedule warning and logout
     warningTimerRef.current = window.setTimeout(() => {
-      // show warning and start 5-minute countdown
+      // show warning and start the remaining countdown until auto logout
       const remaining = Math.floor((LOGOUT_MS - WARNING_MS) / 1000)
       setIdleRemainingSeconds(remaining)
       setIdleWarningOpen(true)

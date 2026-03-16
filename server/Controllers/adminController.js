@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { appConfig } from "../Config/env.js";
+import { DOCTOR_ROLE_ALIASES, isAdminRole, isDoctorRole, normalizeRole } from "../Utils/roles.js";
 
 async function resolveActorEmail(req) {
     const fallbackId = req.user?.id || req.user?._id;
@@ -22,7 +23,7 @@ async function resolveActorEmail(req) {
     }
 }
 
-const STAFF_ROLES = ['doctor'];
+const STAFF_ROLE_FILTER = { $in: DOCTOR_ROLE_ALIASES };
 
 const toIsoString = (value, fallback = new Date(0).toISOString()) => {
     if (!value) return fallback;
@@ -50,7 +51,7 @@ const toStaffApplicationDto = (user) => ({
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
-    role: user.role,
+    role: normalizeRole(user.role) || 'user',
     status: user.status,
     department: user.department || '',
     hasLicenseFile: Boolean(user.licenseUrl) || (Array.isArray(user.licenseUrls) && user.licenseUrls.length > 0),
@@ -59,13 +60,13 @@ const toStaffApplicationDto = (user) => ({
 
 export async function getPendingStaffApplications(req, res) {
     try {
-        const role = String(req.query?.role || 'all').toLowerCase();
-        if (!['all', ...STAFF_ROLES].includes(role)) {
+        const requestedRole = String(req.query?.role || 'all').toLowerCase();
+        if (requestedRole !== 'all' && !isDoctorRole(requestedRole)) {
             return res.status(400).json({ message: "Invalid role filter." });
         }
 
         const query = {
-            role: role === 'all' ? { $in: STAFF_ROLES } : role,
+            role: STAFF_ROLE_FILTER,
             status: 'disabled',
             staffApplicationReviewed: { $ne: true },
         };
@@ -93,7 +94,7 @@ export async function approveStaffApplication(req, res) {
         if (!target) {
             return res.status(404).json({ message: "User not found." });
         }
-        if (!STAFF_ROLES.includes(target.role)) {
+        if (!isDoctorRole(target.role)) {
             return res.status(400).json({ message: "Only doctor applications can be approved." });
         }
         const hasAnyLicense = Boolean(target.licenseUrl) || (Array.isArray(target.licenseUrls) && target.licenseUrls.length > 0);
@@ -133,7 +134,7 @@ export async function rejectStaffApplication(req, res) {
         if (!target) {
             return res.status(404).json({ message: "User not found." });
         }
-        if (!STAFF_ROLES.includes(target.role)) {
+        if (!isDoctorRole(target.role)) {
             return res.status(400).json({ message: "Only doctor applications can be rejected." });
         }
 
@@ -180,7 +181,7 @@ export async function viewStaffApplicationLicense(req, res) {
         if (!target) {
             return res.status(404).json({ message: "User not found." });
         }
-        if (!STAFF_ROLES.includes(target.role)) {
+        if (!isDoctorRole(target.role)) {
             return res.status(400).json({ message: "License is only available for doctor accounts." });
         }
         const licensePaths = Array.from(new Set([
@@ -215,21 +216,26 @@ export async function getAllUsers(req, res) {
         const users = await User.find()
             .select("email firstName lastName role status department profile")
             .sort({ _id: -1 });
+        const responseUsers = users.map((user) => ({
+            ...user.toObject(),
+            role: normalizeRole(user.role) || 'user',
+        }));
 
         // create audit log (non-fatal)
         try {
             const requesterId = req.user?.id || req.user?._id;
+            const requesterRole = normalizeRole(req.user?.role) || 'UNKNOWN';
             await AuditLog.create({
                 userId: requesterId,
                 action: "GET_USERS_SUCCESS",
-                details: `${(req.user?.role || 'UNKNOWN').toUpperCase()} retrieved ${users.length} user records.`,
+                details: `${requesterRole.toUpperCase()} retrieved ${users.length} user records.`,
                 ipAddress: req.ip,
                 userAgent: req.headers['user-agent']
             });
         } catch (logErr) {
             console.warn('Failed to write audit log for getAllUsers', logErr)
         }
-        return res.status(200).json(users);
+        return res.status(200).json(responseUsers);
     } catch (error) {
         console.error("Failed to get users:", error);
         return res.status(500).json({ message: "Failed to retrieve users." });
@@ -240,10 +246,10 @@ export async function updateUserByAdmin(req, res) {
     try {
         const { userId } = req.params;
         const { role, status, department } = req.body;
-        const adminRole = req.user?.role;
+        const adminRole = normalizeRole(req.user?.role);
         const adminId = req.user?.id || req.user?._id;
 
-        if (!['admin', 'system_admin'].includes(adminRole)) {
+        if (!isAdminRole(adminRole)) {
             return res.status(403).json({ message: "Only admins can manage users." });
         }
 
@@ -257,21 +263,21 @@ export async function updateUserByAdmin(req, res) {
         }
 
         const update = {};
-        const allowedRoles = ['user', 'doctor', 'admin', 'system_admin'];
         const allowedStatus = ['active', 'disabled'];
 
         if (role !== undefined) {
-            if (!allowedRoles.includes(role)) {
+            const normalizedRole = normalizeRole(role);
+            if (!normalizedRole) {
                 return res.status(400).json({ message: "Invalid role value." });
             }
-            update.role = role;
+            update.role = normalizedRole;
         }
         if (status !== undefined) {
             if (!allowedStatus.includes(status)) {
                 return res.status(400).json({ message: "Invalid status value." });
             }
             update.status = status;
-            if (status === 'active' && ['doctor'].includes(target.role)) {
+            if (status === 'active' && isDoctorRole(update.role || target.role)) {
                 update.staffApplicationReviewed = true;
             }
         }
@@ -288,6 +294,10 @@ export async function updateUserByAdmin(req, res) {
             { $set: update },
             { new: true }
         ).select("email firstName lastName role status department profile");
+        const updatedUser = {
+            ...updated.toObject(),
+            role: normalizeRole(updated.role) || 'user',
+        };
 
         const adminEmail = await resolveActorEmail(req);
 
@@ -301,7 +311,7 @@ export async function updateUserByAdmin(req, res) {
 
         return res.status(200).json({
             message: "User updated successfully.",
-            user: updated
+            user: updatedUser
         });
     } catch (error) {
         console.error("Failed to update user:", error);

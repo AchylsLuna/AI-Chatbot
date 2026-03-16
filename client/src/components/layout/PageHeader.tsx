@@ -24,7 +24,7 @@ const PageHeader = ({
         className="text-left"
         aria-label="Go to landing page"
       >
-        <p className="text-sm font-semibold text-[color:var(--agent-ink)]">AI Health Care</p>
+        <p className="text-sm font-semibold tracking-[-0.01em] text-[color:var(--agent-ink)]">AI Health Care</p>
         <p className="text-xs text-[color:var(--agent-muted)]">
           {getRoleLabel(authUser.role)} · {currentPage.replace('_', ' ')}
         </p>
