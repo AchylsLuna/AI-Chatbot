@@ -1,20 +1,23 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
-import ConfirmModal from '../components/ui/ConfirmModal'
-import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
-import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
-import WorkspaceSidebarShell from '../components/layout/WorkspaceSidebarShell'
-import WorkspaceTopShell from '../components/layout/WorkspaceTopShell'
+import ConfirmModal from '../../components/ui/ConfirmModal'
+import PageCanvas from '../../components/layout/PageCanvas'
+import Sidebar, { type SidebarItem } from '../../components/layout/Sidebar'
+import SectionCard from '../../components/layout/SectionCard'
+import SidebarShell from '../../components/layout/SidebarShell'
+import PageTopShell from '../../components/layout/PageTopShell'
 import {
-  workspaceFieldClass,
-  workspaceGhostButtonClass,
-  workspaceHeadingTextClass,
-  workspaceMutedTextClass,
-  workspacePanelClass,
-  workspacePrimaryButtonClass,
-  workspaceSubtleTextClass,
-} from '../styles/workspaceUi'
-import { buildRouteFromCanonicalPath, normalizePath } from '../config/routing'
-import { getDoctorTabPath, resolveDoctorTabFromPath } from '../config/workspaceTabRoutes'
+  pageChipButtonClass,
+  pageFieldClass,
+  pageGhostButtonClass,
+  pageHeadingTextClass,
+  pageMutedTextClass,
+  pagePanelClass,
+  pagePanelSoftClass,
+  pagePrimaryButtonClass,
+  pageSubtleTextClass,
+} from '../../styles/pageUi'
+import { buildRouteFromCanonicalPath, normalizePath } from '../../config/routing'
+import { getDoctorTabPath, resolveDoctorTabFromPath } from '../../config/roleTabRoutes'
 import {
   api,
   type DoctorScheduleDays,
@@ -25,15 +28,16 @@ import {
   type DoctorQueueTimelineItem,
   type PrescriptionDraft,
   type SoapNotePayload,
-} from '../services/api'
-import type { AuthSession, Reservation } from '../types'
+} from '../../services/api'
+import type { AuthSession, Reservation } from '../../types'
 import {
   formatPhilippineDateTime,
   formatPhilippineMonthYear,
   formatPhilippineTime,
-} from '../utils/dateTime'
-import { maskIdentifier, maskPersonName } from '../utils/privacy'
-import { getWorkspaceRoleLabel } from '../utils/roles'
+} from '../../utils/dateTime'
+import { maskIdentifier, maskPersonName } from '../../utils/privacy'
+import { getRoleLabel } from '../../utils/roles'
+import { reservationStatusChipClass } from '../../utils/statusStyles'
 
 type DoctorDashboardPageProps = {
   authUser: AuthSession['user'] | null
@@ -206,13 +210,6 @@ const priorityChipClass = (priority: Reservation['priority']) => {
   if (priority === 'High') return 'border-rose-300/70 bg-rose-100 text-rose-700'
   if (priority === 'Routine') return 'border-sky-300/70 bg-sky-100 text-sky-700'
   if (priority === 'Low') return 'border-slate-300/70 bg-slate-100 text-slate-700'
-  return 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]'
-}
-
-const statusChipClass = (status: Reservation['status']) => {
-  if (status === 'Recorded') return 'border-emerald-300/70 bg-emerald-100 text-emerald-700'
-  if (status === 'Failed') return 'border-rose-300/70 bg-rose-100 text-rose-700'
-  if (status === 'Booked') return 'border-sky-300/70 bg-sky-100 text-sky-700'
   return 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]'
 }
 
@@ -473,7 +470,7 @@ const DoctorDashboardPage = ({
     }
   }, [])
 
-  const loadDoctorWorkspaceData = async () => {
+  const loadDoctorDashboardData = async () => {
     setIsLoadingDoctorData(true)
     setDoctorDataError(null)
     try {
@@ -493,16 +490,16 @@ const DoctorDashboardPage = ({
         console.warn('Unable to refresh doctor appointments list.', error)
       }
     } catch (error) {
-      setDoctorDataError(error instanceof Error ? error.message : 'Unable to load doctor workspace data.')
+      setDoctorDataError(error instanceof Error ? error.message : 'Unable to load doctor data.')
     } finally {
       setIsLoadingDoctorData(false)
     }
   }
 
   useEffect(() => {
-    void loadDoctorWorkspaceData()
+    void loadDoctorDashboardData()
     const interval = window.setInterval(() => {
-      void loadDoctorWorkspaceData()
+      void loadDoctorDashboardData()
     }, 30000)
     return () => window.clearInterval(interval)
   }, [])
@@ -560,7 +557,7 @@ const DoctorDashboardPage = ({
     setDoctorDataError(null)
     try {
       await api.updateDoctorQueueStatus(appointmentId, queueStatus)
-      await loadDoctorWorkspaceData()
+      await loadDoctorDashboardData()
     } catch (error) {
       setDoctorDataError(error instanceof Error ? error.message : 'Unable to update queue status.')
     } finally {
@@ -612,7 +609,7 @@ const DoctorDashboardPage = ({
       await api.saveAppointmentPrescriptions(selectedAppointment.id, pendingPrescriptions)
       setPrescriptionMessage('Prescriptions saved.')
       setPendingPrescriptions([])
-      await loadDoctorWorkspaceData()
+      await loadDoctorDashboardData()
     } catch (error) {
       setPrescriptionError(error instanceof Error ? error.message : 'Unable to save prescriptions.')
     }
@@ -912,7 +909,7 @@ const DoctorDashboardPage = ({
     () => [
       { key: 'settings-name', label: 'Name', value: profileName, caption: 'Profile display name' },
       { key: 'settings-account', label: 'Account', value: authUser?.username ?? 'Unknown', caption: 'Signed in user' },
-      { key: 'settings-role', label: 'Role', value: getWorkspaceRoleLabel(authUser?.role), caption: 'Workspace role' },
+      { key: 'settings-role', label: 'Role', value: getRoleLabel(authUser?.role), caption: 'Role' },
       { key: 'settings-theme', label: 'Theme', value: theme === 'dark' ? 'Dark' : 'Light', caption: 'Current theme' },
     ],
     [authUser?.role, authUser?.username, profileName, theme]
@@ -951,13 +948,14 @@ const DoctorDashboardPage = ({
     },
     settings: {
       title: 'Account Settings',
-      description: 'Manage profile name, password security, and doctor workspace preferences.',
+      description: 'Manage profile name, password security, and doctor preferences.',
       searchPlaceholder: 'Search settings',
       metrics: settingsMetrics,
     }
   } as const
 
   const activeMeta = sectionMeta[activeSection]
+  const doctorSyncStatus = isLoadingDoctorData ? 'Refreshing clinic data' : 'Live clinic data'
   const nextPatientCountdownSeconds = useMemo(() => {
     if (!doctorOverview?.nextPatient) return 0
     const targetMs = new Date(doctorOverview.nextPatient.scheduledDate).getTime()
@@ -965,23 +963,62 @@ const DoctorDashboardPage = ({
     return Math.max(0, delta)
   }, [clockTick, doctorOverview?.nextPatient])
 
+  const renderTopActions = () => {
+    if (activeSection === 'schedule') {
+      return (
+        <button
+          type="button"
+          className={pageGhostButtonClass}
+          onClick={() => {
+            void loadDoctorScheduleForWeek(scheduleWeekStart)
+            setScheduleMessage(null)
+          }}
+          disabled={isScheduleLoading || isSavingSchedule}
+        >
+          {isScheduleLoading ? 'Refreshing...' : 'Reload week'}
+        </button>
+      )
+    }
+
+    if (activeSection === 'settings') {
+      return (
+        <button type="button" className={pageGhostButtonClass} onClick={onToggleTheme}>
+          Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
+        </button>
+      )
+    }
+
+    return (
+      <button
+        type="button"
+        className={pageGhostButtonClass}
+        onClick={() => {
+          void loadDoctorDashboardData()
+        }}
+        disabled={isLoadingDoctorData}
+      >
+        {isLoadingDoctorData ? 'Refreshing...' : 'Refresh section'}
+      </button>
+    )
+  }
+
   return (
-    <WorkspaceCanvas>
+    <PageCanvas>
       <div className="w-full">
-        <WorkspaceSidebarShell
-          className={`workspace-shell--full-side${isSidebarCollapsed ? ' workspace-shell--rail-collapsed' : ''}`}
+        <SidebarShell
+          className={`page-shell--full-side${isSidebarCollapsed ? ' page-shell--rail-collapsed' : ''}`}
           contentClassName="px-4 pb-10 pt-5 sm:px-6 lg:px-8"
-          mobileTitle="Doctor workspace"
+          mobileTitle="Doctor"
           stickyOffsetMode="auto"
           sidebar={
             <Sidebar
-              variant="dashboard"
+              variant="staff"
               mobileMode="drawer"
               fullRail
               isCollapsed={isSidebarCollapsed}
               onToggleCollapse={() => setIsSidebarCollapsed((previous) => !previous)}
               brandTitle="AI Health Care"
-              brandSubtitle="Doctor workspace"
+              brandSubtitle="Doctor"
               sectionLabel="Primary"
               items={primaryItems}
               activeKey={activeSection}
@@ -992,15 +1029,16 @@ const DoctorDashboardPage = ({
               }}
               footerProfile={{
                 name: profileName,
-                subtitle: authUser?.username ?? 'Doctor workspace',
+                subtitle: authUser?.username ?? 'Doctor',
                 onClick: () => setSection('settings'),
               }}
             />
           }
           content={
             <section className="space-y-6">
-              <WorkspaceTopShell
+              <PageTopShell
                 eyebrow="Doctor session"
+                statusLabel={doctorSyncStatus}
                 title={activeMeta.title}
                 description={activeMeta.description}
                 searchValue={searchQuery}
@@ -1009,10 +1047,11 @@ const DoctorDashboardPage = ({
                 showSearch={activeSection !== 'settings' && activeSection !== 'schedule'}
                 showAccountMenu={activeSection !== 'settings'}
                 profileName={profileName}
-                profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
+                profileCaption={getRoleLabel(authUser?.role)}
                 showNotifications
                 notificationCount={Math.min(queueItems.length, 99)}
                 onSignOut={confirmAndLogout}
+                quickActions={renderTopActions()}
                 metrics={activeMeta.metrics}
               />
 
@@ -1031,19 +1070,29 @@ const DoctorDashboardPage = ({
 
               {/* APPOINTMENTS VIEW */}
               {activeSection === 'appointments' ? (
-                <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Appointment list</h2>
-                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Complete queue of patient appointments with priority flags and triage data.
-                  </p>
+                <SectionCard
+                  eyebrow="Clinic flow"
+                  title="Appointment list"
+                  description="Complete queue of patient appointments with priority flags and triage data."
+                  actions={
+                    <>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        {filteredAppointments.length} visible
+                      </span>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        High priority {appointmentItems.filter((item) => item.priority === 'High').length}
+                      </span>
+                    </>
+                  }
+                >
                   {doctorDataError ? (
                     <p className="mt-2 text-xs font-semibold text-rose-500">{doctorDataError}</p>
                   ) : null}
 
                   <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <div className="reference-card-soft p-4">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Appointment counter</p>
-                      <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                    <div className={`${pagePanelSoftClass} p-4`}>
+                      <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Appointment counter</p>
+                      <p className={`mt-1 text-sm ${pageMutedTextClass}`}>
                         Today: {doctorOverview?.counter.total ?? appointmentItems.length} total
                       </p>
                       <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
@@ -1062,30 +1111,30 @@ const DoctorDashboardPage = ({
                       </div>
                     </div>
 
-                    <div className="reference-card-soft p-4">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Next patient</p>
+                    <div className={`${pagePanelSoftClass} p-4`}>
+                      <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Next patient</p>
                       {doctorOverview?.nextPatient ? (
                         <>
-                          <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>
+                          <p className={`mt-1 text-sm font-semibold ${pageHeadingTextClass}`}>
                             {dataMaskingEnabled
                               ? maskPersonName(doctorOverview.nextPatient.patientName)
                               : doctorOverview.nextPatient.patientName}
                           </p>
-                          <p className={`mt-1 text-xs ${workspaceMutedTextClass}`}>{doctorOverview.nextPatient.chiefComplaint}</p>
+                          <p className={`mt-1 text-xs ${pageMutedTextClass}`}>{doctorOverview.nextPatient.chiefComplaint}</p>
                           <p className="mt-3 text-2xl font-semibold text-indigo-600">
                             {formatCountdown(nextPatientCountdownSeconds)}
                           </p>
-                          <p className={`text-xs ${workspaceMutedTextClass}`}>
+                          <p className={`text-xs ${pageMutedTextClass}`}>
                             Starts at {formatTime(doctorOverview.nextPatient.scheduledDate)}
                           </p>
                         </>
                       ) : (
-                        <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>No upcoming patient today.</p>
+                        <p className={`mt-2 text-sm ${pageMutedTextClass}`}>No upcoming patient today.</p>
                       )}
                     </div>
 
-                    <div className="reference-card-soft p-4">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Urgency / triage flags</p>
+                    <div className={`${pagePanelSoftClass} p-4`}>
+                      <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Urgency / triage flags</p>
                       <div className="mt-2 space-y-2">
                         {(doctorOverview?.urgencyFlags ?? []).slice(0, 4).map((flag) => (
                           <div key={flag.appointmentId} className="flex items-center justify-between rounded-lg border border-[color:var(--card-border)] px-2 py-2 text-xs">
@@ -1097,11 +1146,11 @@ const DoctorDashboardPage = ({
                               />
                               {dataMaskingEnabled ? maskPersonName(flag.patientName) : flag.patientName}
                             </span>
-                            <span className={workspaceMutedTextClass}>{flag.triageLevel}</span>
+                            <span className={pageMutedTextClass}>{flag.triageLevel}</span>
                           </div>
                         ))}
                         {(doctorOverview?.urgencyFlags?.length ?? 0) === 0 ? (
-                          <p className={`text-xs ${workspaceMutedTextClass}`}>No urgent flags for today.</p>
+                          <p className={`text-xs ${pageMutedTextClass}`}>No urgent flags for today.</p>
                         ) : null}
                       </div>
                     </div>
@@ -1109,7 +1158,7 @@ const DoctorDashboardPage = ({
 
                   {filteredAppointments.length === 0 ? (
                     <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>
+                      <p className={`text-sm ${pageMutedTextClass}`}>
                         No appointments match your search query.
                       </p>
                     </div>
@@ -1122,7 +1171,7 @@ const DoctorDashboardPage = ({
                         return (
                           <div
                             key={apt.id}
-                            className={`${workspacePanelClass} cursor-pointer p-4 transition-all hover:shadow-md`}
+                            className={`${pagePanelSoftClass} cursor-pointer p-4 transition-all hover:shadow-md`}
                             onClick={() => {
                               setSelectedAppointment(apt)
                               setShowAppointmentDetail(true)
@@ -1131,13 +1180,13 @@ const DoctorDashboardPage = ({
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
-                                  <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
+                                  <p className={`font-semibold ${pageHeadingTextClass}`}>{displayName}</p>
                                   {apt.flagged && (
                                     <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" title="Flagged" />
                                   )}
                                 </div>
-                                <p className={`text-xs ${workspaceMutedTextClass}`}>{displayId}</p>
-                                <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>{apt.symptoms}</p>
+                                <p className={`text-xs ${pageMutedTextClass}`}>{displayId}</p>
+                                <p className={`mt-2 text-sm ${pageMutedTextClass}`}>{apt.symptoms}</p>
                               </div>
                               <div className="flex flex-col gap-2">
                                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(apt.priority)}`}>
@@ -1147,9 +1196,9 @@ const DoctorDashboardPage = ({
                             </div>
 
                             <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
-                              <span className={workspaceMutedTextClass}>{apt.department}</span>
-                              <span className={workspaceMutedTextClass}>{formatTime(apt.requestedTime)}</span>
-                              <span className={`inline-flex rounded-full border px-2.5 py-1 font-semibold ${statusChipClass(apt.status)}`}>
+                              <span className={pageMutedTextClass}>{apt.department}</span>
+                              <span className={pageMutedTextClass}>{formatTime(apt.requestedTime)}</span>
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 font-semibold ${reservationStatusChipClass(apt.status)}`}>
                                 {apt.status}
                               </span>
                               <span className={`inline-flex rounded-full border px-2.5 py-1 font-semibold ${queueStatusChipClass(apt.queueStatus)}`}>
@@ -1161,45 +1210,45 @@ const DoctorDashboardPage = ({
                       })}
                     </div>
                   )}
-                </section>
+                </SectionCard>
               ) : null}
 
               {activeSection === 'calendar' ? (
-                <section className={`${workspacePanelClass} p-5`}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Monthly calendar</h2>
-                      <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>Pending appointments grouped by weekday and date.</p>
-                    </div>
-                    <p className={`text-xs font-semibold ${workspaceSubtleTextClass}`}>
+                <SectionCard
+                  eyebrow="Calendar"
+                  title="Monthly calendar"
+                  description="Pending appointments grouped by weekday and date."
+                  actions={
+                    <span className={`${pageChipButtonClass} cursor-default`}>
                       {calendarView.appointmentsThisMonth} appointment{calendarView.appointmentsThisMonth === 1 ? '' : 's'} this month
-                    </p>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-3">
-                    <p className={`text-base font-semibold ${workspaceHeadingTextClass}`}>
-                      Viewing: {calendarView.monthLabel}
-                    </p>
-                    <label className="flex items-center gap-2">
-                      <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${workspaceSubtleTextClass}`}>
-                        Month
-                      </span>
-                      <input
-                        type="month"
-                        value={formatMonthInputValue(calendarViewDate)}
-                        className={workspaceFieldClass}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          const match = /^(\d{4})-(\d{2})$/.exec(value)
-                          if (!match) return
-                          const year = Number(match[1])
-                          const monthIndex = Number(match[2]) - 1
-                          setCalendarViewDate(new Date(year, monthIndex, 1))
-                        }}
-                      />
-                    </label>
-                  </div>
-
+                    </span>
+                  }
+                  toolbar={
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className={`text-base font-semibold ${pageHeadingTextClass}`}>
+                        Viewing: {calendarView.monthLabel}
+                      </p>
+                      <label className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${pageSubtleTextClass}`}>
+                          Month
+                        </span>
+                        <input
+                          type="month"
+                          value={formatMonthInputValue(calendarViewDate)}
+                          className={pageFieldClass}
+                          onChange={(event) => {
+                            const value = event.target.value
+                            const match = /^(\d{4})-(\d{2})$/.exec(value)
+                            if (!match) return
+                            const year = Number(match[1])
+                            const monthIndex = Number(match[2]) - 1
+                            setCalendarViewDate(new Date(year, monthIndex, 1))
+                          }}
+                        />
+                      </label>
+                    </div>
+                  }
+                >
                   <div className="mt-4 overflow-x-auto">
                     <table className="min-w-[760px] w-full table-fixed border-collapse">
                       <thead>
@@ -1207,7 +1256,7 @@ const DoctorDashboardPage = ({
                           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
                             <th
                               key={label}
-                              className={`border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}
+                              className={`border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}
                             >
                               {label}
                             </th>
@@ -1224,7 +1273,7 @@ const DoctorDashboardPage = ({
                               >
                                 {cell ? (
                                   <div className="flex h-full min-h-0 flex-col">
-                                    <p className={`text-sm font-semibold ${workspaceHeadingTextClass}`}>{cell.day}</p>
+                                    <p className={`text-sm font-semibold ${pageHeadingTextClass}`}>{cell.day}</p>
                                     {cell.appointments.length > 0 ? (
                                       <div className="mt-2 max-h-20 space-y-1.5 overflow-y-auto pr-1">
                                         {cell.appointments.slice(0, 3).map((apt) => (
@@ -1232,16 +1281,16 @@ const DoctorDashboardPage = ({
                                             key={apt.id}
                                             className="rounded-md border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-2 py-1"
                                           >
-                                            <p className={`text-[11px] font-semibold ${workspaceHeadingTextClass}`}>
+                                            <p className={`text-[11px] font-semibold ${pageHeadingTextClass}`}>
                                               {formatTime(apt.requestedTime)}
                                             </p>
-                                            <p className={`text-[11px] ${workspaceMutedTextClass}`}>
+                                            <p className={`text-[11px] ${pageMutedTextClass}`}>
                                               {dataMaskingEnabled ? maskPersonName(apt.patientName) : apt.patientName}
                                             </p>
                                           </div>
                                         ))}
                                         {cell.appointments.length > 3 ? (
-                                          <p className={`text-[11px] font-semibold ${workspaceSubtleTextClass}`}>
+                                          <p className={`text-[11px] font-semibold ${pageSubtleTextClass}`}>
                                             +{cell.appointments.length - 3} more
                                           </p>
                                         ) : null}
@@ -1256,23 +1305,33 @@ const DoctorDashboardPage = ({
                       </tbody>
                     </table>
                   </div>
-                </section>
+                </SectionCard>
               ) : null}
 
               {/* QUEUE MANAGEMENT VIEW */}
               {activeSection === 'queue' ? (
-                <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Patient queue timeline</h2>
-                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Dynamic timeline of today's slots with triage flags, status toggles, and quick checkup history.
-                  </p>
+                <SectionCard
+                  eyebrow="Queue"
+                  title="Patient queue timeline"
+                  description="Dynamic timeline of today's slots with triage flags, status toggles, and quick checkup history."
+                  actions={
+                    <>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        {queueItems.length} patients
+                      </span>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        Arrived {queueItems.filter((item) => item.queueStatus === 'Arrived').length}
+                      </span>
+                    </>
+                  }
+                >
                   {isLoadingDoctorData ? (
-                    <p className={`mt-2 text-xs ${workspaceMutedTextClass}`}>Refreshing timeline...</p>
+                    <p className={`mt-2 text-xs ${pageMutedTextClass}`}>Refreshing timeline...</p>
                   ) : null}
 
                   {queueItems.length === 0 ? (
                     <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>
+                      <p className={`text-sm ${pageMutedTextClass}`}>
                         No pending patients in the queue.
                       </p>
                     </div>
@@ -1281,22 +1340,22 @@ const DoctorDashboardPage = ({
                       <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
                         <thead>
                           <tr>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
                               Patient
                             </th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
                               Department
                             </th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
                               Time
                             </th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
                               Triage
                             </th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
                               Queue status
                             </th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
                               Action
                             </th>
                           </tr>
@@ -1309,27 +1368,27 @@ const DoctorDashboardPage = ({
                               <tr key={item.id}>
                                 <td className="px-3 py-3">
                                   <div className="group relative inline-block">
-                                    <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
+                                    <p className={`font-semibold ${pageHeadingTextClass}`}>{displayName}</p>
                                     <div className="pointer-events-none absolute left-0 top-7 z-10 hidden w-72 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3 shadow-lg group-hover:block">
-                                      <p className={`text-[11px] uppercase tracking-[0.13em] ${workspaceSubtleTextClass}`}>
+                                      <p className={`text-[11px] uppercase tracking-[0.13em] ${pageSubtleTextClass}`}>
                                         Last 3 checkups
                                       </p>
                                       <div className="mt-2 space-y-1">
                                         {item.checkupHistory.length > 0 ? (
                                           item.checkupHistory.slice(0, 3).map((history) => (
-                                            <p key={`${item.id}-${history.visitDate}`} className={`text-xs ${workspaceMutedTextClass}`}>
+                                            <p key={`${item.id}-${history.visitDate}`} className={`text-xs ${pageMutedTextClass}`}>
                                               {formatDateTime(history.visitDate)} - {history.primaryDiagnosis}
                                             </p>
                                           ))
                                         ) : (
-                                          <p className={`text-xs ${workspaceMutedTextClass}`}>No prior visit record.</p>
+                                          <p className={`text-xs ${pageMutedTextClass}`}>No prior visit record.</p>
                                         )}
                                       </div>
                                     </div>
                                   </div>
                                 </td>
-                                <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{item.department}</td>
-                                <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>{formatTime(item.requestedTime)}</td>
+                                <td className={`px-3 py-3 ${pageMutedTextClass}`}>{item.department}</td>
+                                <td className={`px-3 py-3 ${pageMutedTextClass}`}>{formatTime(item.requestedTime)}</td>
                                 <td className="px-3 py-3">
                                   <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(item.priority)}`}>
                                     {item.priority}
@@ -1346,7 +1405,7 @@ const DoctorDashboardPage = ({
                                       <button
                                         key={`${item.id}-${nextStatus}`}
                                         type="button"
-                                        className={`${workspaceGhostButtonClass} text-xs ${statusSavingId === item.id ? 'opacity-60' : ''}`}
+                                        className={`${pageGhostButtonClass} text-xs ${statusSavingId === item.id ? 'opacity-60' : ''}`}
                                         disabled={statusSavingId === item.id}
                                         onClick={() => {
                                           void handleQueueStatusChange(item.id, nextStatus)
@@ -1357,7 +1416,7 @@ const DoctorDashboardPage = ({
                                     ))}
                                     <button
                                       type="button"
-                                      className={`${workspacePrimaryButtonClass} text-xs`}
+                                      className={`${pagePrimaryButtonClass} text-xs`}
                                       onClick={() => {
                                         setSelectedAppointment(item)
                                         setShowAppointmentDetail(true)
@@ -1374,142 +1433,163 @@ const DoctorDashboardPage = ({
                       </table>
                     </div>
                   )}
-                </section>
+                </SectionCard>
               ) : null}
 
               {/* ANALYTICS VIEW */}
               {activeSection === 'analytics' ? (
-                <section className="space-y-4">
-                  <div className={`${workspacePanelClass} p-5`}>
-                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Department breakdown</h2>
-                    <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                      Appointment distribution across departments.
-                    </p>
+                <SectionCard
+                  eyebrow="Insights"
+                  title="Analytics overview"
+                  description="Department load, completion rates, and current appointment distribution."
+                  actions={
+                    <span className={`${pageChipButtonClass} cursor-default`}>
+                      {appointmentItems.length} total appointments
+                    </span>
+                  }
+                >
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <div className={`${pagePanelSoftClass} p-5`}>
+                      <h2 className={`text-lg font-semibold ${pageHeadingTextClass}`}>Department breakdown</h2>
+                      <p className={`mt-1 text-sm ${pageMutedTextClass}`}>
+                        Appointment distribution across departments.
+                      </p>
 
-                    <div className="mt-4 space-y-2">
-                      {Array.from(
-                        new Map(
-                          appointmentItems.map((item) => [
-                            item.department,
-                            appointmentItems.filter((i) => i.department === item.department).length,
-                          ])
-                        ).entries()
-                      ).map(([dept, count]) => (
-                        <div key={dept} className="flex items-center justify-between">
-                          <span className={`text-sm ${workspaceHeadingTextClass}`}>{dept}</span>
-                          <div className="flex items-center gap-3">
-                            <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
-                              <div
-                                className="h-full bg-blue-500"
-                                style={{
-                                  width: `${(count / appointmentItems.length) * 100}%`,
-                                }}
-                              />
+                      <div className="mt-4 space-y-2">
+                        {Array.from(
+                          new Map(
+                            appointmentItems.map((item) => [
+                              item.department,
+                              appointmentItems.filter((i) => i.department === item.department).length,
+                            ])
+                          ).entries()
+                        ).map(([dept, count]) => (
+                          <div key={dept} className="flex items-center justify-between">
+                            <span className={`text-sm ${pageHeadingTextClass}`}>{dept}</span>
+                            <div className="flex items-center gap-3">
+                              <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
+                                <div
+                                  className="h-full bg-blue-500"
+                                  style={{
+                                    width: `${(count / appointmentItems.length) * 100}%`,
+                                  }}
+                                />
+                              </div>
+                              <span className={`w-8 text-right text-sm font-semibold ${pageHeadingTextClass}`}>{count}</span>
                             </div>
-                            <span className={`w-8 text-right text-sm font-semibold ${workspaceHeadingTextClass}`}>{count}</span>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={`${pagePanelSoftClass} p-5`}>
+                      <h2 className={`text-lg font-semibold ${pageHeadingTextClass}`}>Status distribution</h2>
+                      <p className={`mt-1 text-sm ${pageMutedTextClass}`}>
+                        Current appointment status breakdown.
+                      </p>
+
+                      <div className="mt-4 space-y-2">
+                        {[
+                          {
+                            label: 'Booked',
+                            count: appointmentItems.filter((i) => i.status === 'Booked').length,
+                            color: 'bg-sky-500',
+                          },
+                          {
+                            label: 'Recorded',
+                            count: appointmentItems.filter((i) => i.status === 'Recorded').length,
+                            color: 'bg-emerald-500',
+                          },
+                          {
+                            label: 'Failed',
+                            count: appointmentItems.filter((i) => i.status === 'Failed').length,
+                            color: 'bg-rose-500',
+                          },
+                        ].map(({ label, count, color }) => (
+                          <div key={label} className="flex items-center justify-between">
+                            <span className={`text-sm ${pageHeadingTextClass}`}>{label}</span>
+                            <div className="flex items-center gap-3">
+                              <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
+                                <div
+                                  className={color}
+                                  style={{
+                                    width: `${appointmentItems.length > 0 ? (count / appointmentItems.length) * 100 : 0}%`,
+                                  }}
+                                />
+                              </div>
+                              <span className={`w-8 text-right text-sm font-semibold ${pageHeadingTextClass}`}>{count}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-
-                  <div className={`${workspacePanelClass} p-5`}>
-                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Status distribution</h2>
-                    <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                      Current appointment status breakdown.
-                    </p>
-
-                    <div className="mt-4 space-y-2">
-                      {[
-                        {
-                          label: 'Booked',
-                          count: appointmentItems.filter((i) => i.status === 'Booked').length,
-                          color: 'bg-sky-500',
-                        },
-                        {
-                          label: 'Recorded',
-                          count: appointmentItems.filter((i) => i.status === 'Recorded').length,
-                          color: 'bg-emerald-500',
-                        },
-                        {
-                          label: 'Failed',
-                          count: appointmentItems.filter((i) => i.status === 'Failed').length,
-                          color: 'bg-rose-500',
-                        },
-                      ].map(({ label, count, color }) => (
-                        <div key={label} className="flex items-center justify-between">
-                          <span className={`text-sm ${workspaceHeadingTextClass}`}>{label}</span>
-                          <div className="flex items-center gap-3">
-                            <div className="h-2 w-32 overflow-hidden rounded-full bg-[color:var(--agent-surface)]">
-                              <div
-                                className={color}
-                                style={{
-                                  width: `${appointmentItems.length > 0 ? (count / appointmentItems.length) * 100 : 0}%`,
-                                }}
-                              />
-                            </div>
-                            <span className={`w-8 text-right text-sm font-semibold ${workspaceHeadingTextClass}`}>{count}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </section>
+                </SectionCard>
               ) : null}
 
               {activeSection === 'schedule' ? (
-                <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Weekly availability schedule</h2>
-                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Publish your morning and afternoon sessions by week. Patients can only book available 1-hour slots from this schedule.
-                  </p>
-
-                  <div className="mt-4 grid gap-3 md:grid-cols-[auto_1fr_auto_auto] md:items-center">
-                    <button
-                      type="button"
-                      className={workspaceGhostButtonClass}
-                      onClick={() => shiftScheduleWeek(-7)}
-                      disabled={isScheduleLoading || isSavingSchedule}
-                    >
-                      Previous week
-                    </button>
-                    <input
-                      type="date"
-                      value={scheduleWeekStart}
-                      onChange={(event) => {
-                        setScheduleWeekStart(normalizeWeekInputValue(event.target.value))
-                        setScheduleMessage(null)
-                        if (scheduleError) setScheduleError(null)
-                      }}
-                      className={workspaceFieldClass}
-                      disabled={isScheduleLoading || isSavingSchedule}
-                    />
-                    <button
-                      type="button"
-                      className={workspaceGhostButtonClass}
-                      onClick={() => shiftScheduleWeek(7)}
-                      disabled={isScheduleLoading || isSavingSchedule}
-                    >
-                      Next week
-                    </button>
-                    <button
-                      type="button"
-                      className={workspaceGhostButtonClass}
-                      onClick={() => {
-                        setScheduleWeekStart(buildDefaultScheduleWeek())
-                        setScheduleMessage(null)
-                        if (scheduleError) setScheduleError(null)
-                      }}
-                      disabled={isScheduleLoading || isSavingSchedule}
-                    >
-                      This week
-                    </button>
-                  </div>
-
-                  <p className={`mt-2 text-xs ${workspaceSubtleTextClass}`}>
+                <SectionCard
+                  eyebrow="Publishing"
+                  title="Weekly availability schedule"
+                  description="Publish your morning and afternoon sessions by week. Patients can only book available 1-hour slots from this schedule."
+                  actions={
+                    <>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        {scheduleHasPublishedWeek ? 'Published' : 'Draft'}
+                      </span>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        {scheduleHasEnabledSession ? 'Open sessions active' : 'All sessions closed'}
+                      </span>
+                    </>
+                  }
+                  toolbar={
+                    <div className="grid gap-3 md:grid-cols-[auto_1fr_auto_auto] md:items-center">
+                      <button
+                        type="button"
+                        className={pageGhostButtonClass}
+                        onClick={() => shiftScheduleWeek(-7)}
+                        disabled={isScheduleLoading || isSavingSchedule}
+                      >
+                        Previous week
+                      </button>
+                      <input
+                        type="date"
+                        value={scheduleWeekStart}
+                        onChange={(event) => {
+                          setScheduleWeekStart(normalizeWeekInputValue(event.target.value))
+                          setScheduleMessage(null)
+                          if (scheduleError) setScheduleError(null)
+                        }}
+                        className={pageFieldClass}
+                        disabled={isScheduleLoading || isSavingSchedule}
+                      />
+                      <button
+                        type="button"
+                        className={pageGhostButtonClass}
+                        onClick={() => shiftScheduleWeek(7)}
+                        disabled={isScheduleLoading || isSavingSchedule}
+                      >
+                        Next week
+                      </button>
+                      <button
+                        type="button"
+                        className={pageGhostButtonClass}
+                        onClick={() => {
+                          setScheduleWeekStart(buildDefaultScheduleWeek())
+                          setScheduleMessage(null)
+                          if (scheduleError) setScheduleError(null)
+                        }}
+                        disabled={isScheduleLoading || isSavingSchedule}
+                      >
+                        This week
+                      </button>
+                    </div>
+                  }
+                >
+                  <p className={`mt-2 text-xs ${pageSubtleTextClass}`}>
                     Week starts on Monday. Morning session: 8:00 AM - 12:00 PM. Afternoon session: 1:30 PM - 5:00 PM.
                   </p>
-                  <p className={`mt-1 text-xs ${workspaceSubtleTextClass}`}>
+                  <p className={`mt-1 text-xs ${pageSubtleTextClass}`}>
                     Schedule status: {scheduleHasPublishedWeek ? 'Published' : 'Not published'} ·{' '}
                     {scheduleHasEnabledSession ? 'Has open sessions' : 'All sessions closed'}
                   </p>
@@ -1560,7 +1640,7 @@ const DoctorDashboardPage = ({
                                 Open
                               </label>
                             </td>
-                            <td className={`border border-[color:var(--card-border)] px-3 py-2 text-xs ${workspaceMutedTextClass}`}>
+                            <td className={`border border-[color:var(--card-border)] px-3 py-2 text-xs ${pageMutedTextClass}`}>
                               {(scheduleWeekSlots[dayKey] || []).length > 0
                                 ? scheduleWeekSlots[dayKey].map((slot) => slot.label).join(', ')
                                 : 'No slots'}
@@ -1581,7 +1661,7 @@ const DoctorDashboardPage = ({
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className={workspacePrimaryButtonClass}
+                      className={pagePrimaryButtonClass}
                       onClick={() => {
                         void handleSaveWeeklySchedule()
                       }}
@@ -1591,7 +1671,7 @@ const DoctorDashboardPage = ({
                     </button>
                     <button
                       type="button"
-                      className={workspaceGhostButtonClass}
+                      className={pageGhostButtonClass}
                       onClick={() => {
                         void loadDoctorScheduleForWeek(scheduleWeekStart)
                         setScheduleMessage(null)
@@ -1601,16 +1681,17 @@ const DoctorDashboardPage = ({
                       {isScheduleLoading ? 'Refreshing...' : 'Reload week'}
                     </button>
                   </div>
-                </section>
+                </SectionCard>
               ) : null}
 
               {activeSection === 'settings' ? (
                 <section className="space-y-4">
-                  <section className={`${workspacePanelClass} p-5`}>
-                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Profile details</h2>
-                    <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                      Update your display name for this workspace.
-                    </p>
+                  <SectionCard
+                    eyebrow="Profile"
+                    title="Profile details"
+                    description="Update your display name for this account."
+                    actions={<span className={`${pageChipButtonClass} cursor-default`}>{profileName}</span>}
+                  >
 
                     <form
                       className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
@@ -1619,21 +1700,21 @@ const DoctorDashboardPage = ({
                         void handleSaveProfileName()
                       }}
                     >
-                      <div className="reference-card-soft p-4">
-                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Account</p>
-                        <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>
+                      <div className={`${pagePanelSoftClass} p-4`}>
+                        <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Account</p>
+                        <p className={`mt-1 text-sm font-semibold ${pageHeadingTextClass}`}>
                           {authUser?.username ?? 'Unknown'}
                         </p>
-                        <p className={`mt-3 text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Role</p>
-                        <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>
-                          {getWorkspaceRoleLabel(authUser?.role)}
+                        <p className={`mt-3 text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Role</p>
+                        <p className={`mt-1 text-sm font-semibold ${pageHeadingTextClass}`}>
+                          {getRoleLabel(authUser?.role)}
                         </p>
                       </div>
 
-                      <div className="reference-card-soft p-4">
+                      <div className={`${pagePanelSoftClass} p-4`}>
                         <label
                           htmlFor="doctor-profile-name"
-                          className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}
+                          className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}
                         >
                           Display name
                         </label>
@@ -1646,7 +1727,7 @@ const DoctorDashboardPage = ({
                             if (profileMessage) setProfileMessage(null)
                           }}
                           placeholder="Enter your full name"
-                          className={`mt-2 ${workspaceFieldClass}`}
+                          className={`mt-2 ${pageFieldClass}`}
                         />
                         {profileError ? (
                           <p className="mt-3 text-xs font-semibold text-rose-500">{profileError}</p>
@@ -1657,14 +1738,14 @@ const DoctorDashboardPage = ({
                         <div className="mt-3 flex flex-wrap gap-2">
                           <button
                             type="submit"
-                            className={workspacePrimaryButtonClass}
+                            className={pagePrimaryButtonClass}
                             disabled={isSavingProfile}
                           >
                             {isSavingProfile ? 'Saving...' : 'Save name'}
                           </button>
                           <button
                             type="button"
-                            className={workspaceGhostButtonClass}
+                            className={pageGhostButtonClass}
                             onClick={() => {
                               setProfileNameDraft(profileName)
                               setProfileError(null)
@@ -1677,13 +1758,14 @@ const DoctorDashboardPage = ({
                         </div>
                       </div>
                     </form>
-                  </section>
+                  </SectionCard>
 
-                  <section className={`${workspacePanelClass} p-5`}>
-                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Change password</h2>
-                    <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                      Use a strong password to keep your workspace secure.
-                    </p>
+                  <SectionCard
+                    eyebrow="Security"
+                    title="Change password"
+                    description="Use a strong password to keep your account secure."
+                    actions={<span className={`${pageChipButtonClass} cursor-default`}>Protected session</span>}
+                  >
 
                     <form
                       className="mt-4 grid gap-3 md:grid-cols-3"
@@ -1701,7 +1783,7 @@ const DoctorDashboardPage = ({
                           if (passwordMessage) setPasswordMessage(null)
                         }}
                         placeholder="Current password"
-                        className={workspaceFieldClass}
+                        className={pageFieldClass}
                       />
                       <input
                         type="password"
@@ -1712,7 +1794,7 @@ const DoctorDashboardPage = ({
                           if (passwordMessage) setPasswordMessage(null)
                         }}
                         placeholder="New password"
-                        className={workspaceFieldClass}
+                        className={pageFieldClass}
                       />
                       <input
                         type="password"
@@ -1723,7 +1805,7 @@ const DoctorDashboardPage = ({
                           if (passwordMessage) setPasswordMessage(null)
                         }}
                         placeholder="Confirm password"
-                        className={workspaceFieldClass}
+                        className={pageFieldClass}
                       />
                     </form>
 
@@ -1737,7 +1819,7 @@ const DoctorDashboardPage = ({
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       <button
                         type="button"
-                        className={workspacePrimaryButtonClass}
+                        className={pagePrimaryButtonClass}
                         onClick={() => {
                           void handleSavePassword()
                         }}
@@ -1745,39 +1827,38 @@ const DoctorDashboardPage = ({
                       >
                         {isSavingPassword ? 'Updating...' : 'Update password'}
                       </button>
-                      <p className={`text-xs ${workspaceSubtleTextClass}`}>
+                      <p className={`text-xs ${pageSubtleTextClass}`}>
                         Minimum 8 characters with uppercase, lowercase, number, and symbol.
                       </p>
                     </div>
-                  </section>
+                  </SectionCard>
 
-                  <section className={`${workspacePanelClass} p-5`}>
-                    <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>
-                      Workspace preferences
-                    </h2>
-                    <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                      Configure your session view and privacy controls.
-                    </p>
+                  <SectionCard
+                    eyebrow="Preferences"
+                    title="Preferences"
+                    description="Configure your session view and privacy controls."
+                    actions={<span className={`${pageChipButtonClass} cursor-default`}>Session {sessionStatus}</span>}
+                  >
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      <div className="reference-card-soft p-3">
-                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Theme</p>
-                        <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>
+                      <div className={`${pagePanelSoftClass} p-3`}>
+                        <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Theme</p>
+                        <p className={`mt-1 text-sm font-semibold ${pageHeadingTextClass}`}>
                           {theme === 'dark' ? 'Dark' : 'Light'}
                         </p>
                       </div>
-                      <div className="reference-card-soft p-3">
-                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Session</p>
-                        <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{sessionStatus}</p>
+                      <div className={`${pagePanelSoftClass} p-3`}>
+                        <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Session</p>
+                        <p className={`mt-1 text-sm font-semibold ${pageHeadingTextClass}`}>{sessionStatus}</p>
                       </div>
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
+                      <button type="button" className={pageGhostButtonClass} onClick={onToggleTheme}>
                         Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
                       </button>
                     </div>
-                  </section>
+                  </SectionCard>
                 </section>
               ) : null}
             </section>
@@ -1788,17 +1869,17 @@ const DoctorDashboardPage = ({
       {/* APPOINTMENT DETAIL MODAL */}
       {selectedAppointment && showAppointmentDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className={`${workspacePanelClass} max-h-[90vh] w-full max-w-2xl overflow-y-auto p-6`}>
+          <div className={`${pagePanelClass} max-h-[90vh] w-full max-w-2xl overflow-y-auto p-6`}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Appointment detail</p>
-                <h2 className={`mt-1 text-2xl font-semibold ${workspaceHeadingTextClass}`}>
+                <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Appointment detail</p>
+                <h2 className={`mt-1 text-2xl font-semibold ${pageHeadingTextClass}`}>
                   {dataMaskingEnabled ? maskPersonName(selectedAppointment.patientName) : selectedAppointment.patientName}
                 </h2>
               </div>
               <button
                 type="button"
-                className={workspaceGhostButtonClass}
+                className={pageGhostButtonClass}
                 onClick={() => setShowAppointmentDetail(false)}
               >
                 Close
@@ -1807,9 +1888,9 @@ const DoctorDashboardPage = ({
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Appointment status</p>
+                <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Appointment status</p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChipClass(selectedAppointment.status)}`}>
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${reservationStatusChipClass(selectedAppointment.status)}`}>
                     {selectedAppointment.status}
                   </span>
                   <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${queueStatusChipClass(selectedAppointment.queueStatus)}`}>
@@ -1818,7 +1899,7 @@ const DoctorDashboardPage = ({
                 </div>
               </div>
               <div>
-                <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Priority</p>
+                <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Priority</p>
                 <p className="mt-1">
                   <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(selectedAppointment.priority)}`}>
                     {selectedAppointment.priority}
@@ -1826,24 +1907,24 @@ const DoctorDashboardPage = ({
                 </p>
               </div>
               <div>
-                <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Requested time</p>
-                <p className={`mt-1 font-semibold ${workspaceHeadingTextClass}`}>{formatDateTime(selectedAppointment.requestedTime)}</p>
+                <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Requested time</p>
+                <p className={`mt-1 font-semibold ${pageHeadingTextClass}`}>{formatDateTime(selectedAppointment.requestedTime)}</p>
               </div>
               <div>
-                <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Flagged</p>
-                <p className={`mt-1 font-semibold ${workspaceHeadingTextClass}`}>{selectedAppointment.flagged ? 'Yes' : 'No'}</p>
+                <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Flagged</p>
+                <p className={`mt-1 font-semibold ${pageHeadingTextClass}`}>{selectedAppointment.flagged ? 'Yes' : 'No'}</p>
               </div>
             </div>
 
             <div className="mt-6">
-              <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Symptoms & Chief complaint</p>
-              <p className={`mt-2 ${workspaceMutedTextClass}`}>{selectedAppointment.symptoms}</p>
+              <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Symptoms & Chief complaint</p>
+              <p className={`mt-2 ${pageMutedTextClass}`}>{selectedAppointment.symptoms}</p>
             </div>
 
             <div className="mt-6">
               <button
                 type="button"
-                className={workspaceGhostButtonClass}
+                className={pageGhostButtonClass}
                 onClick={() => {
                   void handleLoadPatientProfile()
                 }}
@@ -1854,8 +1935,8 @@ const DoctorDashboardPage = ({
               {patientProfileError ? <p className="mt-2 text-xs font-semibold text-rose-500">{patientProfileError}</p> : null}
               {patientProfile ? (
                 <section className="mt-3 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                  <h3 className={`text-sm font-semibold ${workspaceHeadingTextClass}`}>Patient profile</h3>
-                  <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>
+                  <h3 className={`text-sm font-semibold ${pageHeadingTextClass}`}>Patient profile</h3>
+                  <p className={`mt-2 text-sm ${pageMutedTextClass}`}>
                     {`${patientProfile.patient.firstName} ${patientProfile.patient.lastName}`.trim()} · {patientProfile.patient.email}
                   </p>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2 text-xs text-[color:var(--agent-muted)]">
@@ -1870,32 +1951,32 @@ const DoctorDashboardPage = ({
 
             <div className="mt-6 space-y-4">
               <section className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                <h3 className={`text-sm font-semibold ${workspaceHeadingTextClass}`}>Digital SOAP notes</h3>
-                <p className={`mt-1 text-xs ${workspaceMutedTextClass}`}>Subjective, Objective, Assessment, and Plan.</p>
+                <h3 className={`text-sm font-semibold ${pageHeadingTextClass}`}>Digital SOAP notes</h3>
+                <p className={`mt-1 text-xs ${pageMutedTextClass}`}>Subjective, Objective, Assessment, and Plan.</p>
                 <div className="mt-3 space-y-2">
                   <textarea
-                    className={workspaceFieldClass}
+                    className={pageFieldClass}
                     rows={2}
                     placeholder="Subjective"
                     value={soapNoteDraft.subjective}
                     onChange={(event) => setSoapNoteDraft((previous) => ({ ...previous, subjective: event.target.value }))}
                   />
                   <textarea
-                    className={workspaceFieldClass}
+                    className={pageFieldClass}
                     rows={2}
                     placeholder="Objective"
                     value={soapNoteDraft.objective}
                     onChange={(event) => setSoapNoteDraft((previous) => ({ ...previous, objective: event.target.value }))}
                   />
                   <textarea
-                    className={workspaceFieldClass}
+                    className={pageFieldClass}
                     rows={2}
                     placeholder="Assessment"
                     value={soapNoteDraft.assessment}
                     onChange={(event) => setSoapNoteDraft((previous) => ({ ...previous, assessment: event.target.value }))}
                   />
                   <textarea
-                    className={workspaceFieldClass}
+                    className={pageFieldClass}
                     rows={2}
                     placeholder="Plan"
                     value={soapNoteDraft.plan}
@@ -1906,7 +1987,7 @@ const DoctorDashboardPage = ({
                 {soapSaveMessage ? <p className="mt-2 text-xs font-semibold text-emerald-600">{soapSaveMessage}</p> : null}
                 <button
                   type="button"
-                  className={`${workspacePrimaryButtonClass} mt-3`}
+                  className={`${pagePrimaryButtonClass} mt-3`}
                   onClick={() => {
                     void handleSaveSoapNote()
                   }}
@@ -1916,11 +1997,11 @@ const DoctorDashboardPage = ({
               </section>
 
               <section className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                <h3 className={`text-sm font-semibold ${workspaceHeadingTextClass}`}>E-Prescription module</h3>
-                <p className={`mt-1 text-xs ${workspaceMutedTextClass}`}>Medication search, dosage entry, and frequent shortcuts.</p>
+                <h3 className={`text-sm font-semibold ${pageHeadingTextClass}`}>E-Prescription module</h3>
+                <p className={`mt-1 text-xs ${pageMutedTextClass}`}>Medication search, dosage entry, and frequent shortcuts.</p>
                 <div className="mt-3 space-y-2">
                   <input
-                    className={workspaceFieldClass}
+                    className={pageFieldClass}
                     placeholder="Search medication"
                     value={medicationQuery}
                     onChange={(event) => {
@@ -1934,7 +2015,7 @@ const DoctorDashboardPage = ({
                         <button
                           key={med.name}
                           type="button"
-                          className={workspaceGhostButtonClass}
+                          className={pageGhostButtonClass}
                           onClick={() => {
                             setMedicationQuery(med.name)
                             setPrescriptionDraft((previous) => ({ ...previous, medication: med.name }))
@@ -1952,7 +2033,7 @@ const DoctorDashboardPage = ({
                         <button
                           key={item.medication}
                           type="button"
-                          className={workspaceGhostButtonClass}
+                          className={pageGhostButtonClass}
                           onClick={() => {
                             setMedicationQuery(item.medication)
                             setPrescriptionDraft((previous) => ({ ...previous, medication: item.medication }))
@@ -1964,13 +2045,13 @@ const DoctorDashboardPage = ({
                     </div>
                   ) : null}
                   <input
-                    className={workspaceFieldClass}
+                    className={pageFieldClass}
                     placeholder="Dosage (e.g. 500mg)"
                     value={prescriptionDraft.dosage ?? ''}
                     onChange={(event) => setPrescriptionDraft((previous) => ({ ...previous, dosage: event.target.value }))}
                   />
                   <input
-                    className={workspaceFieldClass}
+                    className={pageFieldClass}
                     placeholder="Frequency (e.g. twice daily)"
                     value={prescriptionDraft.frequency ?? ''}
                     onChange={(event) => setPrescriptionDraft((previous) => ({ ...previous, frequency: event.target.value }))}
@@ -1979,13 +2060,13 @@ const DoctorDashboardPage = ({
                     type="number"
                     min={1}
                     max={365}
-                    className={workspaceFieldClass}
+                    className={pageFieldClass}
                     placeholder="Duration (days)"
                     value={prescriptionDraft.durationDays ?? 7}
                     onChange={(event) => setPrescriptionDraft((previous) => ({ ...previous, durationDays: Number(event.target.value) || 1 }))}
                   />
                   <input
-                    className={workspaceFieldClass}
+                    className={pageFieldClass}
                     placeholder="Instructions"
                     value={prescriptionDraft.instructions ?? ''}
                     onChange={(event) => setPrescriptionDraft((previous) => ({ ...previous, instructions: event.target.value }))}
@@ -1993,12 +2074,12 @@ const DoctorDashboardPage = ({
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className={workspaceGhostButtonClass} onClick={handleAddPrescription}>
+                  <button type="button" className={pageGhostButtonClass} onClick={handleAddPrescription}>
                     Add prescription
                   </button>
                   <button
                     type="button"
-                    className={workspacePrimaryButtonClass}
+                    className={pagePrimaryButtonClass}
                     onClick={() => {
                       void handleSavePrescriptions()
                     }}
@@ -2009,7 +2090,7 @@ const DoctorDashboardPage = ({
                 {pendingPrescriptions.length > 0 ? (
                   <div className="mt-3 space-y-1">
                     {pendingPrescriptions.map((item, index) => (
-                      <p key={`${item.medication}-${index}`} className={`text-xs ${workspaceMutedTextClass}`}>
+                      <p key={`${item.medication}-${index}`} className={`text-xs ${pageMutedTextClass}`}>
                         {item.medication} - {item.dosage} {item.frequency ? `- ${item.frequency}` : ''}
                       </p>
                     ))}
@@ -2021,14 +2102,14 @@ const DoctorDashboardPage = ({
             </div>
 
             <div className="mt-6 flex gap-3">
-              <button type="button" className={workspaceGhostButtonClass} onClick={() => setShowAppointmentDetail(false)}>
+              <button type="button" className={pageGhostButtonClass} onClick={() => setShowAppointmentDetail(false)}>
                 Close
               </button>
             </div>
           </div>
         </div>
       )}
-    </WorkspaceCanvas>
+    </PageCanvas>
   )
 }
 

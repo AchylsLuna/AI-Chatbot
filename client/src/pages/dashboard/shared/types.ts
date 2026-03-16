@@ -1,8 +1,8 @@
 import type { Reservation } from '../../../types'
 
-export type DashboardLogSeverity = 'Info' | 'Warning' | 'Critical'
+export type LogSeverity = 'Info' | 'Warning' | 'Critical'
 
-export type DashboardLogItem = {
+export type LogItem = {
   id: string
   actor: string
   source: 'Auth' | 'Reservation' | 'System'
@@ -15,17 +15,17 @@ export type DashboardLogItem = {
   userAgent?: string
   timestamp?: string
   createdAt: string
-  severity: DashboardLogSeverity
+  severity: LogSeverity
 }
 
-export type DashboardNotificationSeverity = 'info' | 'warning' | 'critical'
+export type NotificationSeverity = 'info' | 'warning' | 'critical'
 
-export type DashboardNotificationItem = {
+export type NotificationItem = {
   id: string
   title: string
   detail: string
   createdAt: string
   reservationId?: Reservation['id']
   status?: Reservation['status']
-  severity: DashboardNotificationSeverity
+  severity: NotificationSeverity
 }

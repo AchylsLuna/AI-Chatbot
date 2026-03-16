@@ -112,6 +112,10 @@ const LoginPage = ({
               onLogin(email, password, roleTab === 'doctor' ? 'doctor_dashboard' : 'appointments')
             }}
         >
+          <p className="auth-lovable-section-label">
+            {roleTab === 'doctor' ? 'Doctor access' : 'Patient access'}
+          </p>
+
           <div className="auth-lovable-role-wrap">
             <button
               type="button"
@@ -291,6 +295,10 @@ const LoginPage = ({
           <button type="submit" disabled={isAuthLoading} className="auth-lovable-primary-button w-full h-12">
             {isAuthLoading ? 'Signing in...' : roleTab === 'doctor' ? 'Sign In as Doctor' : 'Sign In'}
           </button>
+
+          <div className="auth-lovable-divider">
+            <span>Or continue with</span>
+          </div>
 
           <div className="space-y-2">
             <button

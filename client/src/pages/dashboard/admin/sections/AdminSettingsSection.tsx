@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
-import { workspaceFieldClass, workspaceGhostButtonClass, workspacePrimaryButtonClass } from '../../../../styles/workspaceUi'
+import { pageFieldClass, pageGhostButtonClass, pagePrimaryButtonClass } from '../../../../styles/pageUi'
 import type { AuthSession } from '../../../../types'
-import { formatRoleLabel, getWorkspaceRoleLabel } from '../../../../utils/roles'
+import { formatRoleLabel, getRoleLabel } from '../../../../utils/roles'
 
 type NotificationPreferences = {
   emailAlerts: boolean
@@ -57,7 +57,7 @@ const AdminSettingsSection = ({
           <p className="mt-1 text-sm text-[color:var(--agent-muted)]">
             Role:{' '}
             <span className="font-semibold text-[color:var(--agent-ink)]">
-              {getWorkspaceRoleLabel(authUser?.role)} workspace
+              {getRoleLabel(authUser?.role)}
             </span>
           </p>
           <p className="mt-1 text-xs text-[color:var(--agent-muted-soft)]">{formatRoleLabel(authUser?.role)}</p>
@@ -67,7 +67,7 @@ const AdminSettingsSection = ({
         <div className="reference-card-soft p-4">
           <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--agent-muted-soft)]">Quick controls</p>
           <div className="mt-3 grid gap-2">
-            <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
+            <button type="button" className={pageGhostButtonClass} onClick={onToggleTheme}>
               Theme: {theme === 'dark' ? 'Dark' : 'Light'}
             </button>
           </div>
@@ -110,26 +110,26 @@ const AdminSettingsSection = ({
               value={currentPassword}
               onChange={(event) => onCurrentPasswordChange(event.target.value)}
               placeholder="Current password"
-              className={workspaceFieldClass}
+              className={pageFieldClass}
             />
             <input
               type="password"
               value={newPassword}
               onChange={(event) => onNewPasswordChange(event.target.value)}
               placeholder="New password"
-              className={workspaceFieldClass}
+              className={pageFieldClass}
             />
             <input
               type="password"
               value={confirmPassword}
               onChange={(event) => onConfirmPasswordChange(event.target.value)}
               placeholder="Confirm password"
-              className={workspaceFieldClass}
+              className={pageFieldClass}
             />
           </div>
           {passwordError ? <p className="mt-3 text-xs font-semibold text-rose-500">{passwordError}</p> : null}
           {passwordMessage ? <p className="mt-3 text-xs font-semibold text-emerald-600">{passwordMessage}</p> : null}
-          <button type="submit" className={`mt-4 ${workspacePrimaryButtonClass}`}>
+          <button type="submit" className={`mt-4 ${pagePrimaryButtonClass}`}>
             Update password
           </button>
         </form>

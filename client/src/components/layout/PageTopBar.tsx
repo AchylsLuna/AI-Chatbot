@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
-import WorkspaceAccountMenu from './WorkspaceAccountMenu'
+import AccountMenu from './AccountMenu'
 
-type DashboardTopBarProps = {
+type PageTopBarProps = {
   title?: string
   searchValue: string
   onSearchChange: (value: string) => void
@@ -40,7 +40,7 @@ const BellIcon = () => (
   </svg>
 )
 
-const DashboardTopBar = ({
+const PageTopBar = ({
   title,
   searchValue,
   onSearchChange,
@@ -57,7 +57,7 @@ const DashboardTopBar = ({
   showAccountMenu,
   borderlessActions = false,
   onSignOut,
-}: DashboardTopBarProps) => {
+}: PageTopBarProps) => {
   const initials = useMemo(() => {
     const trimmed = profileName.trim()
     if (!trimmed) return 'U'
@@ -82,12 +82,12 @@ const DashboardTopBar = ({
       {showSearch ? (
         <div className="reference-search-field">
           {searchLabel ? <p className="reference-search-label">{searchLabel}</p> : null}
-          <label className="reference-search" htmlFor="reference-dashboard-search">
+          <label className="reference-search" htmlFor="reference-page-search">
             <span className="text-[color:var(--agent-muted-soft)]" aria-hidden="true">
               <SearchIcon />
             </span>
             <input
-              id="reference-dashboard-search"
+              id="reference-page-search"
               value={searchValue}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder={searchPlaceholder}
@@ -121,7 +121,7 @@ const DashboardTopBar = ({
           ) : null}
 
           {canShowAccountMenu ? (
-            <WorkspaceAccountMenu
+            <AccountMenu
               profileName={profileName}
               profileCaption={profileCaption}
               showNotifications={showNotifications}
@@ -146,5 +146,5 @@ const DashboardTopBar = ({
   )
 }
 
-export type { DashboardTopBarProps }
-export default DashboardTopBar
+export type { PageTopBarProps }
+export default PageTopBar

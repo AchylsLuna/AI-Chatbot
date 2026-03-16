@@ -1,5 +1,5 @@
 import type { AuthSession, Reservation } from '../../../types'
-import type { DashboardLogItem, DashboardNotificationItem } from './types'
+import type { LogItem, NotificationItem } from './types'
 import { formatPhilippineDateTime } from '../../../utils/dateTime'
 
 const parseDate = (value: string) => {
@@ -19,16 +19,16 @@ const getBrowserUserAgent = () => {
   return window.navigator.userAgent
 }
 
-const fallbackLogs: DashboardLogItem[] = [
+const fallbackLogs: LogItem[] = [
   {
     id: 'SYS-LOG-001',
     actor: 'System',
     source: 'System',
     title: 'Daily dashboard snapshot generated',
-    detail: 'Automated integrity check completed for workspace event timeline.',
+    detail: 'Automated integrity check completed for the event timeline.',
     userId: 'system-service',
     action: 'SYSTEM_AUDIT',
-    details: 'Automated integrity check completed for workspace event timeline.',
+    details: 'Automated integrity check completed for the event timeline.',
     ipAddress: '127.0.0.1',
     userAgent: 'System Service',
     timestamp: '2026-02-17T15:00:00.000Z',
@@ -52,17 +52,17 @@ const fallbackLogs: DashboardLogItem[] = [
   },
 ]
 
-export const buildDashboardLogItems = (params: {
+export const buildLogItems = (params: {
   reservations: Reservation[]
   authUser: AuthSession['user'] | null
   sessionStatus: string
-}): DashboardLogItem[] => {
+}): LogItem[] => {
   const browserUserAgent = getBrowserUserAgent()
   const reservationLogs = [...params.reservations]
     .sort((a, b) => parseDate(b.createdAt) - parseDate(a.createdAt))
     .slice(0, 20)
-    .map<DashboardLogItem>((reservation) => {
-      const severity: DashboardLogItem['severity'] =
+    .map<LogItem>((reservation) => {
+      const severity: LogItem['severity'] =
         reservation.status === 'Failed'
           ? 'Critical'
           : reservation.status === 'Booked'
@@ -90,7 +90,7 @@ export const buildDashboardLogItems = (params: {
 
   const authLogCreatedAt = new Date().toISOString()
   const authDetails = `Session status: ${params.sessionStatus}.`
-  const authLog: DashboardLogItem = {
+  const authLog: LogItem = {
     id: 'AUTH-LOG-CURRENT-SESSION',
     actor: params.authUser?.username ?? 'Unknown user',
     source: 'Auth',
@@ -111,14 +111,14 @@ export const buildDashboardLogItems = (params: {
     .slice(0, 40)
 }
 
-export const buildDashboardNotificationItems = (
+export const buildNotificationItems = (
   reservations: Reservation[]
-): DashboardNotificationItem[] => {
+): NotificationItem[] => {
   const items = [...reservations]
     .sort((a, b) => parseDate(b.createdAt) - parseDate(a.createdAt))
     .slice(0, 30)
-    .map<DashboardNotificationItem>((reservation) => {
-      const severity: DashboardNotificationItem['severity'] =
+    .map<NotificationItem>((reservation) => {
+      const severity: NotificationItem['severity'] =
         reservation.status === 'Failed'
           ? 'critical'
           : reservation.status === 'Booked'
@@ -149,7 +149,7 @@ export const buildDashboardNotificationItems = (
   ]
 }
 
-export const formatDashboardDateTime = (value: string) => {
+export const formatEventDateTime = (value: string) => {
   const timestamp = parseDate(value)
   if (!timestamp) return 'Unknown'
   return formatPhilippineDateTime(timestamp)

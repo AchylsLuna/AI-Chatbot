@@ -3,11 +3,11 @@
 This document reflects the current frontend routing and redirect behavior implemented in:
 
 - `client/src/config/routing.ts`
-- `client/src/config/workspaceTabRoutes.ts`
+- `client/src/config/roleTabRoutes.ts`
 - `client/src/hooks/useAppRouting.ts`
 - `client/src/App.tsx`
 - `client/src/config/accessControl.ts`
-- `client/src/utils/dashboardRoutes.ts`
+- `client/src/utils/roleRoutes.ts`
 
 ## Canonical Routes
 
@@ -25,27 +25,28 @@ This document reflects the current frontend routing and redirect behavior implem
 | `/terms` | `terms` | Terms and Conditions |
 | `/privacy-policy` | `privacy_policy` | Privacy Policy (RA 10173) |
 
-### Patient Workspace
+### Patient Routes
 
-| Path | Workspace | Tab |
+| Path | Page | Tab |
 | --- | --- | --- |
-| `/appointments` | `appointments` | `booking_appointments` |
-| `/appointments/history` | `appointments` | `history` |
-| `/appointments/notifications` | `appointments` | `notifications` |
-| `/appointments/settings` | `appointments` | `settings` |
+| `/BookAppointment` | `appointments` | `booking_appointments` |
+| `/History` | `appointments` | `history` |
+| `/Profile` | `appointments` | `profile` |
+| `/Notifications` | `appointments` | `notifications` |
+| `/AccountSettings` | `appointments` | `settings` |
 
-### Doctor Workspace
+### Doctor Dashboard
 
-| Path | Workspace | Tab |
+| Path | Page | Tab |
 | --- | --- | --- |
 | `/doctor/dashboard` | `doctor_dashboard` | `appointments` |
 | `/doctor/queue` | `doctor_dashboard` | `queue` |
 | `/doctor/analytics` | `doctor_dashboard` | `analytics` |
 | `/doctor/settings` | `doctor_dashboard` | `settings` |
 
-### Admin Workspace
+### Admin Dashboard
 
-| Path | Workspace | Tab |
+| Path | Page | Tab |
 | --- | --- | --- |
 | `/admin` | `admin` | `user_management` |
 | `/admin/staff-management` | `admin` | `staff_management` |
@@ -64,7 +65,7 @@ This document reflects the current frontend routing and redirect behavior implem
 Notes:
 
 - Legacy `doctor` role values are normalized to `nurse`.
-- `admin` and `system_admin` both land on the admin workspace by default.
+- `admin` and `system_admin` both land on the admin dashboard by default.
 
 ## Default Role Redirects
 
@@ -80,17 +81,17 @@ When an authenticated user opens `/`, the app redirects them to:
 ## Protected Route Redirects
 
 1. Unknown paths are canonicalized back to `/`.
-2. Unauthenticated access to patient workspace routes goes to `/login`.
-3. Unauthenticated access to doctor workspace routes goes to `/doctor-sign-in`.
-4. Unauthenticated access to admin workspace routes goes to `/admin-login`.
+2. Unauthenticated access to patient routes goes to `/login`.
+3. Unauthenticated access to doctor dashboard routes goes to `/doctor-sign-in`.
+4. Unauthenticated access to admin dashboard routes goes to `/admin-login`.
 5. A patient hitting doctor or admin pages is redirected to `/appointments`.
 6. A doctor hitting admin pages is redirected to `/doctor/dashboard`.
 7. An admin hitting doctor pages is redirected to `/admin`.
-8. Workspace URLs are canonicalized on initial load and browser back/forward navigation.
+8. Protected route URLs are canonicalized on initial load and browser back/forward navigation.
 
 ## Supported Legacy Aliases
 
-These routes are still accepted and resolve to current workspace pages:
+These routes are still accepted and resolve to current protected pages:
 
 | Alias | Canonical destination |
 | --- | --- |
@@ -130,7 +131,12 @@ These routes are still accepted and resolve to current workspace pages:
 | `/dashboard/doctor/jobs` | `/doctor/dashboard` |
 | `/dashboard/admin` | `/admin` |
 | `/dashboard/admin/dashboard` | `/admin` |
-| `/triage` | `/appointments` |
-| `/worker` | `/appointments` |
-| `/worker/dashboard` | `/appointments` |
-| `/appointments/appointments` | `/appointments/history` |
+| `/triage` | `/BookAppointment` |
+| `/worker` | `/BookAppointment` |
+| `/worker/dashboard` | `/BookAppointment` |
+| `/appointments` | `/BookAppointment` |
+| `/appointments/profile` | `/Profile` |
+| `/appointments/history` | `/History` |
+| `/appointments/notifications` | `/Notifications` |
+| `/appointments/settings` | `/AccountSettings` |
+| `/appointments/appointments` | `/History` |

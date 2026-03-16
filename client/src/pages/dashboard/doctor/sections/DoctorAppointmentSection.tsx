@@ -1,9 +1,9 @@
 import PaginationControls from '../../../../components/layout/PaginationControls'
 import {
-  workspaceFieldClass,
-  workspaceGhostButtonClass,
-  workspacePrimaryButtonClass,
-} from '../../../../styles/workspaceUi'
+  pageFieldClass,
+  pageGhostButtonClass,
+  pagePrimaryButtonClass,
+} from '../../../../styles/pageUi'
 import type { Reservation } from '../../../../types'
 import { formatPhilippineDateTime } from '../../../../utils/dateTime'
 import { maskIdentifier, maskPersonName } from '../../../../utils/privacy'
@@ -111,7 +111,7 @@ const DoctorAppointmentSection = ({
           <select
             value={statusFilter}
             onChange={(event) => onStatusFilterChange(event.target.value as ReservationFilterStatus)}
-            className={workspaceFieldClass}
+            className={pageFieldClass}
           >
             <option value="all">All statuses</option>
             <option value="Booked">Booked</option>
@@ -119,7 +119,7 @@ const DoctorAppointmentSection = ({
             <option value="Failed">Failed</option>
           </select>
 
-          <button type="button" className={workspaceGhostButtonClass} onClick={onResetFilters}>
+          <button type="button" className={pageGhostButtonClass} onClick={onResetFilters}>
             Reset filters
           </button>
 
@@ -179,7 +179,7 @@ const DoctorAppointmentSection = ({
                     <select
                       value={draftStatus}
                       onChange={(event) => onDraftStatusChange(event.target.value as Reservation['status'])}
-                      className={workspaceFieldClass}
+                      className={pageFieldClass}
                     >
                       <option value="Booked">Booked</option>
                       <option value="Recorded">Recorded</option>
@@ -188,13 +188,13 @@ const DoctorAppointmentSection = ({
                     <input
                       value={draftTime}
                       onChange={(event) => onDraftTimeChange(event.target.value)}
-                      className={workspaceFieldClass}
+                      className={pageFieldClass}
                       placeholder="Requested time"
                     />
                     <input
                       value={draftDepartment}
                       onChange={(event) => onDraftDepartmentChange(event.target.value)}
-                      className={workspaceFieldClass}
+                      className={pageFieldClass}
                       placeholder="Department"
                     />
                   </div>
@@ -204,18 +204,18 @@ const DoctorAppointmentSection = ({
                       type="button"
                       onClick={onSaveEdit}
                       disabled={isSaving}
-                      className={`${workspacePrimaryButtonClass} disabled:cursor-not-allowed disabled:opacity-70`}
+                      className={`${pagePrimaryButtonClass} disabled:cursor-not-allowed disabled:opacity-70`}
                     >
                       {isSaving ? 'Saving...' : 'Save changes'}
                     </button>
-                    <button type="button" onClick={onCancelEdit} className={workspaceGhostButtonClass}>
+                    <button type="button" onClick={onCancelEdit} className={pageGhostButtonClass}>
                       Cancel
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="mt-4">
-                  <button type="button" onClick={() => onBeginEdit(reservation)} className={workspaceGhostButtonClass}>
+                  <button type="button" onClick={() => onBeginEdit(reservation)} className={pageGhostButtonClass}>
                     Edit appointment
                   </button>
                 </div>

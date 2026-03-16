@@ -10,7 +10,7 @@ import {
 
 type StickyOffsetMode = 'compact' | 'header' | 'auto'
 
-type WorkspaceSidebarShellProps = {
+type SidebarShellProps = {
   sidebar: ReactNode
   content: ReactNode
   mobileTitle?: string
@@ -25,17 +25,17 @@ const focusableSelector =
 const resolveOffsetMode = (mode: StickyOffsetMode): 'compact' | 'header' => {
   if (mode !== 'auto') return mode
   if (typeof document === 'undefined') return 'compact'
-  return document.querySelector('[data-workspace-header="true"]') ? 'header' : 'compact'
+  return document.querySelector('[data-page-header="true"]') ? 'header' : 'compact'
 }
 
-const WorkspaceSidebarShell = ({
+const SidebarShell = ({
   sidebar,
   content,
-  mobileTitle = 'Workspace navigation',
+  mobileTitle = 'Dashboard navigation',
   stickyOffsetMode = 'auto',
   className,
   contentClassName,
-}: WorkspaceSidebarShellProps) => {
+}: SidebarShellProps) => {
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.matchMedia('(min-width: 1024px)').matches
@@ -147,15 +147,15 @@ const WorkspaceSidebarShell = ({
   }
 
   return (
-    <div className={`workspace-shell ${className ?? ''}`}>
+    <div className={`page-shell ${className ?? ''}`}>
       {!isDesktop ? (
-        <div className="workspace-shell-mobile-bar lg:hidden">
+        <div className="page-shell-mobile-bar lg:hidden">
           <button
             type="button"
             ref={triggerRef}
-            className="workspace-shell-mobile-trigger"
+            className="page-shell-mobile-trigger"
             aria-expanded={drawerOpen}
-            aria-controls="workspace-sidebar-drawer"
+            aria-controls="tab-sidebar-drawer"
             onClick={() => setDrawerOpen(true)}
           >
             <span aria-hidden="true">☰</span>
@@ -165,50 +165,50 @@ const WorkspaceSidebarShell = ({
       ) : null}
 
       {isDesktop ? (
-        <aside className="workspace-shell-rail" data-offset={resolvedOffsetMode}>
-          <div className="workspace-shell-rail-inner">{sidebar}</div>
+        <aside className="page-shell-rail" data-offset={resolvedOffsetMode}>
+          <div className="page-shell-rail-inner">{sidebar}</div>
         </aside>
       ) : null}
 
-      <section className={`workspace-shell-content ${contentClassName ?? ''}`}>{content}</section>
+      <section className={`page-shell-content ${contentClassName ?? ''}`}>{content}</section>
 
       {!isDesktop ? (
         <div
-          className={`workspace-shell-drawer lg:hidden ${drawerOpen ? 'is-open' : ''}`}
+          className={`page-shell-drawer lg:hidden ${drawerOpen ? 'is-open' : ''}`}
           aria-hidden={!drawerOpen}
         >
           <button
             type="button"
-            className="workspace-shell-drawer-backdrop"
+            className="page-shell-drawer-backdrop"
             aria-label="Close navigation menu"
             onClick={closeDrawer}
           />
 
           <div
-            id="workspace-sidebar-drawer"
+            id="tab-sidebar-drawer"
             ref={drawerRef}
-            className="workspace-shell-drawer-panel"
+            className="page-shell-drawer-panel"
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
             onClickCapture={handleNavClickCapture}
             onKeyDown={handleDrawerKeyDown}
           >
-            <div className="workspace-shell-drawer-header">
-              <p id={titleId} className="workspace-shell-drawer-title">
+            <div className="page-shell-drawer-header">
+              <p id={titleId} className="page-shell-drawer-title">
                 {mobileTitle}
               </p>
               <button
                 type="button"
                 ref={closeButtonRef}
-                className="workspace-shell-drawer-close"
+                className="page-shell-drawer-close"
                 onClick={closeDrawer}
               >
                 Close
               </button>
             </div>
 
-            <div className="workspace-shell-drawer-body">{sidebar}</div>
+            <div className="page-shell-drawer-body">{sidebar}</div>
           </div>
         </div>
       ) : null}
@@ -216,4 +216,4 @@ const WorkspaceSidebarShell = ({
   )
 }
 
-export default WorkspaceSidebarShell
+export default SidebarShell

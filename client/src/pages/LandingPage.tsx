@@ -33,7 +33,7 @@ const serviceCards = [
   },
   {
     title: 'Queue Visibility',
-    detail: 'Track booking status updates and operational follow-up from one workspace.',
+    detail: 'Track booking status updates and operational follow-up from one place.',
   },
   {
     title: 'Role Separation',
@@ -62,7 +62,7 @@ const processSteps = [
 
 const quickOverviewItems = [
   'Role-safe routing for patient, doctor, and admin paths.',
-  'Session-aware checks for protected workspace access.',
+  'Session-aware checks for protected account access.',
   'Clear booking visibility from request to status updates.',
 ]
 
@@ -332,7 +332,7 @@ const LandingPage = ({
                   Your trusted appointment workflow starts here.
                 </h1>
                 <p className="mt-4 max-w-[34ch] text-sm leading-7 text-[color:var(--agent-muted)] sm:text-base">
-                  Coordinate booking intake, status tracking, and role-specific workspaces with a
+                  Coordinate booking intake, status tracking, and role-specific access with a
                   clearer clinical experience.
                 </p>
                 <div className="mt-6">
@@ -341,7 +341,7 @@ const LandingPage = ({
                     onClick={() => onNavigate?.(isAuthenticated ? 'appointments' : 'login')}
                     className="landing-ref-primary-button px-5 py-2.5 text-sm"
                   >
-                    {isAuthenticated ? 'Open patient workspace' : 'Sign in to continue'}
+                    {isAuthenticated ? 'Open patient portal' : 'Sign in to continue'}
                   </button>
                 </div>
               </div>
@@ -373,7 +373,7 @@ const LandingPage = ({
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--agent-muted)]">
               Structured modules support patient booking, care-team review, and role-based
-              workspace operations.
+              daily operations.
             </p>
             <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
               {quickOverviewItems.map((item) => (

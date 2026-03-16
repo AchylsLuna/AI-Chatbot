@@ -3,11 +3,11 @@ import { matchesNamespace, normalizePath } from './pathUtils'
 import { ROUTES } from '../utils/routes'
 
 export const APPOINTMENTS_TAB_PATHS = {
-  booking_appointments: ROUTES.appointments,
-  profile: `${ROUTES.appointments}/profile`,
-  history: `${ROUTES.appointments}/history`,
-  notifications: `${ROUTES.appointments}/notifications`,
-  settings: `${ROUTES.appointments}/settings`,
+  booking_appointments: ROUTES.patient.bookAppointment,
+  profile: ROUTES.patient.profile,
+  history: ROUTES.patient.history,
+  notifications: ROUTES.patient.notifications,
+  settings: ROUTES.patient.accountSettings,
 } as const
 
 export const DOCTOR_TAB_PATHS = {
@@ -31,9 +31,14 @@ export const ADMIN_TAB_PATHS = {
 export type AppointmentsTab = keyof typeof APPOINTMENTS_TAB_PATHS
 export type DoctorTab = keyof typeof DOCTOR_TAB_PATHS
 export type AdminTab = keyof typeof ADMIN_TAB_PATHS
-export type WorkspacePage = Extract<AppPage, 'appointments' | 'doctor_dashboard' | 'admin'>
+export type TabPage = Extract<AppPage, 'appointments' | 'doctor_dashboard' | 'admin'>
 
 const APPOINTMENTS_COMPAT_TAB_MAP: Readonly<Record<string, AppointmentsTab>> = {
+  [ROUTES.appointments]: 'booking_appointments',
+  [`${ROUTES.appointments}/profile`]: 'profile',
+  [`${ROUTES.appointments}/history`]: 'history',
+  [`${ROUTES.appointments}/notifications`]: 'notifications',
+  [`${ROUTES.appointments}/settings`]: 'settings',
   '/worker': 'booking_appointments',
   '/worker/dashboard': 'booking_appointments',
   '/triage': 'booking_appointments',
@@ -109,7 +114,7 @@ export const getAppointmentsTabPath = (tab: AppointmentsTab) => APPOINTMENTS_TAB
 export const getDoctorTabPath = (tab: DoctorTab) => DOCTOR_TAB_PATHS[tab]
 export const getAdminTabPath = (tab: AdminTab) => ADMIN_TAB_PATHS[tab]
 
-export const resolveWorkspacePageFromPath = (path: string): WorkspacePage | null => {
+export const resolveTabPageFromPath = (path: string): TabPage | null => {
   const normalized = normalizePath(path)
 
   if (resolveAppointmentsTabFromPath(normalized)) return 'appointments'
@@ -122,7 +127,7 @@ export const resolveWorkspacePageFromPath = (path: string): WorkspacePage | null
   return null
 }
 
-export const resolveWorkspaceCanonicalPath = (path: string): string | null => {
+export const resolveTabCanonicalPath = (path: string): string | null => {
   const normalized = normalizePath(path)
 
   const appointmentsTab = resolveAppointmentsTabFromPath(normalized)
@@ -134,7 +139,7 @@ export const resolveWorkspaceCanonicalPath = (path: string): string | null => {
   const adminTab = resolveAdminTabFromPath(normalized)
   if (adminTab) return getAdminTabPath(adminTab)
 
-  const page = resolveWorkspacePageFromPath(normalized)
+  const page = resolveTabPageFromPath(normalized)
   if (page === 'appointments') return getAppointmentsTabPath('booking_appointments')
   if (page === 'doctor_dashboard') return getDoctorTabPath('appointments')
   if (page === 'admin') return getAdminTabPath('user_management')
@@ -142,13 +147,13 @@ export const resolveWorkspaceCanonicalPath = (path: string): string | null => {
   return null
 }
 
-export const isWorkspacePathForPage = (path: string, page: AppPage) => {
+export const isTabPathForPage = (path: string, page: AppPage) => {
   if (page !== 'appointments' && page !== 'doctor_dashboard' && page !== 'admin') {
     return false
   }
 
-  const canonical = resolveWorkspaceCanonicalPath(path)
+  const canonical = resolveTabCanonicalPath(path)
   if (!canonical) return false
 
-  return resolveWorkspacePageFromPath(canonical) === page
+  return resolveTabPageFromPath(canonical) === page
 }

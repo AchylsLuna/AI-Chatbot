@@ -18,7 +18,7 @@ import {
   parseApiSchema,
   supportTicketReceiptResponseSchema,
 } from '../schemas/apiSchemas'
-import { normalizeRoleForSession } from '../utils/dashboardRoutes'
+import { normalizeRoleForSession } from '../utils/roleRoutes'
 
 const resolveApiBase = () => {
   const configured = String(import.meta.env.VITE_API_URL ?? '/api').trim()
@@ -546,6 +546,12 @@ export type AssistantChatResponse = {
   }
 }
 
+type ResendOtpResult = {
+  challengeId: string
+  expiresInSeconds: number
+  otpPreview?: string
+}
+
 export const api = {
   login: async (username: string, password: string): Promise<AuthSession | LoginOtpChallenge> => {
     const response = await request(`${API_BASE}/login`, {
@@ -597,13 +603,11 @@ export const api = {
     return parseApiSchema(authSessionSchema, mapped, 'login')
   },
   requestOtpChallenge: async (username: string, password: string): Promise<LoginOtpChallenge> => {
-    const response = await request(`${API_BASE}/auth/otp/request`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    })
-    const payload = await handleResponse(response)
-    return parseApiSchema(loginOtpChallengeSchema, payload, 'OTP challenge')
+    const result = await api.login(username, password)
+    if ('challengeId' in result) {
+      return result
+    }
+    throw new Error('OTP challenge was not required for this account.')
   },
   verifyOtpLogin: async (challengeId: string, code: string): Promise<AuthSession> => {
     const response = await request(`${API_BASE}/verify-otp`, {
@@ -636,13 +640,26 @@ export const api = {
     }
     return parseApiSchema(authSessionSchema, mapped, 'OTP verification')
   },
-  resendOtp: async (challengeId: string): Promise<void> => {
+  resendOtp: async (challengeId: string): Promise<ResendOtpResult> => {
     const response = await request(`${API_BASE}/resend-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ challengeId }),
     })
-    await handleResponse(response)
+    const payload = await handleResponse(response)
+    const payloadRecord = payload as Record<string, unknown>
+    return {
+      challengeId:
+        (payloadRecord.challengeId as string | undefined) ?? challengeId,
+      expiresInSeconds:
+        typeof payloadRecord.expiresInSeconds === 'number'
+          ? payloadRecord.expiresInSeconds
+          : 10 * 60,
+      otpPreview:
+        typeof payloadRecord.otpPreview === 'string'
+          ? payloadRecord.otpPreview
+          : undefined,
+    }
   },
   signup: async (draft: SignupDraft): Promise<void> => {
     const safeEmail = draft.email ?? draft.username ?? ''

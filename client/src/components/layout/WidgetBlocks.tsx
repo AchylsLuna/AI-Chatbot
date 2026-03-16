@@ -1,20 +1,20 @@
 import { useMemo } from 'react'
 
-type DashboardActivityItem = {
+type ActivityItem = {
   id: string
   title: string
   detail: string
   meta?: string
 }
 
-type DashboardSeries = {
+type ChartSeries = {
   key: string
   label: string
   color: string
   values: number[]
 }
 
-type DashboardRecommendationItem = {
+type RecommendationItem = {
   id: string
   title: string
   subtitle: string
@@ -22,26 +22,26 @@ type DashboardRecommendationItem = {
   badge?: string
 }
 
-type DashboardFeaturedItem = {
+type FeaturedItem = {
   id: string
   title: string
   subtitle: string
 }
 
-type DashboardWidgetBlocksProps = {
+type WidgetBlocksProps = {
   summaryTitle: string
   summaryValue: string
   summaryLabel: string
   secondaryLabel: string
   showSummaryPanel?: boolean
   activityTitle: string
-  activityItems: DashboardActivityItem[]
+  activityItems: ActivityItem[]
   chartTitle: string
-  chartSeries: DashboardSeries[]
+  chartSeries: ChartSeries[]
   recommendationTitle: string
-  recommendationItems: DashboardRecommendationItem[]
+  recommendationItems: RecommendationItem[]
   featuredTitle: string
-  featuredItems: DashboardFeaturedItem[]
+  featuredItems: FeaturedItem[]
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
@@ -61,7 +61,7 @@ const buildPolyline = (values: number[], maxValue: number) => {
     .join(' ')
 }
 
-const DashboardWidgetBlocks = ({
+const WidgetBlocks = ({
   summaryTitle,
   summaryValue,
   summaryLabel,
@@ -75,7 +75,7 @@ const DashboardWidgetBlocks = ({
   recommendationItems,
   featuredTitle,
   featuredItems,
-}: DashboardWidgetBlocksProps) => {
+}: WidgetBlocksProps) => {
   const ringPercent = useMemo(() => {
     const parsed = Number.parseInt(summaryValue.replace(/[^\d]/g, ''), 10)
     if (Number.isNaN(parsed)) return 70
@@ -212,11 +212,11 @@ const DashboardWidgetBlocks = ({
 }
 
 export type {
-  DashboardActivityItem,
-  DashboardFeaturedItem,
-  DashboardRecommendationItem,
-  DashboardSeries,
-  DashboardWidgetBlocksProps,
+  ActivityItem,
+  FeaturedItem,
+  RecommendationItem,
+  ChartSeries,
+  WidgetBlocksProps,
 }
 
-export default DashboardWidgetBlocks
+export default WidgetBlocks

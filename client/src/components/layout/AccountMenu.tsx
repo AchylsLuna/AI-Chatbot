@@ -1,12 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
-type WorkspaceAccountMenuProps = {
+type AccountMenuProps = {
   profileName: string
   profileCaption?: string
   showNotifications?: boolean
   notificationCount?: number
   onSignOut: () => void
-  variant?: 'reference' | 'workspace'
+  variant?: 'reference' | 'staff'
 }
 
 const BellIcon = () => (
@@ -24,14 +24,14 @@ const buildInitials = (value: string) => {
   return `${tokens[0][0] ?? ''}${tokens[1][0] ?? ''}`.toUpperCase()
 }
 
-const WorkspaceAccountMenu = ({
+const AccountMenu = ({
   profileName,
   profileCaption,
   showNotifications = true,
   notificationCount = 0,
   onSignOut,
   variant = 'reference',
-}: WorkspaceAccountMenuProps) => {
+}: AccountMenuProps) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -72,18 +72,18 @@ const WorkspaceAccountMenu = ({
   return (
     <div
       ref={rootRef}
-      className={`workspace-account-menu-root workspace-account-menu-root--${variant}`}
+      className={`account-menu-root account-menu-root--${variant}`}
       data-account-menu-root="true"
     >
       {showNotifications ? (
         <button
           type="button"
-          className="workspace-account-bell"
+          className="account-menu-bell"
           aria-label={`Notifications (${boundedNotificationCount})`}
         >
           <BellIcon />
           {boundedNotificationCount > 0 ? (
-            <span className="workspace-account-badge">{boundedNotificationCount}</span>
+            <span className="account-menu-badge">{boundedNotificationCount}</span>
           ) : null}
         </button>
       ) : null}
@@ -91,28 +91,28 @@ const WorkspaceAccountMenu = ({
       <button
         ref={triggerRef}
         type="button"
-        className="workspace-account-trigger"
+        className="account-menu-trigger"
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         aria-controls={menuId}
         onClick={() => setMenuOpen((previous) => !previous)}
       >
-        <span className="workspace-account-avatar">{initials}</span>
+        <span className="account-menu-avatar">{initials}</span>
       </button>
 
       {menuOpen ? (
-        <div id={menuId} role="menu" aria-label="Account menu" className="workspace-account-dropdown">
-          <div className="workspace-account-dropdown-head">
-            <p className="workspace-account-dropdown-name">{profileName}</p>
+        <div id={menuId} role="menu" aria-label="Account menu" className="account-menu-dropdown">
+          <div className="account-menu-dropdown-head">
+            <p className="account-menu-dropdown-name">{profileName}</p>
             {profileCaption ? (
-              <p className="workspace-account-dropdown-caption">{profileCaption}</p>
+              <p className="account-menu-dropdown-caption">{profileCaption}</p>
             ) : null}
           </div>
 
           <button
             type="button"
             role="menuitem"
-            className="workspace-account-dropdown-item is-danger"
+            className="account-menu-dropdown-item is-danger"
             onClick={() => {
               setMenuOpen(false)
               onSignOut()
@@ -126,5 +126,5 @@ const WorkspaceAccountMenu = ({
   )
 }
 
-export type { WorkspaceAccountMenuProps }
-export default WorkspaceAccountMenu
+export type { AccountMenuProps }
+export default AccountMenu

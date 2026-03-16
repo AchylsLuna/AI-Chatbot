@@ -1,19 +1,19 @@
 import { resolveReportLogMetadata } from './reportLogMetadata'
-import type { DashboardLogItem } from './types'
+import type { LogItem } from './types'
 
-export type ReportLogSourceFilter = 'all' | DashboardLogItem['source']
-export type ReportLogSeverityFilter = 'all' | DashboardLogItem['severity']
+export type ReportLogSourceFilter = 'all' | LogItem['source']
+export type ReportLogSeverityFilter = 'all' | LogItem['severity']
 export type ReportLogActionFilter = 'all' | string
 
 type FilterReportLogItemsParams = {
-  items: DashboardLogItem[]
+  items: LogItem[]
   searchQuery: string
   sourceFilter: ReportLogSourceFilter
   severityFilter: ReportLogSeverityFilter
   actionFilter: ReportLogActionFilter
 }
 
-export const getReportLogActionOptions = (items: DashboardLogItem[]) => {
+export const getReportLogActionOptions = (items: LogItem[]) => {
   const actionSet = new Set<string>()
 
   for (const item of items) {

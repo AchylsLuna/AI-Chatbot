@@ -1,9 +1,9 @@
-import DashboardStatStrip from '../../../../components/layout/DashboardStatStrip'
-import DashboardWidgetBlocks, {
-  type DashboardActivityItem,
-  type DashboardFeaturedItem,
-  type DashboardRecommendationItem,
-} from '../../../../components/layout/DashboardWidgetBlocks'
+import StatStrip from '../../../../components/layout/StatStrip'
+import WidgetBlocks, {
+  type ActivityItem,
+  type FeaturedItem,
+  type RecommendationItem,
+} from '../../../../components/layout/WidgetBlocks'
 
 type AdminDashboardOverviewSectionProps = {
   metrics: {
@@ -18,9 +18,9 @@ type AdminDashboardOverviewSectionProps = {
     recorded: number[]
     failed: number[]
   }
-  activityItems: DashboardActivityItem[]
-  recommendationItems: DashboardRecommendationItem[]
-  featuredItems: DashboardFeaturedItem[]
+  activityItems: ActivityItem[]
+  recommendationItems: RecommendationItem[]
+  featuredItems: FeaturedItem[]
 }
 
 const AdminDashboardOverviewSection = ({
@@ -33,7 +33,7 @@ const AdminDashboardOverviewSection = ({
 }: AdminDashboardOverviewSectionProps) => {
   return (
     <>
-      <DashboardStatStrip
+      <StatStrip
         metrics={[
           { key: 'total', label: 'Total', value: metrics.total },
           { key: 'booked', label: 'Booked', value: metrics.booked },
@@ -42,7 +42,7 @@ const AdminDashboardOverviewSection = ({
         ]}
       />
 
-      <DashboardWidgetBlocks
+      <WidgetBlocks
         summaryTitle="System completion"
         summaryValue={`${completionRate}%`}
         summaryLabel="Verified"

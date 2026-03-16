@@ -10,6 +10,14 @@ export const ROUTES = {
   terms: '/terms',
   privacyPolicy: '/privacy-policy',
   appointments: '/appointments',
+  patient: {
+    root: '/BookAppointment',
+    bookAppointment: '/BookAppointment',
+    history: '/History',
+    profile: '/Profile',
+    notifications: '/Notifications',
+    accountSettings: '/AccountSettings',
+  },
   admin: {
     root: '/admin',
     dashboard: '/admin',

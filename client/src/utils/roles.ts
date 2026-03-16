@@ -1,6 +1,6 @@
 import type { AppPage } from '../types/navigation'
 import type { UserRole } from '../types'
-import { getDefaultDashboardPage } from './dashboardRoutes'
+import { getDefaultPageForRole as resolveDefaultPageForRole } from './roleRoutes'
 
 const roleLabels: Record<UserRole, string> = {
   user: 'Patient',
@@ -16,7 +16,7 @@ export const formatRoleLabel = (role?: string | null) => {
   return role.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
-export const getWorkspaceRoleLabel = (role?: UserRole | null) => {
+export const getRoleLabel = (role?: UserRole | null) => {
   if (!role) return 'Unknown'
   if (role === 'user') return 'Patient'
   if (role === 'doctor') return 'Doctor'
@@ -24,5 +24,5 @@ export const getWorkspaceRoleLabel = (role?: UserRole | null) => {
 }
 
 export const getDefaultPageForRole = (role?: UserRole | null): AppPage => {
-  return getDefaultDashboardPage(role)
+  return resolveDefaultPageForRole(role)
 }

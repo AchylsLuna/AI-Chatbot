@@ -54,7 +54,7 @@ class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorBoundary
             {this.props.section} failed safely
           </h2>
           <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-            A rendering error was contained to prevent the whole workspace from crashing.
+            A rendering error was contained to prevent the whole page from crashing.
           </p>
           {this.state.message ? (
             <p className="agent-alert agent-alert--error mt-3">{this.state.message}</p>

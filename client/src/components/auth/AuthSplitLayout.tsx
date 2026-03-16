@@ -72,6 +72,23 @@ const AuthSplitLayout = ({
                 Sign in to continue with role-based access, appointment tracking, and staff
                 dashboards.
               </p>
+
+              <div className="auth-lovable-preview-grid">
+                <div className="auth-lovable-preview-card">
+                  <p className="auth-lovable-preview-label">Patient</p>
+                  <p className="auth-lovable-preview-title">Book Appointment</p>
+                  <p className="auth-lovable-preview-copy">
+                    Schedule care, review history, and manage reminders.
+                  </p>
+                </div>
+                <div className="auth-lovable-preview-card">
+                  <p className="auth-lovable-preview-label">Verification</p>
+                  <p className="auth-lovable-preview-title">OTP before access</p>
+                  <p className="auth-lovable-preview-copy">
+                    Protected routes stay locked until the session is verified.
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
 

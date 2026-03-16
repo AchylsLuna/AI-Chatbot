@@ -4,7 +4,7 @@ A secure backend and UI for appointment booking, staff dashboards, and audit-bac
 
 **Highlights**
 - Auth: Local login, OTP (email) and role-based access (User, Doctor, Admin, Super Admin). See controllers: [server/Controllers/UserController.js].
-- Role-based dashboards: User appointments, Doctor/Admin dashboard, Admin workspace. Client routing and access control in [client/src/config/accessControl.ts].
+- Role-based dashboards: User appointments, Doctor/Admin dashboard, Admin dashboard. Client routing and access control in [client/src/config/accessControl.ts].
 - Audit logging and encrypted backups: admin download implemented in [server/Controllers/adminController.js]. Decrypt helper in [decrypt_backup/decrypt_backup.js].
 - Appointment archival service: [server/Utils/archiveService.js] with a script at [server/scripts/runArchiveAppointments.js].
 

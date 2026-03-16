@@ -1,10 +1,10 @@
 import { Fragment } from 'react'
 import PaginationControls from '../../../../components/layout/PaginationControls'
 import {
-  workspaceFieldClass,
-  workspaceGhostButtonClass,
-  workspacePrimaryButtonClass,
-} from '../../../../styles/workspaceUi'
+  pageFieldClass,
+  pageGhostButtonClass,
+  pagePrimaryButtonClass,
+} from '../../../../styles/pageUi'
 import type { Reservation } from '../../../../types'
 import { maskIdentifier, maskPersonName } from '../../../../utils/privacy'
 
@@ -187,12 +187,12 @@ const AdminUserManagementSection = ({
                         </td>
                         <td className="px-3 py-3">
                           <div className="flex flex-wrap gap-2">
-                            <button type="button" className={workspaceGhostButtonClass} onClick={() => onBeginEdit(item)}>
+                            <button type="button" className={pageGhostButtonClass} onClick={() => onBeginEdit(item)}>
                               Edit
                             </button>
                             <button
                               type="button"
-                              className={workspaceGhostButtonClass}
+                              className={pageGhostButtonClass}
                               disabled={item.accountStatus === 'Active'}
                               onClick={() => onSetAccountStatus(item.key, 'Active')}
                             >
@@ -200,7 +200,7 @@ const AdminUserManagementSection = ({
                             </button>
                             <button
                               type="button"
-                              className={workspaceGhostButtonClass}
+                              className={pageGhostButtonClass}
                               disabled={item.accountStatus === 'Disabled'}
                               onClick={() => onSetAccountStatus(item.key, 'Disabled')}
                             >
@@ -219,31 +219,31 @@ const AdminUserManagementSection = ({
                                 <input
                                   value={draftName}
                                   onChange={(event) => onDraftNameChange(event.target.value)}
-                                  className={workspaceFieldClass}
+                                  className={pageFieldClass}
                                   placeholder="Display name"
                                 />
                                 <input
                                   value={draftEmail}
                                   onChange={(event) => onDraftEmailChange(event.target.value)}
-                                  className={workspaceFieldClass}
+                                  className={pageFieldClass}
                                   placeholder="Contact email"
                                 />
                                 <input
                                   value={draftNote}
                                   onChange={(event) => onDraftNoteChange(event.target.value)}
-                                  className={workspaceFieldClass}
+                                  className={pageFieldClass}
                                   placeholder="Internal note"
                                 />
                               </div>
                               <div className="mt-3 flex flex-wrap gap-2">
                                 <button
                                   type="button"
-                                  className={workspacePrimaryButtonClass}
+                                  className={pagePrimaryButtonClass}
                                   onClick={() => onSaveEdit(item.key)}
                                 >
                                   Save
                                 </button>
-                                <button type="button" className={workspaceGhostButtonClass} onClick={onCancelEdit}>
+                                <button type="button" className={pageGhostButtonClass} onClick={onCancelEdit}>
                                   Cancel
                                 </button>
                               </div>

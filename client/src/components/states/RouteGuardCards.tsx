@@ -15,7 +15,7 @@ export const AuthLoadingCard = ({ label }: AuthLoadingCardProps) => (
   <div className="min-h-screen pb-20">
     <div className="mx-auto w-full max-w-6xl px-6 py-10">
       <div className={`${stateCardClass} p-7`}>
-        <p className="agent-eyebrow">Preparing workspace</p>
+        <p className="agent-eyebrow">Preparing session</p>
         <h1 className="mt-4 text-2xl font-semibold text-[color:var(--agent-ink)]">Checking access</h1>
         <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--agent-muted)]">{label}</p>
       </div>

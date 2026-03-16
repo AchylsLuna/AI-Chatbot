@@ -311,8 +311,6 @@ const SignupPage = ({
         ) : null}
 
         <h2 className="auth-lovable-title">Create your account</h2>
-        <p className="auth-lovable-subtitle">Start your AI-powered health journey today</p>
-
         <div className="auth-lovable-role-wrap mt-6">
           <button
             type="button"

@@ -1,7 +1,11 @@
 # Pages Routing Notes
 
 ## File structure
-- Canonical app pages live directly in `client/src/pages`.
+- Canonical role pages live under:
+  - `client/src/pages/patient`
+  - `client/src/pages/doctor`
+  - `client/src/pages/admin`
+- Public/auth pages remain directly in `client/src/pages`.
 - Legacy deep trees under `client/src/pages/dashboard/*` remain available but are not active routing entrypoints.
 - Legacy deep trees are intentionally excluded from active app static checks (`typecheck`/`lint`) to keep maintenance scoped to canonical pages.
 
@@ -13,17 +17,18 @@
 - Primary dashboard entry: `/doctor/dashboard`
 
 ## Active sidebar tab routes
-- Patient workspace (`appointments`)
-  - `dashboard` -> `/appointments`
-  - `appointments` -> `/appointments/appointments`
-  - `notifications` -> `/appointments/notifications`
-  - `settings` -> `/appointments/settings`
-- Doctor workspace (`doctor_dashboard`)
+- Patient routes (`appointments`)
+  - `book_appointment` -> `/BookAppointment`
+  - `history` -> `/History`
+  - `profile` -> `/Profile`
+  - `notifications` -> `/Notifications`
+  - `settings` -> `/AccountSettings`
+- Doctor dashboard (`doctor_dashboard`)
   - `appointments` -> `/doctor/dashboard`
   - `queue` -> `/doctor/queue`
   - `analytics` -> `/doctor/analytics`
   - `settings` -> `/doctor/settings`
-- Admin workspace (`admin`)
+- Admin dashboard (`admin`)
   - `user_management` -> `/admin`
   - `staff_management` -> `/admin/staff-management`
   - `audit_log` -> `/admin/audit-log`
@@ -33,10 +38,11 @@
 
 ## Deep links and history
 - Sidebar tabs are deep-linkable on active pages, and URLs update on tab changes.
-- Browser Back/Forward traverses prior sidebar tabs within a workspace.
-- Protected workspace tab URLs are restored after login/OTP when access is granted.
+- Browser Back/Forward traverses prior sidebar tabs within the active area.
+- Protected tab URLs are restored after login/OTP when access is granted.
 
 ## Compatibility aliases
+- Legacy `/appointments/*` patient namespace routes remain supported and canonicalize to the new patient routes.
 - Legacy `/dashboard/doctor/*` namespace routes remain supported as compatibility redirects.
 - Legacy `/dashboard/admin/*` namespace routes remain supported as compatibility redirects.
 - Historical sign-in aliases (`/sign-in`, `/signin`, `/admin-sign-in`, `/doctor-signin`) are normalized to canonical routes.

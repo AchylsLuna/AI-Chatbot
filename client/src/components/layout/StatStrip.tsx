@@ -1,15 +1,15 @@
-type DashboardStatMetric = {
+type StatMetric = {
   key: string
   label: string
   value: number | string
   caption?: string
 }
 
-type DashboardStatStripProps = {
-  metrics: DashboardStatMetric[]
+type StatStripProps = {
+  metrics: StatMetric[]
 }
 
-const DashboardStatStrip = ({ metrics }: DashboardStatStripProps) => (
+const StatStrip = ({ metrics }: StatStripProps) => (
   <section className="reference-stat-strip">
     {metrics.map((metric, index) => (
       <article
@@ -29,5 +29,5 @@ const DashboardStatStrip = ({ metrics }: DashboardStatStripProps) => (
   </section>
 )
 
-export type { DashboardStatMetric, DashboardStatStripProps }
-export default DashboardStatStrip
+export type { StatMetric, StatStripProps }
+export default StatStrip

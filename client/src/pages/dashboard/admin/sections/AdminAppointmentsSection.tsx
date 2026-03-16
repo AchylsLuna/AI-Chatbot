@@ -1,5 +1,5 @@
 import PaginationControls from '../../../../components/layout/PaginationControls'
-import { workspaceFieldClass, workspaceGhostButtonClass } from '../../../../styles/workspaceUi'
+import { pageFieldClass, pageGhostButtonClass } from '../../../../styles/pageUi'
 import type { Reservation } from '../../../../types'
 import { formatPhilippineDateTime } from '../../../../utils/dateTime'
 import { maskIdentifier, maskPersonName } from '../../../../utils/privacy'
@@ -48,7 +48,7 @@ const AdminAppointmentsSection = ({
       <article className="reference-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="reference-section-title">Appointment workspace</h2>
+            <h2 className="reference-section-title">Appointments</h2>
             <p className="reference-widget-subtle mt-1">
               Review appointment queue status and monitor latest booking activity.
             </p>
@@ -81,7 +81,7 @@ const AdminAppointmentsSection = ({
           <select
             value={statusFilter}
             onChange={(event) => onStatusFilterChange(event.target.value as ReservationFilterStatus)}
-            className={workspaceFieldClass}
+            className={pageFieldClass}
           >
             <option value="all">All statuses</option>
             <option value="Booked">Booked</option>
@@ -89,7 +89,7 @@ const AdminAppointmentsSection = ({
             <option value="Failed">Failed</option>
           </select>
 
-          <button type="button" className={workspaceGhostButtonClass} onClick={onResetFilters}>
+          <button type="button" className={pageGhostButtonClass} onClick={onResetFilters}>
             Reset filters
           </button>
 

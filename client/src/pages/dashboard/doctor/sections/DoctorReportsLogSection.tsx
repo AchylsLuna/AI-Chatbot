@@ -1,22 +1,22 @@
 import {
-  workspaceFieldClass,
-  workspaceGhostButtonClass,
-  workspaceMutedTextClass,
-  workspacePanelClass,
-  workspaceSubtleTextClass,
-} from '../../../../styles/workspaceUi'
+  pageFieldClass,
+  pageGhostButtonClass,
+  pageMutedTextClass,
+  pagePanelClass,
+  pageSubtleTextClass,
+} from '../../../../styles/pageUi'
 import { maskIdentifier, maskPersonName } from '../../../../utils/privacy'
-import { formatDashboardDateTime } from '../../shared/dashboardEvents'
+import { formatEventDateTime } from '../../shared/activityEvents'
 import {
   type ReportLogActionFilter,
   type ReportLogSeverityFilter,
   type ReportLogSourceFilter,
 } from '../../shared/reportLogFilters'
 import { resolveReportLogMetadata } from '../../shared/reportLogMetadata'
-import type { DashboardLogItem } from '../../shared/types'
+import type { LogItem } from '../../shared/types'
 
 type DoctorReportsLogSectionProps = {
-  items: DashboardLogItem[]
+  items: LogItem[]
   dataMaskingEnabled: boolean
   sourceFilter: ReportLogSourceFilter
   severityFilter: ReportLogSeverityFilter
@@ -28,14 +28,14 @@ type DoctorReportsLogSectionProps = {
   onResetFilters: () => void
 }
 
-const severityClass = (severity: DashboardLogItem['severity']) => {
+const severityClass = (severity: LogItem['severity']) => {
   if (severity === 'Critical') return 'border-rose-300/70 bg-rose-100 text-rose-700'
   if (severity === 'Warning') return 'border-amber-300/70 bg-amber-100 text-amber-700'
   return 'border-sky-300/70 bg-sky-100 text-sky-700'
 }
 
-const sourceOptions: DashboardLogItem['source'][] = ['Auth', 'Reservation', 'System']
-const severityOptions: DashboardLogItem['severity'][] = ['Info', 'Warning', 'Critical']
+const sourceOptions: LogItem['source'][] = ['Auth', 'Reservation', 'System']
+const severityOptions: LogItem['severity'][] = ['Info', 'Warning', 'Critical']
 
 const DoctorReportsLogSection = ({
   items,
@@ -52,14 +52,14 @@ const DoctorReportsLogSection = ({
 
   return (
     <section className="space-y-3">
-      <article className={`${workspacePanelClass} p-5`}>
-        <p className={`text-sm ${workspaceMutedTextClass}`}>Filter the currently displayed report log records.</p>
+      <article className={`${pagePanelClass} p-5`}>
+        <p className={`text-sm ${pageMutedTextClass}`}>Filter the currently displayed report log records.</p>
 
         <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center">
           <select
             value={sourceFilter}
             onChange={(event) => onSourceFilterChange(event.target.value as ReportLogSourceFilter)}
-            className={workspaceFieldClass}
+            className={pageFieldClass}
             aria-label="Filter report logs by source"
           >
             <option value="all">All sources</option>
@@ -73,7 +73,7 @@ const DoctorReportsLogSection = ({
           <select
             value={severityFilter}
             onChange={(event) => onSeverityFilterChange(event.target.value as ReportLogSeverityFilter)}
-            className={workspaceFieldClass}
+            className={pageFieldClass}
             aria-label="Filter report logs by severity"
           >
             <option value="all">All severities</option>
@@ -87,7 +87,7 @@ const DoctorReportsLogSection = ({
           <select
             value={actionFilter}
             onChange={(event) => onActionFilterChange(event.target.value as ReportLogActionFilter)}
-            className={workspaceFieldClass}
+            className={pageFieldClass}
             aria-label="Filter report logs by action"
           >
             <option value="all">All actions</option>
@@ -98,15 +98,15 @@ const DoctorReportsLogSection = ({
             ))}
           </select>
 
-          <button type="button" className={workspaceGhostButtonClass} onClick={onResetFilters}>
+          <button type="button" className={pageGhostButtonClass} onClick={onResetFilters}>
             Reset filters
           </button>
         </div>
       </article>
 
       {items.length === 0 ? (
-        <article className={`${workspacePanelClass} p-5`}>
-          <p className={`text-sm ${workspaceMutedTextClass}`}>No report log events match your search query.</p>
+        <article className={`${pagePanelClass} p-5`}>
+          <p className={`text-sm ${pageMutedTextClass}`}>No report log events match your search query.</p>
         </article>
       ) : (
         items.map((item) => {
@@ -115,12 +115,12 @@ const DoctorReportsLogSection = ({
           const metadata = resolveReportLogMetadata(item, dataMaskingEnabled)
 
           return (
-            <article key={item.id} className={`${workspacePanelClass} p-5`}>
+            <article key={item.id} className={`${pagePanelClass} p-5`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>{item.source}</p>
+                  <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>{item.source}</p>
                   <h2 className="mt-1 text-base font-semibold text-[color:var(--agent-ink)]">{title}</h2>
-                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{detail}</p>
+                  <p className={`mt-1 text-sm ${pageMutedTextClass}`}>{detail}</p>
                 </div>
                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${severityClass(item.severity)}`}>
                   {item.severity}
@@ -151,7 +151,7 @@ const DoctorReportsLogSection = ({
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-2">
                     <dt className="font-semibold text-[color:var(--agent-ink)]">Timestamp</dt>
-                    <dd>{formatDashboardDateTime(metadata.timestamp)}</dd>
+                    <dd>{formatEventDateTime(metadata.timestamp)}</dd>
                   </div>
                 </dl>
               </div>

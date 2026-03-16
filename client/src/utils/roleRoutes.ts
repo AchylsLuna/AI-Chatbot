@@ -50,7 +50,7 @@ export const isSystemAdminRole = (role?: string | null, accountType?: string | n
   return getNormalizedRole(role, accountType) === 'system_admin'
 }
 
-export const getDefaultDashboardPage = (
+export const getDefaultPageForRole = (
   role?: string | null,
   accountType?: string | null
 ): AppPage => {

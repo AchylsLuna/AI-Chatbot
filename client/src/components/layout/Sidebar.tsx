@@ -32,7 +32,7 @@ export type SidebarAuxItem = {
 
 type SidebarProps = {
   className?: string
-  variant?: 'default' | 'dashboard' | 'reference'
+  variant?: 'default' | 'staff' | 'reference' | 'patient'
   mobileMode?: 'drawer'
   fullRail?: boolean
   heightMode?: 'content' | 'viewport'
@@ -178,7 +178,7 @@ const renderProfileInitials = (name: string, fallback = 'U') => {
 
 const resolveAutoOffset = (): 'compact' | 'header' => {
   if (typeof document === 'undefined') return 'compact'
-  return document.querySelector('[data-workspace-header="true"]') ? 'header' : 'compact'
+  return document.querySelector('[data-page-header="true"]') ? 'header' : 'compact'
 }
 
 const Sidebar = ({
@@ -217,7 +217,7 @@ const Sidebar = ({
   const resolvedStickyOffset = stickyOffset === 'auto' ? resolveAutoOffset() : stickyOffset
   const viewportClass =
     heightMode === 'viewport'
-      ? `workspace-sidebar--viewport workspace-sidebar--offset-${resolvedStickyOffset}`
+      ? `tab-sidebar--viewport tab-sidebar--offset-${resolvedStickyOffset}`
       : ''
   const showCollapsedState = Boolean(isCollapsed)
   const allowCollapse = Boolean(onToggleCollapse)
@@ -240,16 +240,16 @@ const Sidebar = ({
         key={item.key}
         type="button"
         onClick={onClick}
-        className={`workspace-sidebar-item ${isActive ? 'is-active' : ''}`}
+        className={`tab-sidebar-item ${isActive ? 'is-active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
         data-sidebar-nav-item="true"
       >
-        <span className="workspace-sidebar-icon" aria-hidden="true">
+        <span className="tab-sidebar-icon" aria-hidden="true">
           <SidebarGlyph icon={item.icon} />
         </span>
-        <span className="workspace-sidebar-copy">
-          <span className="workspace-sidebar-label">{item.label}</span>
-          {item.caption ? <span className="workspace-sidebar-caption">{item.caption}</span> : null}
+        <span className="tab-sidebar-copy">
+          <span className="tab-sidebar-label">{item.label}</span>
+          {item.caption ? <span className="tab-sidebar-caption">{item.caption}</span> : null}
         </span>
       </button>
     )
@@ -257,7 +257,7 @@ const Sidebar = ({
 
   return (
     <aside
-      className={`workspace-sidebar ${showCollapsedState ? 'is-collapsed' : ''} ${viewportClass} ${className ?? ''}`}
+      className={`tab-sidebar ${showCollapsedState ? 'is-collapsed' : ''} ${viewportClass} ${className ?? ''}`}
       data-sidebar-root="true"
       data-sidebar-variant={variant}
       data-sidebar-mobile-mode={mobileMode}
@@ -266,69 +266,69 @@ const Sidebar = ({
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="workspace-sidebar-collapse-toggle"
+          className="tab-sidebar-collapse-toggle"
         >
           {showCollapsedState ? 'Expand sidebar' : 'Collapse sidebar'}
         </button>
       ) : null}
 
       {showBrand ? (
-        <div className="workspace-sidebar-brand">
+        <div className="tab-sidebar-brand">
           {onBrandClick ? (
             <button
               type="button"
               onClick={() => onBrandClick()}
-              className="workspace-sidebar-brand-main"
+              className="tab-sidebar-brand-main"
               data-sidebar-nav-item="true"
             >
               <AppLogoBadge className="h-10 w-10" />
               <span className="min-w-0 text-left">
-                <span className="workspace-sidebar-brand-title">{brandTitle}</span>
-                <span className="workspace-sidebar-brand-subtitle">{brandSubtitle}</span>
+                <span className="tab-sidebar-brand-title">{brandTitle}</span>
+                <span className="tab-sidebar-brand-subtitle">{brandSubtitle}</span>
               </span>
             </button>
           ) : (
-            <span className="workspace-sidebar-brand-main is-static">
+            <span className="tab-sidebar-brand-main is-static">
               <AppLogoBadge className="h-10 w-10" />
               <span className="min-w-0 text-left">
-                <span className="workspace-sidebar-brand-title">{brandTitle}</span>
-                <span className="workspace-sidebar-brand-subtitle">{brandSubtitle}</span>
+                <span className="tab-sidebar-brand-title">{brandTitle}</span>
+                <span className="tab-sidebar-brand-subtitle">{brandSubtitle}</span>
               </span>
             </span>
           )}
           {allowCollapse ? (
             <button
               type="button"
-              className="workspace-sidebar-brand-chevron-button"
+              className="tab-sidebar-brand-chevron-button"
               aria-label={showCollapsedState ? 'Expand sidebar' : 'Collapse sidebar'}
               onClick={() => onToggleCollapse?.()}
             >
-              <span className="workspace-sidebar-brand-chevron" aria-hidden="true">
+              <span className="tab-sidebar-brand-chevron" aria-hidden="true">
                 {showCollapsedState ? '›' : '‹'}
               </span>
             </button>
           ) : (
-            <span className="workspace-sidebar-brand-chevron" aria-hidden="true">
+            <span className="tab-sidebar-brand-chevron" aria-hidden="true">
               ‹
             </span>
           )}
         </div>
       ) : null}
 
-      <div className="workspace-sidebar-scroll">
+      <div className="tab-sidebar-scroll">
         {mainItems.length > 0 ? (
-          <section className="workspace-sidebar-main-section">
-            <p className="workspace-sidebar-heading">{sectionLabel}</p>
-            <nav className="workspace-sidebar-nav" aria-label={`${sectionLabel} navigation`}>
+          <section className="tab-sidebar-main-section">
+            <p className="tab-sidebar-heading">{sectionLabel}</p>
+            <nav className="tab-sidebar-nav" aria-label={`${sectionLabel} navigation`}>
               {mainItems.map((item) => renderItem(item, () => onSelect(item.key), activeKey === item.key))}
             </nav>
           </section>
         ) : null}
 
         {utilityItems.length > 0 ? (
-          <section className="workspace-sidebar-divider workspace-sidebar-aux-section">
-            <p className="workspace-sidebar-heading">{auxiliaryLabel}</p>
-            <nav className="workspace-sidebar-nav" aria-label={`${auxiliaryLabel} navigation`}>
+          <section className="tab-sidebar-divider tab-sidebar-aux-section">
+            <p className="tab-sidebar-heading">{auxiliaryLabel}</p>
+            <nav className="tab-sidebar-nav" aria-label={`${auxiliaryLabel} navigation`}>
               {utilityItems.map((item) =>
                 renderItem(item, () => handleAuxSelect(item.key), activeKey === item.key)
               )}
@@ -338,9 +338,9 @@ const Sidebar = ({
       </div>
 
       {supportItem ? (
-        <section className="workspace-sidebar-support">
-          <p className="workspace-sidebar-heading">Support</p>
-          <div className="workspace-sidebar-nav">
+        <section className="tab-sidebar-support">
+          <p className="tab-sidebar-heading">Support</p>
+          <div className="tab-sidebar-nav">
             {renderItem(
               supportItem,
               () => handleAuxSelect(supportItem.key),
@@ -351,38 +351,38 @@ const Sidebar = ({
       ) : null}
 
       {(statusValue || profileValue || footerProfile || profileExtra) ? (
-        <div className="workspace-sidebar-footer">
+        <div className="tab-sidebar-footer">
           {statusValue ? (
-            <div className="workspace-sidebar-meta-card">
-              <p className="workspace-sidebar-meta-label">{statusLabel ?? 'Status'}</p>
-              <p className="workspace-sidebar-meta-value">{statusValue}</p>
+            <div className="tab-sidebar-meta-card">
+              <p className="tab-sidebar-meta-label">{statusLabel ?? 'Status'}</p>
+              <p className="tab-sidebar-meta-value">{statusValue}</p>
             </div>
           ) : null}
 
           {profileValue ? (
-            <div className="workspace-sidebar-meta-card">
-              <p className="workspace-sidebar-meta-label">{profileLabel ?? 'Profile'}</p>
-              <p className="workspace-sidebar-profile-value">{profileValue}</p>
-              {profileCaption ? <p className="workspace-sidebar-meta-caption">{profileCaption}</p> : null}
+            <div className="tab-sidebar-meta-card">
+              <p className="tab-sidebar-meta-label">{profileLabel ?? 'Profile'}</p>
+              <p className="tab-sidebar-profile-value">{profileValue}</p>
+              {profileCaption ? <p className="tab-sidebar-meta-caption">{profileCaption}</p> : null}
             </div>
           ) : null}
 
           {footerProfile ? (
             <button
               type="button"
-              className="workspace-sidebar-profile"
+              className="tab-sidebar-profile"
               onClick={footerProfile.onClick}
               disabled={!footerProfile.onClick}
               data-sidebar-nav-item={footerProfile.onClick ? 'true' : undefined}
             >
-              <span className="workspace-sidebar-profile-avatar">
+              <span className="tab-sidebar-profile-avatar">
                 {footerProfile.avatarText ?? renderProfileInitials(footerProfile.name)}
               </span>
               <span className="min-w-0 text-left">
-                <span className="workspace-sidebar-profile-subtitle">{footerProfile.subtitle}</span>
-                <span className="workspace-sidebar-profile-name">{footerProfile.name}</span>
+                <span className="tab-sidebar-profile-subtitle">{footerProfile.subtitle}</span>
+                <span className="tab-sidebar-profile-name">{footerProfile.name}</span>
               </span>
-              <span className="workspace-sidebar-chevron" aria-hidden="true">
+              <span className="tab-sidebar-chevron" aria-hidden="true">
                 ›
               </span>
             </button>

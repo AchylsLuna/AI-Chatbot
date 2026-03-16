@@ -1,8 +1,8 @@
 import type { AppPage } from '../types/navigation'
 import {
-  resolveWorkspaceCanonicalPath,
-  resolveWorkspacePageFromPath,
-} from './workspaceTabRoutes'
+  resolveTabCanonicalPath,
+  resolveTabPageFromPath,
+} from './roleTabRoutes'
 import { matchesNamespace, normalizePath, withBasePrefix } from './pathUtils'
 import { ROUTES } from '../utils/routes'
 
@@ -10,7 +10,7 @@ export { normalizePath } from './pathUtils'
 
 const PAGE_ROUTES: Record<AppPage, string> = {
   landing: ROUTES.landing,
-  appointments: ROUTES.appointments,
+  appointments: ROUTES.patient.bookAppointment,
   doctor_dashboard: ROUTES.doctor.dashboard,
   admin: ROUTES.admin.dashboard,
   admin_login: ROUTES.adminSignIn,
@@ -61,6 +61,7 @@ const LEGACY_ROUTE_ALIASES: Record<string, AppPage> = {
   '/admin_login': 'admin_login',
   '/forgot_password': 'forgot_password',
   '/signup-doctor': 'doctor_signup',
+  [ROUTES.appointments]: 'appointments',
   '/terms-and-conditions': 'terms',
   '/terms_and_conditions': 'terms',
   '/privacy': 'privacy_policy',
@@ -113,7 +114,7 @@ export const buildRouteWithSearchHash = (
 
 export const hasKnownRoute = (path: string) => {
   const normalized = normalizePath(path)
-  if (resolveWorkspacePageFromPath(normalized)) return true
+  if (resolveTabPageFromPath(normalized)) return true
   if (isDoctorNamespacePath(normalized) || isAdminNamespacePath(normalized)) return true
 
   const isCanonicalRoute = Object.values(PAGE_ROUTES).some(
@@ -127,8 +128,8 @@ export const hasKnownRoute = (path: string) => {
 
 export const resolvePageFromPath = (path: string): AppPage => {
   const normalized = normalizePath(path)
-  const workspacePage = resolveWorkspacePageFromPath(normalized)
-  if (workspacePage) return workspacePage
+  const tabPage = resolveTabPageFromPath(normalized)
+  if (tabPage) return tabPage
   if (isDoctorNamespacePath(normalized)) return 'doctor_dashboard'
   if (isAdminNamespacePath(normalized)) return 'admin'
 
@@ -156,8 +157,8 @@ export const resolveCanonicalPath = (path: string) => {
   const normalized = normalizePath(path)
   if (!hasKnownRoute(normalized)) return normalizePath(PAGE_ROUTES.landing)
 
-  const workspaceCanonicalPath = resolveWorkspaceCanonicalPath(normalized)
-  if (workspaceCanonicalPath) return normalizePath(workspaceCanonicalPath)
+  const tabCanonicalPath = resolveTabCanonicalPath(normalized)
+  if (tabCanonicalPath) return normalizePath(tabCanonicalPath)
 
   const matchedCanonicalRoute = Object.values(PAGE_ROUTES).find(
     (route) => normalizePath(route) === normalized

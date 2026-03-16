@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import AuthSplitLayout from '../components/auth/AuthSplitLayout'
-import type { AppPage } from '../types/navigation'
-import type { AuthProvider, AuthSession } from '../types'
-import { formatRoleLabel } from '../utils/roles'
+import AuthSplitLayout from '../../components/auth/AuthSplitLayout'
+import type { AppPage } from '../../types/navigation'
+import type { AuthProvider, AuthSession } from '../../types'
+import { formatRoleLabel } from '../../utils/roles'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i
 
@@ -38,7 +38,7 @@ const AdminLoginPage = ({
   const hasAdminPortalAccess = authUser
     ? authUser.role === 'admin' || authUser.role === 'system_admin'
     : false
-  const hasDoctorWorkspaceAccess = authUser ? authUser.role === 'doctor' : false
+  const hasDoctorDashboardAccess = authUser ? authUser.role === 'doctor' : false
 
   return (
     <AuthSplitLayout layout="center" centerBorderless>
@@ -77,11 +77,11 @@ const AdminLoginPage = ({
             {hasAdminPortalAccess ? (
               <div className="space-y-3">
                 <p className="text-sm text-emerald-300">
-                  Access verified. Continue to the Admin Workspace.
+                  Access verified. Continue to the Admin Dashboard.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <button onClick={() => onNavigate?.('admin')} className="agent-button w-full">
-                    Open Admin Workspace
+                    Open Admin Dashboard
                   </button>
                   <button onClick={onLogout} className="agent-button-ghost w-full">
                     Sign out
@@ -91,7 +91,7 @@ const AdminLoginPage = ({
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-rose-300">
-                  {hasDoctorWorkspaceAccess
+                  {hasDoctorDashboardAccess
                     ? 'This account does not have admin portal access. Open the Doctor Dashboard or sign out and use an Admin account.'
                     : 'This account does not have admin portal access. Sign out and use an Admin account.'}
                 </p>
@@ -99,7 +99,7 @@ const AdminLoginPage = ({
                   <button onClick={onLogout} className="agent-button-ghost w-full">
                     Sign out
                   </button>
-                  {hasDoctorWorkspaceAccess ? (
+                  {hasDoctorDashboardAccess ? (
                     <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button w-full">
                       Doctor Dashboard
                     </button>

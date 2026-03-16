@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import DashboardTopBar from '../../../components/layout/DashboardTopBar'
-import { buildDashboardLogItems } from '../shared/dashboardEvents'
+import PageTopBar from '../../../components/layout/PageTopBar'
+import { buildLogItems } from '../shared/activityEvents'
 import DoctorAppointmentSection from './sections/DoctorAppointmentSection'
 import DoctorCalendarSection from './sections/DoctorCalendarSection'
 import DoctorDashboardOverviewSection from './sections/DoctorDashboardOverviewSection'
 import DoctorReportsLogSection from './sections/DoctorReportsLogSection'
 import DoctorSettingsSection from './sections/DoctorSettingsSection'
-import WorkspaceCanvas from '../../../components/layout/WorkspaceCanvas'
+import PageCanvas from '../../../components/layout/PageCanvas'
 import Sidebar, { type SidebarItem } from '../../../components/layout/Sidebar'
-import WorkspaceSidebarShell from '../../../components/layout/WorkspaceSidebarShell'
+import SidebarShell from '../../../components/layout/SidebarShell'
 import type { AppPage } from '../../../types/navigation'
 import type {
   AppointmentUpdateDraft,
@@ -305,7 +305,7 @@ const DoctorDashboardPage = ({
   )
 
   const reportLogs = useMemo(
-    () => buildDashboardLogItems({ reservations, authUser, sessionStatus }),
+    () => buildLogItems({ reservations, authUser, sessionStatus }),
     [authUser, reservations, sessionStatus]
   )
 
@@ -394,10 +394,10 @@ const DoctorDashboardPage = ({
   const profileName = resolveDoctorDisplayName(authUser)
 
   return (
-    <WorkspaceCanvas>
+    <PageCanvas>
       <div className="w-full px-4 pb-10 pt-5 sm:px-6 lg:px-8">
-        <WorkspaceSidebarShell
-          mobileTitle="Doctor workspace"
+        <SidebarShell
+          mobileTitle="Doctor"
           stickyOffsetMode="auto"
           sidebar={
             <Sidebar
@@ -405,7 +405,7 @@ const DoctorDashboardPage = ({
               mobileMode="drawer"
               fullRail
               brandTitle="AI Health Care"
-              brandSubtitle="Doctor workspace"
+              brandSubtitle="Doctor"
               sectionLabel="Main"
               items={sidebarItems}
               activeKey={activeSection}
@@ -428,7 +428,7 @@ const DoctorDashboardPage = ({
               supportItem={{ key: 'logout', label: 'Log out', icon: 'shield' }}
               footerProfile={{
                 name: profileName,
-                subtitle: 'Doctor workspace',
+                subtitle: 'Doctor',
                 onClick: () => setSection('settings'),
               }}
             />
@@ -440,7 +440,7 @@ const DoctorDashboardPage = ({
             ) : activeSection !== 'settings' ? (
               <>
                 <h1 className="reference-page-title">{sectionTitleMap[activeSection]}</h1>
-                <DashboardTopBar
+                <PageTopBar
                   title={undefined}
                   searchValue={searchQuery}
                   searchPlaceholder={searchPlaceholderMap[activeSection]}
@@ -567,7 +567,7 @@ const DoctorDashboardPage = ({
           }
         />
       </div>
-    </WorkspaceCanvas>
+    </PageCanvas>
   )
 }
 

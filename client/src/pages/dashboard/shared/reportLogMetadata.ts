@@ -1,5 +1,5 @@
 import { maskIdentifier } from '../../../utils/privacy'
-import type { DashboardLogItem } from './types'
+import type { LogItem } from './types'
 
 export type ReportLogMetadata = {
   userId: string
@@ -15,7 +15,7 @@ const normalizeValue = (value?: string) => {
   return normalized || undefined
 }
 
-const actionFallback = (item: DashboardLogItem) => {
+const actionFallback = (item: LogItem) => {
   if (item.source === 'Auth') return 'SESSION_AUDIT'
   if (item.source === 'System') return 'SYSTEM_AUDIT'
   if (item.severity === 'Critical') return 'RESERVATION_FAILED'
@@ -23,7 +23,7 @@ const actionFallback = (item: DashboardLogItem) => {
   return 'RESERVATION_RECORDED'
 }
 
-const userIdFallback = (item: DashboardLogItem) => {
+const userIdFallback = (item: LogItem) => {
   const actor = normalizeValue(item.actor)
   if (!actor) return 'unknown-user'
   return actor.toLowerCase().replace(/\s+/g, '.')
@@ -37,7 +37,7 @@ const browserUserAgentFallback = () => {
 }
 
 export const resolveReportLogMetadata = (
-  item: DashboardLogItem,
+  item: LogItem,
   dataMaskingEnabled: boolean
 ): ReportLogMetadata => {
   const userIdRaw = normalizeValue(item.userId) ?? userIdFallback(item)

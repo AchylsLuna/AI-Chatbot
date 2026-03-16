@@ -1,12 +1,12 @@
 import type { CSSProperties, ReactNode } from 'react'
 
-type WorkspaceCanvasProps = {
+type PageCanvasProps = {
   children: ReactNode
   className?: string
   style?: CSSProperties
 }
 
-const WorkspaceCanvas = ({ children, className = '', style }: WorkspaceCanvasProps) => (
+const PageCanvas = ({ children, className = '', style }: PageCanvasProps) => (
   <div
     className={`relative min-h-screen bg-[color:var(--agent-bg)] text-[color:var(--agent-ink)] ${className}`}
     style={style}
@@ -15,4 +15,4 @@ const WorkspaceCanvas = ({ children, className = '', style }: WorkspaceCanvasPro
   </div>
 )
 
-export default WorkspaceCanvas
+export default PageCanvas

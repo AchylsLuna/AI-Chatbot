@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import DashboardTopBar from '../../../components/layout/DashboardTopBar'
+import PageTopBar from '../../../components/layout/PageTopBar'
 import Sidebar, { type SidebarItem } from '../../../components/layout/Sidebar'
-import WorkspaceCanvas from '../../../components/layout/WorkspaceCanvas'
-import WorkspaceSidebarShell from '../../../components/layout/WorkspaceSidebarShell'
+import PageCanvas from '../../../components/layout/PageCanvas'
+import SidebarShell from '../../../components/layout/SidebarShell'
 import type { AuthSession, Reservation } from '../../../types'
 import type { AppPage } from '../../../types/navigation'
 import { formatPhilippineDateTime } from '../../../utils/dateTime'
 import { maskIdentifier, maskPersonName } from '../../../utils/privacy'
-import { buildDashboardLogItems } from '../shared/dashboardEvents'
+import { buildLogItems } from '../shared/activityEvents'
 import {
   filterReportLogItems,
   getReportLogActionOptions,
@@ -540,7 +540,7 @@ const AdminDashboardPage = ({
   )
 
   const reportLogs = useMemo(
-    () => buildDashboardLogItems({ reservations, authUser, sessionStatus }),
+    () => buildLogItems({ reservations, authUser, sessionStatus }),
     [authUser, reservations, sessionStatus]
   )
 
@@ -704,10 +704,10 @@ const AdminDashboardPage = ({
   const profileName = resolveAdminDisplayName(authUser)
 
   return (
-    <WorkspaceCanvas>
+    <PageCanvas>
       <div className="mx-auto w-full max-w-[1500px] px-4 pb-10 pt-5 sm:px-6 lg:px-8">
-        <WorkspaceSidebarShell
-          mobileTitle="Admin workspace"
+        <SidebarShell
+          mobileTitle="Admin"
           stickyOffsetMode="auto"
           sidebar={
             <Sidebar
@@ -715,7 +715,7 @@ const AdminDashboardPage = ({
               mobileMode="drawer"
               fullRail
               brandTitle="AI Health Care"
-              brandSubtitle="Admin workspace"
+              brandSubtitle="Admin"
               sectionLabel="Main"
               items={sidebarItems}
               activeKey={activeSection}
@@ -738,7 +738,7 @@ const AdminDashboardPage = ({
               supportItem={{ key: 'logout', label: 'Log out', icon: 'shield' }}
               footerProfile={{
                 name: profileName,
-                subtitle: 'Admin workspace',
+                subtitle: 'Admin',
                 onClick: () => setSection('settings'),
               }}
             />
@@ -750,7 +750,7 @@ const AdminDashboardPage = ({
             ) : activeSection !== 'settings' ? (
               <>
                 <h1 className="reference-page-title">{sectionTitleMap[activeSection]}</h1>
-                <DashboardTopBar
+                <PageTopBar
                   title={undefined}
                   searchValue={searchQuery}
                   searchPlaceholder={searchPlaceholderMap[activeSection]}
@@ -896,7 +896,7 @@ const AdminDashboardPage = ({
           }
         />
       </div>
-    </WorkspaceCanvas>
+    </PageCanvas>
   )
 }
 

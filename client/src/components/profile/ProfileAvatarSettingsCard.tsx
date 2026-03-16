@@ -1,12 +1,12 @@
 import { useEffect, useId, useMemo, useState } from 'react'
 import {
-  workspaceGhostButtonClass,
-  workspaceHeadingTextClass,
-  workspaceMutedTextClass,
-  workspacePanelSoftClass,
-  workspacePrimaryButtonClass,
-  workspaceSubtleTextClass,
-} from '../../styles/workspaceUi'
+  pageGhostButtonClass,
+  pageHeadingTextClass,
+  pageMutedTextClass,
+  pagePanelSoftClass,
+  pagePrimaryButtonClass,
+  pageSubtleTextClass,
+} from '../../styles/pageUi'
 import type { UserRole } from '../../types'
 import {
   getAvatarInitials,
@@ -30,7 +30,7 @@ const ProfileAvatarSettingsCard = ({
   username,
   role,
   title = 'Profile photo',
-  description = 'Upload a profile photo to personalize your workspace identity.',
+  description = 'Upload a profile photo to personalize your account identity.',
   className,
   onAvatarChange,
 }: ProfileAvatarSettingsCardProps) => {
@@ -89,11 +89,11 @@ const ProfileAvatarSettingsCard = ({
   }
 
   return (
-    <article className={`${workspacePanelSoftClass} p-4 ${className ?? ''}`}>
+    <article className={`${pagePanelSoftClass} p-4 ${className ?? ''}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className={`text-base font-semibold ${workspaceHeadingTextClass}`}>{title}</h3>
-          <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{description}</p>
+          <h3 className={`text-base font-semibold ${pageHeadingTextClass}`}>{title}</h3>
+          <p className={`mt-1 text-sm ${pageMutedTextClass}`}>{description}</p>
         </div>
         <div className="relative h-16 w-16 overflow-hidden rounded-full border border-[color:var(--card-border)] bg-[color:var(--agent-surface)]">
           {avatarUrl ? (
@@ -113,7 +113,7 @@ const ProfileAvatarSettingsCard = ({
       <div className="mt-4 flex flex-wrap gap-2">
         <label
           htmlFor={inputId}
-          className={`${workspacePrimaryButtonClass} cursor-pointer ${isUpdating ? 'pointer-events-none opacity-70' : ''}`}
+          className={`${pagePrimaryButtonClass} cursor-pointer ${isUpdating ? 'pointer-events-none opacity-70' : ''}`}
         >
           {avatarUrl ? 'Replace photo' : 'Upload photo'}
         </label>
@@ -131,7 +131,7 @@ const ProfileAvatarSettingsCard = ({
 
         <button
           type="button"
-          className={workspaceGhostButtonClass}
+          className={pageGhostButtonClass}
           disabled={!avatarUrl || isUpdating}
           onClick={handleRemovePhoto}
         >
@@ -139,7 +139,7 @@ const ProfileAvatarSettingsCard = ({
         </button>
       </div>
 
-      <p className={`mt-2 text-xs ${workspaceSubtleTextClass}`}>
+      <p className={`mt-2 text-xs ${pageSubtleTextClass}`}>
         PNG, JPEG, or WEBP only. Maximum file size is 2MB.
       </p>
 
@@ -150,4 +150,3 @@ const ProfileAvatarSettingsCard = ({
 }
 
 export default ProfileAvatarSettingsCard
-

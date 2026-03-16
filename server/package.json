@@ -7,7 +7,10 @@
     "dev": "nodemon server.js --watch . --ext js,json",
     "start": "node server.js",
     "create-admin": "node scripts/createAdmin.js",
-    "create-doctor": "node scripts/createDoctor.js"
+    "create-doctor": "node scripts/createDoctor.js",
+    "create-patient": "node scripts/createPatient.js",
+    "create-doctor-patient": "node scripts/createDoctorAndPatient.js",
+    "seed-core-users": "node scripts/seedCoreUsers.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",

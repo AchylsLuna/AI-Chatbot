@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import GlobalAssistantChat from './components/chat/GlobalAssistantChat'
 import AppHeader from './components/layout/AppHeader'
-import WorkspaceHeader from './components/layout/WorkspaceHeader'
+import PageHeader from './components/layout/PageHeader'
 import AppErrorBoundary from './components/states/AppErrorBoundary'
 import { AccessDeniedCard, AuthLoadingCard } from './components/states/RouteGuardCards'
 import { canAccessPage } from './config/accessControl'
@@ -9,11 +9,11 @@ import useAuthData from './hooks/useAuthData'
 import useAppRouting from './hooks/useAppRouting'
 import useScrollReveal from './hooks/useScrollReveal'
 import useAppTheme from './hooks/useAppTheme'
-import { isAdminRole, isDoctorRole } from './utils/dashboardRoutes'
-import AdminDashboard from './pages/AdminDashboard'
-import AdminLoginPage from './pages/AdminLoginPage'
-import DoctorDashboardPage from './pages/DoctorDashboardPage'
-import AppointmentsPage from './pages/AppointmentsPage'
+import { isAdminRole, isDoctorRole } from './utils/roleRoutes'
+import AdminDashboardPage from './pages/admin/AdminDashboardPage'
+import AdminLoginPage from './pages/admin/AdminLoginPage'
+import DoctorDashboardPage from './pages/doctor/DoctorDashboardPage'
+import PatientAppointmentsPage from './pages/patient/PatientAppointmentsPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
@@ -60,11 +60,11 @@ function App() {
 
   const isProtectedRoute =
     currentPage === 'appointments' || currentPage === 'doctor_dashboard' || currentPage === 'admin'
-  const isReferenceDashboardPage =
+  const isTabPage =
     currentPage === 'appointments' || currentPage === 'doctor_dashboard' || currentPage === 'admin'
   const showPublicHeader = !isLanding && !isAuthPage && !authUser && !isProtectedRoute
-  const showWorkspaceHeader =
-    Boolean(authUser) && !isAuthPage && currentPage !== 'landing' && !isReferenceDashboardPage
+  const showPageHeader =
+    Boolean(authUser) && !isAuthPage && currentPage !== 'landing' && !isTabPage
   const showSupportAssistant = true
   const isDoctorAuthenticated = isDoctorRole(authUser?.role, authUser?.accountType)
   const isAdminAuthenticated = isAdminRole(authUser?.role, authUser?.accountType)
@@ -159,12 +159,12 @@ function App() {
   const otpPage = (
     <OtpPage
       challenge={pendingOtpChallenge}
+      sourcePage={pendingOtpChallenge?.sourcePage}
       authError={authError}
       isAuthLoading={isOtpActionLoading}
       onVerifyOtp={handleVerifyOtp}
       onCancelOtp={handleCancelOtp}
       onResendOtp={handleResendOtp}
-      onNavigate={navigateToPage}
     />
   )
 
@@ -201,7 +201,7 @@ function App() {
     return options.allowedContent
   }
 
-  const withWorkspaceBoundary = (content: ReactNode, section: string) => (
+  const withDashboardBoundary = (content: ReactNode, section: string) => (
     <AppErrorBoundary section={section} resetKey={`${currentPage}-${authUser?.role ?? 'guest'}`}>
       {content}
     </AppErrorBoundary>
@@ -235,8 +235,8 @@ function App() {
           deniedDetail:
             'This page is the Patient appointment portal. Sign in with a Patient account to view personal appointments.',
           allowedContent: (
-            withWorkspaceBoundary(
-              <AppointmentsPage
+            withDashboardBoundary(
+              <PatientAppointmentsPage
                 reservations={reservations}
                 authUser={authUser}
                 onNavigate={navigateToPage}
@@ -247,7 +247,7 @@ function App() {
                 onToggleTheme={toggleTheme}
                 dataMaskingEnabled={dataMaskingEnabled}
               />,
-              'Appointments workspace'
+              'Appointments'
             )
           ),
         })
@@ -265,7 +265,7 @@ function App() {
           deniedTitle: "Doctor's dashboard access required",
           deniedDetail: 'This page is available for doctor-role accounts only.',
           allowedContent: (
-            withWorkspaceBoundary(
+            withDashboardBoundary(
               <DoctorDashboardPage
                 authUser={authUser}
                 reservations={reservations}
@@ -302,8 +302,8 @@ function App() {
           />
         )
       } else {
-        pageContent = withWorkspaceBoundary(
-          <AdminDashboard
+        pageContent = withDashboardBoundary(
+          <AdminDashboardPage
             authUser={authUser}
             reservations={reservations}
             onNavigate={navigateToPage}
@@ -421,9 +421,9 @@ function App() {
         {showPublicHeader && (
           <AppHeader onNavigate={navigateToPage} />
         )}
-        {showWorkspaceHeader && authUser && (
-          <WorkspaceHeader
-            key={`workspace-header-${currentPage}-${authUser.username}-${authUser.role}`}
+        {showPageHeader && authUser && (
+          <PageHeader
+            key={`dashboard-header-${currentPage}-${authUser.username}-${authUser.role}`}
             authUser={authUser}
             currentPage={currentPage}
             onNavigate={navigateToPage}

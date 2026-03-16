@@ -1,32 +1,36 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import ConfirmModal from '../components/ui/ConfirmModal'
-import WorkspaceCanvas from '../components/layout/WorkspaceCanvas'
-import Sidebar, { type SidebarItem } from '../components/layout/Sidebar'
-import WorkspaceSidebarShell from '../components/layout/WorkspaceSidebarShell'
-import WorkspaceTopShell from '../components/layout/WorkspaceTopShell'
+import ConfirmModal from '../../components/ui/ConfirmModal'
+import PageCanvas from '../../components/layout/PageCanvas'
+import Sidebar, { type SidebarItem } from '../../components/layout/Sidebar'
+import SectionCard from '../../components/layout/SectionCard'
+import SidebarShell from '../../components/layout/SidebarShell'
+import PageTopShell from '../../components/layout/PageTopShell'
 import {
-  workspaceGhostButtonClass,
-  workspaceHeadingTextClass,
-  workspaceMutedTextClass,
-  workspacePanelClass,
-  workspaceSubtleTextClass,
-} from '../styles/workspaceUi'
-import { buildRouteFromCanonicalPath, normalizePath } from '../config/routing'
-import { getAdminTabPath, resolveAdminTabFromPath } from '../config/workspaceTabRoutes'
-import type { AppPage } from '../types/navigation'
-import type { AuthSession, Reservation } from '../types'
-import { formatPhilippineDateTime } from '../utils/dateTime'
-import { maskIdentifier, maskPersonName } from '../utils/privacy'
-import { formatRoleLabel, getWorkspaceRoleLabel } from '../utils/roles'
+  pageChipButtonClass,
+  pageGhostButtonClass,
+  pageHeadingTextClass,
+  pageMutedTextClass,
+  pagePanelClass,
+  pagePanelSoftClass,
+  pageSubtleTextClass,
+} from '../../styles/pageUi'
+import { buildRouteFromCanonicalPath, normalizePath } from '../../config/routing'
+import { getAdminTabPath, resolveAdminTabFromPath } from '../../config/roleTabRoutes'
+import type { AppPage } from '../../types/navigation'
+import type { AuthSession, Reservation } from '../../types'
+import { formatPhilippineDateTime } from '../../utils/dateTime'
+import { maskIdentifier, maskPersonName } from '../../utils/privacy'
+import { formatRoleLabel, getRoleLabel } from '../../utils/roles'
+import { reservationStatusChipClass } from '../../utils/statusStyles'
 import {
   api,
   type AdminAuditLogRecord,
   type AdminErrorLogRecord,
   type AdminStaffApplicationRecord,
   type AdminUserRecord,
-} from '../services/api'
+} from '../../services/api'
 
-type AdminDashboardProps = {
+type AdminDashboardPageProps = {
   authUser: AuthSession['user'] | null
   reservations: Reservation[]
   onNavigate?: (page: AppPage) => void
@@ -118,13 +122,6 @@ const formatDateTime = (value: string | null | undefined) => {
   return formatPhilippineDateTime(timestamp)
 }
 
-const statusChipClass = (status: Reservation['status'] | 'None') => {
-  if (status === 'Recorded') return 'border-emerald-300/70 bg-emerald-100 text-emerald-700'
-  if (status === 'Failed') return 'border-rose-300/70 bg-rose-100 text-rose-700'
-  if (status === 'Booked') return 'border-sky-300/70 bg-sky-100 text-sky-700'
-  return 'border-[color:var(--card-border)] bg-[color:var(--agent-surface)] text-[color:var(--agent-muted)]'
-}
-
 const accountChipClass = (status: AdminUserRecord['status']) =>
   status === 'disabled'
     ? 'border-rose-300/70 bg-rose-100 text-rose-700'
@@ -187,7 +184,7 @@ const resolveAdminDisplayName = (user: AuthSession['user'] | null) => {
   return 'Admin'
 }
 
-const AdminDashboard = ({
+const AdminDashboardPage = ({
   authUser,
   reservations,
   onNavigate,
@@ -196,7 +193,7 @@ const AdminDashboard = ({
   theme,
   onToggleTheme,
   dataMaskingEnabled,
-}: AdminDashboardProps) => {
+}: AdminDashboardPageProps) => {
   const [activeSection, setActiveSection] = useState<AdminSection>(() => {
     if (typeof window === 'undefined') return 'user_management'
     return resolveAdminTabFromPath(window.location.pathname) ?? 'user_management'
@@ -608,11 +605,11 @@ const AdminDashboard = ({
     },
     settings: {
       title: 'Account Settings',
-      description: 'Manage admin workspace preferences and session details.',
+      description: 'Manage admin preferences and session details.',
       searchPlaceholder: 'Search settings',
       metrics: [
         { key: 'settings-account', label: 'Account', value: authUser?.username ?? 'Unknown', caption: 'Signed in user' },
-        { key: 'settings-role', label: 'Role', value: getWorkspaceRoleLabel(authUser?.role), caption: 'Workspace role' },
+        { key: 'settings-role', label: 'Role', value: getRoleLabel(authUser?.role), caption: 'Role' },
         { key: 'settings-theme', label: 'Theme', value: theme === 'dark' ? 'Dark' : 'Light', caption: 'Current theme' },
       ],
     },
@@ -620,6 +617,74 @@ const AdminDashboard = ({
 
   const activeMeta = sectionMeta[activeSection]
   const profileName = resolveAdminDisplayName(authUser)
+  const adminSyncStatus = loadingData ? 'Syncing server data' : 'Live server data'
+
+  const renderTopActions = () => {
+    if (activeSection === 'settings') {
+      return (
+        <button type="button" className={pageGhostButtonClass} onClick={onToggleTheme}>
+          Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
+        </button>
+      )
+    }
+
+    if (activeSection === 'audit_log') {
+      return (
+        <>
+          <button
+            type="button"
+            className={pageGhostButtonClass}
+            onClick={() => void fetchAdminData()}
+            disabled={loadingData}
+          >
+            {loadingData ? 'Refreshing...' : 'Refresh log'}
+          </button>
+          <button
+            type="button"
+            className={pageGhostButtonClass}
+            onClick={() => void handleDownloadAuditBackup()}
+            disabled={isDownloadingAuditBackup}
+          >
+            {isDownloadingAuditBackup ? 'Downloading...' : 'Download backup'}
+          </button>
+        </>
+      )
+    }
+
+    if (activeSection === 'error_log') {
+      return (
+        <>
+          <button
+            type="button"
+            className={pageGhostButtonClass}
+            onClick={() => void fetchAdminData()}
+            disabled={loadingData}
+          >
+            {loadingData ? 'Refreshing...' : 'Refresh log'}
+          </button>
+          <button
+            type="button"
+            className={pageGhostButtonClass}
+            onClick={() => void handleDownloadErrorBackup()}
+            disabled={isDownloadingErrorBackup}
+          >
+            {isDownloadingErrorBackup ? 'Downloading...' : 'Download backup'}
+          </button>
+        </>
+      )
+    }
+
+    return (
+      <button
+        type="button"
+        className={pageGhostButtonClass}
+        onClick={() => void fetchAdminData()}
+        disabled={loadingData}
+      >
+        {loadingData ? 'Refreshing...' : 'Refresh section'}
+      </button>
+    )
+  }
 
   const handleUpdateUserStatus = async (userId: string, status: AdminUserRecord['status']) => {
     setActionMessage(null)
@@ -719,22 +784,22 @@ const AdminDashboard = ({
   }
 
   return (
-    <WorkspaceCanvas>
+    <PageCanvas>
       <div className="w-full">
-        <WorkspaceSidebarShell
-          className={`workspace-shell--full-side${isSidebarCollapsed ? ' workspace-shell--rail-collapsed' : ''}`}
+        <SidebarShell
+          className={`page-shell--full-side${isSidebarCollapsed ? ' page-shell--rail-collapsed' : ''}`}
           contentClassName="px-4 pb-10 pt-5 sm:px-6 lg:px-8"
-          mobileTitle="Admin workspace"
+          mobileTitle="Admin"
           stickyOffsetMode="auto"
           sidebar={
             <Sidebar
-              variant="dashboard"
+              variant="staff"
               mobileMode="drawer"
               fullRail
               isCollapsed={isSidebarCollapsed}
               onToggleCollapse={() => setIsSidebarCollapsed((previous) => !previous)}
               brandTitle="AI Health Care"
-              brandSubtitle="Admin workspace"
+              brandSubtitle="Admin"
               sectionLabel="Primary"
               items={primaryItems}
               activeKey={activeSection}
@@ -760,25 +825,27 @@ const AdminDashboard = ({
               }}
               footerProfile={{
                 name: profileName,
-                subtitle: 'Admin workspace',
+                subtitle: 'Admin',
                 onClick: () => setSection('settings'),
               }}
             />
           }
           content={
             <section className="space-y-6">
-              <WorkspaceTopShell
+              <PageTopShell
                 eyebrow="Privileged session"
+                statusLabel={adminSyncStatus}
                 title={activeMeta.title}
                 description={activeMeta.description}
                 searchValue={searchQuery}
                 searchPlaceholder={activeMeta.searchPlaceholder}
                 onSearchChange={setSearchQuery}
                 profileName={profileName}
-                profileCaption={`${getWorkspaceRoleLabel(authUser?.role)} workspace`}
+                profileCaption={getRoleLabel(authUser?.role)}
                 showNotifications
                 notificationCount={Math.min(notificationItems.filter((item) => !item.read).length, 99)}
                 onSignOut={confirmAndLogout}
+                quickActions={renderTopActions()}
                 metrics={activeMeta.metrics}
               />
 
@@ -797,19 +864,19 @@ const AdminDashboard = ({
 
               {selectedStaffApplication ? (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
-                  <div className={`${workspacePanelClass} w-full max-w-2xl p-5`}>
+                  <div className={`${pagePanelClass} w-full max-w-2xl p-5`}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                        <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
                           New {selectedStaffApplication.role} application
                         </p>
-                        <h3 className={`mt-1 text-lg font-semibold ${workspaceHeadingTextClass}`}>
+                        <h3 className={`mt-1 text-lg font-semibold ${pageHeadingTextClass}`}>
                           Review staff account request
                         </h3>
                       </div>
                       <button
                         type="button"
-                        className={workspaceGhostButtonClass}
+                        className={pageGhostButtonClass}
                         disabled={isReviewActionPending}
                         onClick={() => setSelectedStaffApplication(null)}
                       >
@@ -817,10 +884,10 @@ const AdminDashboard = ({
                       </button>
                     </div>
 
-                    <div className={`mt-4 grid gap-3 text-sm ${workspaceMutedTextClass} sm:grid-cols-2`}>
+                    <div className={`mt-4 grid gap-3 text-sm ${pageMutedTextClass} sm:grid-cols-2`}>
                       <p>
                         Name:{' '}
-                        <span className={workspaceHeadingTextClass}>
+                        <span className={pageHeadingTextClass}>
                           {dataMaskingEnabled
                             ? maskPersonName(`${selectedStaffApplication.firstName} ${selectedStaffApplication.lastName}`.trim())
                             : `${selectedStaffApplication.firstName} ${selectedStaffApplication.lastName}`.trim()}
@@ -828,7 +895,7 @@ const AdminDashboard = ({
                       </p>
                       <p>
                         Email:{' '}
-                        <span className={workspaceHeadingTextClass}>
+                        <span className={pageHeadingTextClass}>
                           {dataMaskingEnabled
                             ? maskIdentifier(selectedStaffApplication.email)
                             : selectedStaffApplication.email}
@@ -836,11 +903,11 @@ const AdminDashboard = ({
                       </p>
                       <p>
                         Role:{' '}
-                        <span className={workspaceHeadingTextClass}>{formatRoleLabel(selectedStaffApplication.role)}</span>
+                        <span className={pageHeadingTextClass}>{formatRoleLabel(selectedStaffApplication.role)}</span>
                       </p>
                       <p>
                         Department:{' '}
-                        <span className={workspaceHeadingTextClass}>
+                        <span className={pageHeadingTextClass}>
                           {selectedStaffApplication.department || 'N/A'}
                         </span>
                       </p>
@@ -849,14 +916,14 @@ const AdminDashboard = ({
                     <div className="mt-5 flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        className={workspaceGhostButtonClass}
+                        className={pageGhostButtonClass}
                         onClick={() => handleOpenStaffLicense(selectedStaffApplication)}
                       >
                         Open uploaded license
                       </button>
                       <button
                         type="button"
-                        className={workspaceGhostButtonClass}
+                        className={pageGhostButtonClass}
                         disabled={isReviewActionPending}
                         onClick={() => void handleApproveStaffApplication(selectedStaffApplication)}
                       >
@@ -864,7 +931,7 @@ const AdminDashboard = ({
                       </button>
                       <button
                         type="button"
-                        className={workspaceGhostButtonClass}
+                        className={pageGhostButtonClass}
                         disabled={isReviewActionPending}
                         onClick={() => void handleRejectStaffApplication(selectedStaffApplication)}
                       >
@@ -876,53 +943,62 @@ const AdminDashboard = ({
               ) : null}
 
               {loadingData ? (
-                <section className={`${workspacePanelClass} p-5`}>
-                  <p className={`text-sm ${workspaceMutedTextClass}`}>Loading admin data from server...</p>
+                <section className={`${pagePanelClass} p-5`}>
+                  <p className={`text-sm ${pageMutedTextClass}`}>Loading admin data from server...</p>
                 </section>
               ) : null}
 
               {dataError ? (
-                <section className={`${workspacePanelClass} p-5`}>
+                <section className={`${pagePanelClass} p-5`}>
                   <p className="text-sm font-semibold text-rose-600">{dataError}</p>
-                  <button type="button" className={`${workspaceGhostButtonClass} mt-3`} onClick={() => void fetchAdminData()}>
+                  <button type="button" className={`${pageGhostButtonClass} mt-3`} onClick={() => void fetchAdminData()}>
                     Retry
                   </button>
                 </section>
               ) : null}
 
               {actionMessage ? (
-                <section className={`${workspacePanelClass} p-4`}>
+                <section className={`${pagePanelClass} p-4`}>
                   <p className="text-sm font-semibold text-emerald-600">{actionMessage}</p>
                 </section>
               ) : null}
 
               {actionError ? (
-                <section className={`${workspacePanelClass} p-4`}>
+                <section className={`${pagePanelClass} p-4`}>
                   <p className="text-sm font-semibold text-rose-600">{actionError}</p>
                 </section>
               ) : null}
 
               {activeSection === 'user_management' ? (
-                <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>User directory</h2>
-                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Users with profile details and booking history from server data.
-                  </p>
-
+                <SectionCard
+                  eyebrow="Directory"
+                  title="User directory"
+                  description="Users with profile details and booking history from server data."
+                  actions={
+                    <>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        Showing {filteredUsers.length} of {usersWithBookings.length}
+                      </span>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        Disabled {usersWithBookings.filter((item) => item.user.status === 'disabled').length}
+                      </span>
+                    </>
+                  }
+                >
                   {filteredUsers.length === 0 ? (
-                    <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>No users match your search query.</p>
+                    <div className={`${pagePanelSoftClass} p-4`}>
+                      <p className={`text-sm ${pageMutedTextClass}`}>No users match your search query.</p>
                     </div>
                   ) : (
-                    <div className="mt-4 overflow-x-auto">
+                    <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
                         <thead>
                           <tr>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>User</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Profile</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Booking history</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Account</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Actions</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>User</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Profile</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Booking history</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Account</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[color:var(--card-border)]">
@@ -935,19 +1011,19 @@ const AdminDashboard = ({
                               <Fragment key={user.id}>
                                 <tr key={user.id}>
                                   <td className="px-3 py-3 align-top">
-                                    <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
-                                    <p className={`text-xs ${workspaceMutedTextClass}`}>{displayEmail}</p>
+                                    <p className={`font-semibold ${pageHeadingTextClass}`}>{displayName}</p>
+                                    <p className={`text-xs ${pageMutedTextClass}`}>{displayEmail}</p>
                                   </td>
-                                  <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>
+                                  <td className={`px-3 py-3 ${pageMutedTextClass}`}>
                                     <p>Phone: {user.profile?.phoneNumber ?? 'N/A'}</p>
                                     <p>Gender: {user.profile?.gender ?? 'N/A'}</p>
                                     <p>DOB: {formatDateTime(user.profile?.dateOfBirth)}</p>
                                   </td>
                                   <td className="px-3 py-3">
-                                    <p className={`${workspaceHeadingTextClass}`}>Total: {summary.total}</p>
-                                    <p className={`${workspaceMutedTextClass}`}>Current: {summary.current}</p>
-                                    <p className={`${workspaceMutedTextClass}`}>Future: {summary.future}</p>
-                                    <span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChipClass(summary.latestStatus)}`}>
+                                    <p className={`${pageHeadingTextClass}`}>Total: {summary.total}</p>
+                                    <p className={`${pageMutedTextClass}`}>Current: {summary.current}</p>
+                                    <p className={`${pageMutedTextClass}`}>Future: {summary.future}</p>
+                                    <span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${reservationStatusChipClass(summary.latestStatus)}`}>
                                       {summary.latestStatus}
                                     </span>
                                   </td>
@@ -960,14 +1036,14 @@ const AdminDashboard = ({
                                     <div className="flex flex-wrap gap-2">
                                       <button
                                         type="button"
-                                        className={workspaceGhostButtonClass}
+                                        className={pageGhostButtonClass}
                                         onClick={() => setExpandedUserId(isExpanded ? null : user.id)}
                                       >
                                         {isExpanded ? 'Hide history' : 'View history'}
                                       </button>
                                       <button
                                         type="button"
-                                        className={workspaceGhostButtonClass}
+                                        className={pageGhostButtonClass}
                                         disabled={user.status === 'disabled'}
                                         onClick={() => void handleUpdateUserStatus(user.id, 'disabled')}
                                       >
@@ -975,7 +1051,7 @@ const AdminDashboard = ({
                                       </button>
                                       <button
                                         type="button"
-                                        className={workspaceGhostButtonClass}
+                                        className={pageGhostButtonClass}
                                         disabled={user.status === 'active'}
                                         onClick={() => void handleUpdateUserStatus(user.id, 'active')}
                                       >
@@ -988,20 +1064,20 @@ const AdminDashboard = ({
                                   <tr>
                                     <td colSpan={5} className="px-3 pb-3">
                                       <div className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3">
-                                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Booking history</p>
+                                        <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Booking history</p>
                                         {summary.history.length === 0 ? (
-                                          <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>No booking history found.</p>
+                                          <p className={`mt-2 text-sm ${pageMutedTextClass}`}>No booking history found.</p>
                                         ) : (
                                           <div className="mt-2 space-y-2">
                                             {summary.history.slice(0, 8).map((booking) => (
                                               <div key={`${user.id}-${booking.id}`} className="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-2 text-xs">
-                                                <p className={`${workspaceHeadingTextClass}`}>
+                                                <p className={`${pageHeadingTextClass}`}>
                                                   {dataMaskingEnabled ? maskIdentifier(booking.id) : booking.id} · {booking.department}
                                                 </p>
-                                                <p className={workspaceMutedTextClass}>
+                                                <p className={pageMutedTextClass}>
                                                   Requested: {formatDateTime(booking.requestedTime)}
                                                 </p>
-                                                <p className={workspaceMutedTextClass}>Status: {booking.status}</p>
+                                                <p className={pageMutedTextClass}>Status: {booking.status}</p>
                                               </div>
                                             ))}
                                           </div>
@@ -1017,40 +1093,50 @@ const AdminDashboard = ({
                       </table>
                     </div>
                   )}
-                </section>
+                </SectionCard>
               ) : null}
 
               {activeSection === 'staff_management' ? (
-                <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Staff directory</h2>
-                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Staff profile visibility with current and future booking workload.
-                  </p>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className={workspaceGhostButtonClass}
-                      onClick={() => setStaffApplicationRoleFilter('all')}
-                    >
-                      All new applications ({pendingStaffApplications.length})
-                    </button>
-                    <button
-                      type="button"
-                      className={workspaceGhostButtonClass}
-                      onClick={() => setStaffApplicationRoleFilter('doctor')}
-                    >
-                      New doctor applications (
-                      {pendingStaffApplications.filter((item) => item.role === 'doctor').length})
-                    </button>
-                  </div>
-
-                  <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                    <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>
+                <SectionCard
+                  eyebrow="Operations"
+                  title="Staff directory"
+                  description="Staff profile visibility with current and future booking workload."
+                  actions={
+                    <>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        Staff {filteredStaff.length}
+                      </span>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        Pending {pendingStaffApplications.length}
+                      </span>
+                    </>
+                  }
+                  toolbar={
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={pageGhostButtonClass}
+                        onClick={() => setStaffApplicationRoleFilter('all')}
+                      >
+                        All new applications ({pendingStaffApplications.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={pageGhostButtonClass}
+                        onClick={() => setStaffApplicationRoleFilter('doctor')}
+                      >
+                        New doctor applications (
+                        {pendingStaffApplications.filter((item) => item.role === 'doctor').length})
+                      </button>
+                    </div>
+                  }
+                >
+                  <div className={`${pagePanelSoftClass} p-4`}>
+                    <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
                       Staff applications pending review
                     </p>
                     {filteredPendingStaffApplications.length === 0 ? (
-                      <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>
+                      <p className={`mt-2 text-sm ${pageMutedTextClass}`}>
                         No pending applications for this filter.
                       </p>
                     ) : (
@@ -1058,10 +1144,10 @@ const AdminDashboard = ({
                         <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
                           <thead>
                             <tr>
-                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Applicant</th>
-                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Details</th>
-                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>License</th>
-                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Action</th>
+                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Applicant</th>
+                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Details</th>
+                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>License</th>
+                              <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[color:var(--card-border)]">
@@ -1070,25 +1156,25 @@ const AdminDashboard = ({
                               return (
                                 <tr key={application.id}>
                                   <td className="px-3 py-3 align-top">
-                                    <p className={`font-semibold ${workspaceHeadingTextClass}`}>
+                                    <p className={`font-semibold ${pageHeadingTextClass}`}>
                                       {dataMaskingEnabled ? maskPersonName(fullName) : fullName}
                                     </p>
-                                    <p className={`text-xs ${workspaceMutedTextClass}`}>
+                                    <p className={`text-xs ${pageMutedTextClass}`}>
                                       {dataMaskingEnabled ? maskIdentifier(application.email) : application.email}
                                     </p>
                                   </td>
-                                  <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>
+                                  <td className={`px-3 py-3 ${pageMutedTextClass}`}>
                                     <p>Role: {formatRoleLabel(application.role)}</p>
                                     <p>Department: {application.department || 'N/A'}</p>
                                     <p>Status: Pending review</p>
                                   </td>
-                                  <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>
+                                  <td className={`px-3 py-3 ${pageMutedTextClass}`}>
                                     {application.hasLicenseFile ? 'Uploaded' : 'Missing'}
                                   </td>
                                   <td className="px-3 py-3">
                                     <button
                                       type="button"
-                                      className={workspaceGhostButtonClass}
+                                      className={pageGhostButtonClass}
                                       onClick={() => setSelectedStaffApplication(application)}
                                     >
                                       Open review window
@@ -1104,19 +1190,19 @@ const AdminDashboard = ({
                   </div>
 
                   {filteredStaff.length === 0 ? (
-                    <div className="mt-4 rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4">
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>No staff records match your search query.</p>
+                    <div className={`${pagePanelSoftClass} mt-4 p-4`}>
+                      <p className={`text-sm ${pageMutedTextClass}`}>No staff records match your search query.</p>
                     </div>
                   ) : (
                     <div className="mt-4 overflow-x-auto">
                       <table className="min-w-full divide-y divide-[color:var(--card-border)] text-sm">
                         <thead>
                           <tr>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Staff member</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Profile</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Bookings</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Account</th>
-                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Actions</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Staff member</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Profile</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Bookings</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Account</th>
+                            <th className={`px-3 py-2 text-left text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[color:var(--card-border)]">
@@ -1129,19 +1215,19 @@ const AdminDashboard = ({
                               <Fragment key={user.id}>
                                 <tr key={user.id}>
                                   <td className="px-3 py-3 align-top">
-                                    <p className={`font-semibold ${workspaceHeadingTextClass}`}>{displayName}</p>
-                                    <p className={`text-xs ${workspaceMutedTextClass}`}>{displayEmail}</p>
+                                    <p className={`font-semibold ${pageHeadingTextClass}`}>{displayName}</p>
+                                    <p className={`text-xs ${pageMutedTextClass}`}>{displayEmail}</p>
                                   </td>
-                                  <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>
+                                  <td className={`px-3 py-3 ${pageMutedTextClass}`}>
                                     <p>Role: {formatRoleLabel(user.role)}</p>
                                     <p>Department: {user.department ?? 'N/A'}</p>
                                     <p>Phone: {user.profile?.phoneNumber ?? 'N/A'}</p>
                                   </td>
-                                  <td className={`px-3 py-3 ${workspaceMutedTextClass}`}>
-                                    <p className={workspaceHeadingTextClass}>Total: {summary.total}</p>
+                                  <td className={`px-3 py-3 ${pageMutedTextClass}`}>
+                                    <p className={pageHeadingTextClass}>Total: {summary.total}</p>
                                     <p>Current: {summary.current}</p>
                                     <p>Future: {summary.future}</p>
-                                    <span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChipClass(summary.latestStatus)}`}>
+                                    <span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${reservationStatusChipClass(summary.latestStatus)}`}>
                                       {summary.latestStatus}
                                     </span>
                                   </td>
@@ -1154,14 +1240,14 @@ const AdminDashboard = ({
                                     <div className="flex flex-wrap gap-2">
                                       <button
                                         type="button"
-                                        className={workspaceGhostButtonClass}
+                                        className={pageGhostButtonClass}
                                         onClick={() => setExpandedStaffId(isExpanded ? null : user.id)}
                                       >
                                         {isExpanded ? 'Hide bookings' : 'View bookings'}
                                       </button>
                                       <button
                                         type="button"
-                                        className={workspaceGhostButtonClass}
+                                        className={pageGhostButtonClass}
                                         disabled={user.status === 'disabled'}
                                         onClick={() => void handleUpdateUserStatus(user.id, 'disabled')}
                                       >
@@ -1169,7 +1255,7 @@ const AdminDashboard = ({
                                       </button>
                                       <button
                                         type="button"
-                                        className={workspaceGhostButtonClass}
+                                        className={pageGhostButtonClass}
                                         disabled={user.status === 'active'}
                                         onClick={() => void handleUpdateUserStatus(user.id, 'active')}
                                       >
@@ -1182,9 +1268,9 @@ const AdminDashboard = ({
                                   <tr>
                                     <td colSpan={5} className="px-3 pb-3">
                                       <div className="rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3">
-                                        <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Current and future booking list</p>
+                                        <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Current and future booking list</p>
                                         {summary.history.length === 0 ? (
-                                          <p className={`mt-2 text-sm ${workspaceMutedTextClass}`}>No bookings assigned.</p>
+                                          <p className={`mt-2 text-sm ${pageMutedTextClass}`}>No bookings assigned.</p>
                                         ) : (
                                           <div className="mt-2 space-y-2">
                                             {summary.history
@@ -1192,11 +1278,11 @@ const AdminDashboard = ({
                                               .slice(0, 10)
                                               .map((booking) => (
                                                 <div key={`${user.id}-${booking.id}`} className="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-2 text-xs">
-                                                  <p className={`${workspaceHeadingTextClass}`}>
+                                                  <p className={`${pageHeadingTextClass}`}>
                                                     {dataMaskingEnabled ? maskIdentifier(booking.id) : booking.id} · {booking.department}
                                                   </p>
-                                                  <p className={workspaceMutedTextClass}>Patient: {dataMaskingEnabled ? maskPersonName(booking.patientName) : booking.patientName}</p>
-                                                  <p className={workspaceMutedTextClass}>Scheduled: {formatDateTime(booking.requestedTime)}</p>
+                                                  <p className={pageMutedTextClass}>Patient: {dataMaskingEnabled ? maskPersonName(booking.patientName) : booking.patientName}</p>
+                                                  <p className={pageMutedTextClass}>Scheduled: {formatDateTime(booking.requestedTime)}</p>
                                                 </div>
                                               ))}
                                           </div>
@@ -1212,38 +1298,33 @@ const AdminDashboard = ({
                       </table>
                     </div>
                   )}
-                </section>
+                </SectionCard>
               ) : null}
 
               {activeSection === 'audit_log' ? (
-                <section className="space-y-3">
-                  <article className={`${workspacePanelClass} p-5`}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>
-                        Download an encrypted backup of audit logs.
-                      </p>
-                      <button
-                        type="button"
-                        className={workspaceGhostButtonClass}
-                        onClick={() => void handleDownloadAuditBackup()}
-                        disabled={isDownloadingAuditBackup}
-                      >
-                        {isDownloadingAuditBackup ? 'Downloading...' : 'Download Encrypted Backup'}
-                      </button>
-                    </div>
-                  </article>
+                <SectionCard
+                  eyebrow="Audit"
+                  title="Audit trail"
+                  description="Server audit records from the audit log model with encrypted backup export."
+                  actions={
+                    <span className={`${pageChipButtonClass} cursor-default`}>
+                      {filteredAuditLogs.length} visible events
+                    </span>
+                  }
+                >
                   {filteredAuditLogs.length === 0 ? (
-                    <article className={`${workspacePanelClass} p-5`}>
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>No audit log records match your search query.</p>
+                    <article className={`${pagePanelSoftClass} p-5`}>
+                      <p className={`text-sm ${pageMutedTextClass}`}>No audit log records match your search query.</p>
                     </article>
                   ) : (
-                    filteredAuditLogs.map((item) => (
-                      <article key={item.id} className={`${workspacePanelClass} p-5`}>
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Audit</p>
-                            <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>{item.action}</h2>
-                            <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{item.details ?? 'No details'}</p>
+                    <div className="space-y-3">
+                      {filteredAuditLogs.map((item) => (
+                        <article key={item.id} className={`${pagePanelSoftClass} p-5`}>
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Audit</p>
+                            <h2 className={`mt-1 text-base font-semibold ${pageHeadingTextClass}`}>{item.action}</h2>
+                            <p className={`mt-1 text-sm ${pageMutedTextClass}`}>{item.details ?? 'No details'}</p>
                           </div>
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${severityChipClass(item.action.includes('DENIED') ? 'Warning' : 'Info')}`}>
                             {item.action.includes('DENIED') ? 'Warning' : 'Info'}
@@ -1254,41 +1335,37 @@ const AdminDashboard = ({
                           <span>IP: {item.ipAddress ?? 'N/A'}</span>
                           <span>{formatDateTime(item.timestamp)}</span>
                         </div>
-                      </article>
-                    ))
+                        </article>
+                      ))}
+                    </div>
                   )}
-                </section>
+                </SectionCard>
               ) : null}
 
               {activeSection === 'error_log' ? (
-                <section className="space-y-3">
-                  <article className={`${workspacePanelClass} p-5`}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>
-                        Download an encrypted backup of error logs.
-                      </p>
-                      <button
-                        type="button"
-                        className={workspaceGhostButtonClass}
-                        onClick={() => void handleDownloadErrorBackup()}
-                        disabled={isDownloadingErrorBackup}
-                      >
-                        {isDownloadingErrorBackup ? 'Downloading...' : 'Download Encrypted Backup'}
-                      </button>
-                    </div>
-                  </article>
+                <SectionCard
+                  eyebrow="Incident response"
+                  title="Error records"
+                  description="Server error records, stack traces, and route metadata with encrypted backup export."
+                  actions={
+                    <span className={`${pageChipButtonClass} cursor-default`}>
+                      {filteredErrorLogs.length} visible errors
+                    </span>
+                  }
+                >
                   {filteredErrorLogs.length === 0 ? (
-                    <article className={`${workspacePanelClass} p-5`}>
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>No error log records match your search query.</p>
+                    <article className={`${pagePanelSoftClass} p-5`}>
+                      <p className={`text-sm ${pageMutedTextClass}`}>No error log records match your search query.</p>
                     </article>
                   ) : (
-                    filteredErrorLogs.map((item) => (
-                      <article key={item.id} className={`${workspacePanelClass} p-5`}>
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Error</p>
-                            <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>{item.message}</h2>
-                            <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
+                    <div className="space-y-3">
+                      {filteredErrorLogs.map((item) => (
+                        <article key={item.id} className={`${pagePanelSoftClass} p-5`}>
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Error</p>
+                            <h2 className={`mt-1 text-base font-semibold ${pageHeadingTextClass}`}>{item.message}</h2>
+                            <p className={`mt-1 text-sm ${pageMutedTextClass}`}>
                               {(item.method ?? 'N/A').toUpperCase()} {item.route ?? 'N/A'}
                             </p>
                           </div>
@@ -1301,39 +1378,55 @@ const AdminDashboard = ({
                           <span>IP: {item.ipAddress ?? 'N/A'}</span>
                           <span>{formatDateTime(item.timestamp)}</span>
                         </div>
-                        {item.stack ? (
-                          <pre className="mt-3 overflow-x-auto rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3 text-xs text-[color:var(--agent-muted)]">
-                            {item.stack}
-                          </pre>
-                        ) : null}
-                      </article>
-                    ))
+                          {item.stack ? (
+                            <pre className="mt-3 overflow-x-auto rounded-xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-3 text-xs text-[color:var(--agent-muted)]">
+                              {item.stack}
+                            </pre>
+                          ) : null}
+                        </article>
+                      ))}
+                    </div>
                   )}
-                </section>
+                </SectionCard>
               ) : null}
 
               {activeSection === 'notifications' ? (
-                <section className="space-y-3">
+                <SectionCard
+                  eyebrow="Inbox"
+                  title="Notifications"
+                  description="Operational and security alerts generated from audit and error activity."
+                  actions={
+                    <>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        Unread {notificationItems.filter((item) => !item.read).length}
+                      </span>
+                      <span className={`${pageChipButtonClass} cursor-default`}>
+                        Critical {notificationItems.filter((item) => item.severity === 'Critical').length}
+                      </span>
+                    </>
+                  }
+                >
                   {filteredNotifications.length === 0 ? (
-                    <article className={`${workspacePanelClass} p-5`}>
-                      <p className={`text-sm ${workspaceMutedTextClass}`}>No notifications match your search query.</p>
+                    <article className={`${pagePanelSoftClass} p-5`}>
+                      <p className={`text-sm ${pageMutedTextClass}`}>No notifications match your search query.</p>
                     </article>
                   ) : (
-                    filteredNotifications.map((item) => (
-                      <article
-                        key={item.id}
-                        className={`${workspacePanelClass} p-5 ${item.read ? '' : 'ring-1 ring-blue-200/70'}`}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
+                    <div className="space-y-3">
+                      {filteredNotifications.map((item) => (
+                        <article
+                          key={item.id}
+                          className={`${pagePanelSoftClass} p-5 ${item.read ? '' : 'ring-1 ring-blue-200/70'}`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2">
                               {!item.read ? (
                                 <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500" title="Unread" />
                               ) : null}
-                              <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>{item.category}</p>
+                              <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>{item.category}</p>
                             </div>
-                            <h2 className={`mt-1 text-base font-semibold ${workspaceHeadingTextClass}`}>{item.title}</h2>
-                            <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>{item.detail}</p>
+                            <h2 className={`mt-1 text-base font-semibold ${pageHeadingTextClass}`}>{item.title}</h2>
+                            <p className={`mt-1 text-sm ${pageMutedTextClass}`}>{item.detail}</p>
                           </div>
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${severityChipClass(item.severity)}`}>
                             {item.severity}
@@ -1343,49 +1436,52 @@ const AdminDashboard = ({
                         <div className="mt-3 text-xs text-[color:var(--agent-muted-soft)]">
                           <span>{formatDateTime(item.createdAt)}</span>
                         </div>
-                      </article>
-                    ))
+                        </article>
+                      ))}
+                    </div>
                   )}
-                </section>
+                </SectionCard>
               ) : null}
 
               {activeSection === 'settings' ? (
-                <section className={`${workspacePanelClass} p-5`}>
-                  <h2 className={`text-lg font-semibold ${workspaceHeadingTextClass}`}>Account settings</h2>
-                  <p className={`mt-1 text-sm ${workspaceMutedTextClass}`}>
-                    Manage profile visibility and workspace preferences from a single tab.
-                  </p>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="reference-card-soft p-3">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Account</p>
-                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{authUser?.username ?? 'Unknown'}</p>
+                <SectionCard
+                  eyebrow="Preferences"
+                  title="Account settings"
+                  description="Manage profile visibility and preferences from a single tab."
+                  actions={
+                    <span className={`${pageChipButtonClass} cursor-default`}>Session {sessionStatus}</span>
+                  }
+                >
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className={`${pagePanelSoftClass} p-3`}>
+                      <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Account</p>
+                      <p className={`mt-1 text-sm font-semibold ${pageHeadingTextClass}`}>{authUser?.username ?? 'Unknown'}</p>
                     </div>
-                    <div className="reference-card-soft p-3">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Role</p>
-                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{getWorkspaceRoleLabel(authUser?.role)}</p>
+                    <div className={`${pagePanelSoftClass} p-3`}>
+                      <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Role</p>
+                      <p className={`mt-1 text-sm font-semibold ${pageHeadingTextClass}`}>{getRoleLabel(authUser?.role)}</p>
                     </div>
-                    <div className="reference-card-soft p-3">
-                      <p className={`text-xs uppercase tracking-[0.14em] ${workspaceSubtleTextClass}`}>Theme</p>
-                      <p className={`mt-1 text-sm font-semibold ${workspaceHeadingTextClass}`}>{theme === 'dark' ? 'Dark' : 'Light'}</p>
+                    <div className={`${pagePanelSoftClass} p-3`}>
+                      <p className={`text-xs uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>Theme</p>
+                      <p className={`mt-1 text-sm font-semibold ${pageHeadingTextClass}`}>{theme === 'dark' ? 'Dark' : 'Light'}</p>
                     </div>
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button type="button" className={workspaceGhostButtonClass} onClick={onToggleTheme}>
+                    <button type="button" className={pageGhostButtonClass} onClick={onToggleTheme}>
                       Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
                     </button>
                   </div>
 
-                  <p className={`mt-4 text-xs ${workspaceSubtleTextClass}`}>Session: {sessionStatus}</p>
-                </section>
+                  <p className={`mt-4 text-xs ${pageSubtleTextClass}`}>Session: {sessionStatus}</p>
+                </SectionCard>
               ) : null}
             </section>
           }
         />
       </div>
-    </WorkspaceCanvas>
+    </PageCanvas>
   )
 }
 
-export default AdminDashboard
+export default AdminDashboardPage
