@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
+import PasswordVisibilityToggle from '../components/auth/PasswordVisibilityToggle'
+import { api } from '../services/api'
 import type { AppPage } from '../types/navigation'
 import type { AuthProvider, AuthSession } from '../types'
 import { getDefaultPageForRole } from '../utils/roles'
@@ -17,6 +19,7 @@ type LoginPageProps = {
   isBiometricReady?: boolean
   onLogout: () => void
   onNavigate?: (page: AppPage) => void
+  onForgotPassword?: () => void
   onGoBack?: () => void
   defaultRoleTab?: LoginRoleTab
 }
@@ -31,6 +34,7 @@ const LoginPage = ({
   isBiometricReady = false,
   onLogout,
   onNavigate,
+  onForgotPassword,
   onGoBack,
   defaultRoleTab = 'patient',
 }: LoginPageProps) => {
@@ -39,7 +43,9 @@ const LoginPage = ({
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [roleTab, setRoleTab] = useState<LoginRoleTab>(defaultRoleTab)
   const [doctorLicenseId, setDoctorLicenseId] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const passwordInputRef = useRef<HTMLInputElement | null>(null)
+  const currentAuthPage: AppPage = defaultRoleTab === 'doctor' ? 'doctor_login' : 'login'
   const homePage: AppPage = getDefaultPageForRole(authUser?.role)
   const homeLabel =
     homePage === 'appointments'
@@ -50,17 +56,33 @@ const LoginPage = ({
           ? 'Go to admin dashboard'
           : 'Go to dashboard'
 
-  const clearPasswordField = () => {
+  const clearPasswordInputValue = () => {
     if (passwordInputRef.current) {
       passwordInputRef.current.value = ''
     }
   }
 
+  const resetPasswordField = () => {
+    clearPasswordInputValue()
+    setShowPassword(false)
+  }
+
   useEffect(() => {
     if (!authError) return
-    clearPasswordField()
-    setPasswordError(null)
+    clearPasswordInputValue()
   }, [authError])
+
+  const handleRoleTabChange = (nextRole: LoginRoleTab) => {
+    setRoleTab(nextRole)
+    setEmailError(null)
+    setPasswordError(null)
+    resetPasswordField()
+
+    const targetPage: AppPage = nextRole === 'doctor' ? 'doctor_login' : 'login'
+    if (onNavigate && targetPage !== currentAuthPage) {
+      onNavigate(targetPage)
+    }
+  }
 
   return (
     <AuthSplitLayout variant="lovable">
@@ -128,7 +150,7 @@ const LoginPage = ({
               setEmailError(null)
               setPasswordError(null)
               onLogin(email, passwordValue, roleTab === 'doctor' ? 'doctor_dashboard' : 'appointments')
-              clearPasswordField()
+              resetPasswordField()
             }}
         >
           <p className="auth-lovable-section-label">
@@ -138,12 +160,7 @@ const LoginPage = ({
           <div className="auth-lovable-role-wrap">
             <button
               type="button"
-              onClick={() => {
-                setRoleTab('patient')
-                if (emailError) setEmailError(null)
-                if (passwordError) setPasswordError(null)
-                clearPasswordField()
-              }}
+              onClick={() => handleRoleTabChange('patient')}
               className={`auth-lovable-role-button ${roleTab === 'patient' ? 'is-active' : ''}`}
             >
               <svg
@@ -162,12 +179,7 @@ const LoginPage = ({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setRoleTab('doctor')
-                if (emailError) setEmailError(null)
-                if (passwordError) setPasswordError(null)
-                clearPasswordField()
-              }}
+              onClick={() => handleRoleTabChange('doctor')}
               className={`auth-lovable-role-button ${roleTab === 'doctor' ? 'is-active' : ''}`}
             >
               <svg
@@ -264,7 +276,7 @@ const LoginPage = ({
             </span>
             <input
               ref={passwordInputRef}
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               name="password"
               autoComplete="current-password"
               autoCapitalize="none"
@@ -274,7 +286,11 @@ const LoginPage = ({
                 if (passwordError) setPasswordError(null)
               }}
               placeholder="Password"
-              className="auth-lovable-input pl-10"
+              className="auth-lovable-input pl-10 pr-10"
+            />
+            <PasswordVisibilityToggle
+              visible={showPassword}
+              onToggle={() => setShowPassword((previous) => !previous)}
             />
           </div>
           {passwordError ? <p className="auth-lovable-field-error" role="alert">{passwordError}</p> : null}
@@ -282,7 +298,13 @@ const LoginPage = ({
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => onNavigate?.('forgot_password')}
+              onClick={() => {
+                if (onForgotPassword) {
+                  onForgotPassword()
+                  return
+                }
+                onNavigate?.('forgot_password')
+              }}
               className="auth-lovable-link text-sm"
             >
               Forgot password?
@@ -301,8 +323,7 @@ const LoginPage = ({
             <button
               type="button"
               onClick={() => {
-                const apiBase = (import.meta.env.VITE_API_URL ?? 'http://localhost:5001/api').replace(/\/$/, '')
-                window.location.href = `${apiBase}/auth/google`
+                window.location.href = api.buildGoogleAuthUrl(currentAuthPage)
               }}
               disabled={isAuthLoading}
               className="auth-lovable-secondary-button h-11 w-full"

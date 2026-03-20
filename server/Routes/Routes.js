@@ -6,6 +6,10 @@ import {
     logout,
     verifyOTP,
     resendOTP,
+    requestPasswordReset,
+    resetPassword,
+    changePassword,
+    exchangeGoogleAuthCode,
     getSettings,
     updateSettings,
     googleCallback,
@@ -44,11 +48,18 @@ import {
 } from '../Controllers/SupportController.js';
 
 import authMiddleware from '../Middleware/authMiddleware.js';
+import { requireCsrf } from '../Middleware/csrfMiddleware.js';
 import { authorizeRoles } from '../Middleware/rbacMiddleware.js';
 import User from '../Models/UserModel.js';
-import { uploadLicense, handleUploadError } from '../Middleware/uploadMiddleware.js';
+import {
+    cleanupUploadedLicenseFiles,
+    handleUploadError,
+    uploadLicense,
+} from '../Middleware/uploadMiddleware.js';
 import {
     loginLimiter,
+    passwordResetConfirmLimiter,
+    passwordResetRequestLimiter,
     otpResendLimiter,
     otpVerifyLimiter,
     symptomCheckLimiter,
@@ -58,6 +69,8 @@ import { body, validationResult } from 'express-validator';
 import passport from 'passport';
 import { isGoogleAuthConfigured } from '../Config/passport.js';
 import { normalizeRole } from '../Utils/roles.js';
+import { createGoogleOauthState, ensureSessionCsrfToken } from '../Utils/authSecurity.js';
+import { appConfig } from '../Config/env.js';
 
 
 const router = Router();
@@ -91,6 +104,20 @@ const validate = (req, res, next) => {
     next();
 }
 
+const validateDoctorRegistration = async (req, res, next) => {
+    const errors = validationResult(req);
+    if (errors.isEmpty()) {
+        next();
+        return;
+    }
+
+    await cleanupUploadedLicenseFiles(req).catch((error) => {
+        console.warn('Failed to clean up uploaded doctor license files after validation error:', error);
+    });
+
+    return res.status(400).json({ errors: errors.array() });
+}
+
 const sanitizePlainText = (value) =>
     String(value || '')
         .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
@@ -112,14 +139,39 @@ const requireGoogleAuthConfig = (req, res, next) => {
 // Google Login
 router.get('/auth/google', 
     requireGoogleAuthConfig,
-    passport.authenticate('google', { scope: ['profile', 'email'], state: true })
+    (req, res, next) => {
+        const sourcePage = ['login', 'doctor_login', 'admin_login'].includes(String(req.query?.sourcePage || ''))
+            ? String(req.query.sourcePage)
+            : 'login'
+        const state = createGoogleOauthState(sourcePage)
+        return passport.authenticate('google', {
+            scope: ['profile', 'email'],
+            state,
+            session: false,
+        })(req, res, next)
+    }
 );
 
 // Google Callback
 router.get('/auth/google/callback', 
     requireGoogleAuthConfig,
-    passport.authenticate('google', { session: false, failureRedirect: '/login-failed' }),
+    passport.authenticate('google', {
+        session: false,
+        failureRedirect: `${appConfig.frontendUrl.replace(/\/$/, '')}/login?google_error=google_login_failed`,
+    }),
     googleCallback 
+);
+router.post('/auth/google/exchange',
+    requireGoogleAuthConfig,
+    [
+        body('exchangeCode')
+            .trim()
+            .isHexadecimal()
+            .isLength({ min: 64, max: 64 })
+            .withMessage('Invalid exchange code'),
+    ],
+    validate,
+    exchangeGoogleAuthCode
 );
 
 // User Routes
@@ -148,7 +200,7 @@ router.post('/register/doctor',
             .isIn(ALLOWED_DOCTOR_DEPARTMENTS)
             .withMessage('Selected doctor department is not allowed')
     ],
-    validate,
+    validateDoctorRegistration,
     registerDoctor
 );
 
@@ -181,8 +233,26 @@ router.post('/resend-otp',
     validate,
     resendOTP
 );
+router.post('/forgot-password',
+    passwordResetRequestLimiter,
+    [
+        body('email').isEmail().normalizeEmail().withMessage('Invalid email'),
+        body('sourcePage').optional().isIn(['login', 'doctor_login', 'admin_login']),
+    ],
+    validate,
+    requestPasswordReset
+);
+router.post('/reset-password',
+    passwordResetConfirmLimiter,
+    [
+        body('resetToken').trim().isHexadecimal().isLength({ min: 64, max: 64 }).withMessage('Invalid reset token'),
+        body('newPassword').isLength({ min: 8 }).withMessage('Password too short'),
+    ],
+    validate,
+    resetPassword
+);
 
-router.post('/logout', authMiddleware, logout);
+router.post('/logout', authMiddleware, requireCsrf, logout);
 
 router.post('/support/tickets',
     supportTicketLimiter,
@@ -215,6 +285,7 @@ router.get('/session', authMiddleware, async (req, res) => {
         if (!userId) return res.status(401).json({ message: 'Invalid session' })
         const user = await User.findById(userId).select('email firstName lastName role googleId')
         if (!user) return res.status(404).json({ message: 'User not found' })
+        const csrfToken = await ensureSessionCsrfToken(req, res, req.authSession)
 
         return res.json({
             username: user.email,
@@ -224,6 +295,7 @@ router.get('/session', authMiddleware, async (req, res) => {
             role: normalizeRole(user.role) || 'user',
             authMethod: user.googleId ? 'google' : 'local',
             sessionId: req.user?.sessionId || null,
+            csrfToken,
         })
     } catch (error) {
         console.error('Session lookup failed', error)
@@ -235,20 +307,35 @@ router.get('/session', authMiddleware, async (req, res) => {
 router.get('/users/me/settings', authMiddleware, getSettings)
 router.put('/users/me/settings',
     authMiddleware,
+    requireCsrf,
     [
         body('settings').optional().isObject(),
+        body('settings.theme').optional().isIn(['light', 'dark']),
         body('settings.notifications.email').optional().isBoolean(),
         body('settings.notifications.sms').optional().isBoolean(),
         body('settings.notifications.push').optional().isBoolean(),
+        body('settings.notifications.appointmentReminders').optional().isBoolean(),
+        body('settings.notifications.securityAlerts').optional().isBoolean(),
     ],
     validate,
     updateSettings
+)
+router.put('/users/me/password',
+    authMiddleware,
+    requireCsrf,
+    [
+        body('currentPassword').exists().withMessage('Current password is required'),
+        body('newPassword').isLength({ min: 8 }).withMessage('Password too short'),
+    ],
+    validate,
+    changePassword
 )
 
 // User profile and personal health information
 router.get('/users/me/profile', authMiddleware, getMyProfile)
 router.put('/users/me/profile',
     authMiddleware,
+    requireCsrf,
     [
         body('firstName').optional().trim().isLength({ min: 1, max: 30 }).escape(),
         body('lastName').optional().trim().isLength({ min: 1, max: 30 }).escape(),
@@ -262,12 +349,38 @@ router.put('/users/me/profile',
 )
 router.put('/users/me/personal-health-info',
     authMiddleware,
+    requireCsrf,
     authorizeRoles('user', 'doctor', 'admin', 'system_admin'),
     [
         body('personalHealthInfo').optional().isObject(),
+        body('personalHealthInfo.bloodType').optional().trim().isLength({ max: 10 }).escape(),
+        body('personalHealthInfo.notes').optional().trim().isLength({ max: 1000 }).escape(),
+        body('personalHealthInfo.allergies').optional().isArray({ max: 50 }),
+        body('personalHealthInfo.medications').optional().isArray({ max: 50 }),
+        body('personalHealthInfo.chronicConditions').optional().isArray({ max: 50 }),
+        body('personalHealthInfo.surgeries').optional().isArray({ max: 50 }),
+        body('personalHealthInfo.allergies.*').optional().trim().isLength({ max: 120 }).escape(),
+        body('personalHealthInfo.medications.*').optional().trim().isLength({ max: 120 }).escape(),
+        body('personalHealthInfo.chronicConditions.*').optional().trim().isLength({ max: 120 }).escape(),
+        body('personalHealthInfo.surgeries.*').optional().trim().isLength({ max: 120 }).escape(),
+        body('personalHealthInfo.emergencyContact').optional().isObject(),
+        body('personalHealthInfo.emergencyContact.name').optional().trim().isLength({ max: 80 }).escape(),
+        body('personalHealthInfo.emergencyContact.phone').optional().trim().isLength({ max: 30 }).escape(),
+        body('personalHealthInfo.emergencyContact.relationship').optional().trim().isLength({ max: 50 }).escape(),
         body('bloodType').optional().trim().isLength({ max: 10 }).escape(),
         body('notes').optional().trim().isLength({ max: 1000 }).escape(),
+        body('allergies').optional().isArray({ max: 50 }),
+        body('medications').optional().isArray({ max: 50 }),
+        body('chronicConditions').optional().isArray({ max: 50 }),
+        body('surgeries').optional().isArray({ max: 50 }),
+        body('allergies.*').optional().trim().isLength({ max: 120 }).escape(),
+        body('medications.*').optional().trim().isLength({ max: 120 }).escape(),
+        body('chronicConditions.*').optional().trim().isLength({ max: 120 }).escape(),
+        body('surgeries.*').optional().trim().isLength({ max: 120 }).escape(),
         body('emergencyContact').optional().isObject(),
+        body('emergencyContact.name').optional().trim().isLength({ max: 80 }).escape(),
+        body('emergencyContact.phone').optional().trim().isLength({ max: 30 }).escape(),
+        body('emergencyContact.relationship').optional().trim().isLength({ max: 50 }).escape(),
     ],
     validate,
     upsertPersonalHealthInfo
@@ -285,6 +398,7 @@ router.get('/appointments', authMiddleware, async (req, res, next) => {
 })
 router.post('/appointments', 
     authMiddleware,
+    requireCsrf,
     authorizeRoles('user'), 
     [
         body('doctorId').isMongoId().withMessage('Invalid Doctor ID'),
@@ -323,6 +437,7 @@ router.get('/doctor/schedules/:weekStart',
 )
 router.put('/doctor/schedules/:weekStart',
     authMiddleware,
+    requireCsrf,
     authorizeRoles('doctor', 'admin', 'system_admin'),
     [
         body('days').optional().isObject().withMessage('days must be an object'),
@@ -332,6 +447,7 @@ router.put('/doctor/schedules/:weekStart',
 )
 router.patch('/appointments/:appointmentId/status',
     authMiddleware,
+    requireCsrf,
     authorizeRoles('doctor', 'admin', 'system_admin'),
     [
         body('status').isIn(['Pending', 'Confirmed', 'Completed', 'Cancelled']).withMessage('Invalid status'),
@@ -362,17 +478,27 @@ router.get('/doctor/patients/:patientId/profile',
 )
 
 // Admin-triggered archive
-router.post('/admin/archive/appointments', authMiddleware, authorizeRoles('admin', 'system_admin'), async (req, res, next) => {
-    try {
-        const { default: archiveService } = await import('../Utils/archiveService.js')
-        const days = req.body?.days ? Number(req.body.days) : undefined
-        const dryRun = req.body?.dry === true
-        const result = await archiveService.archiveOldAppointments({ olderThanDays: days, dryRun })
-        return res.json({ ok: true, result })
-    } catch (err) {
-        next(err)
+router.post('/admin/archive/appointments',
+    authMiddleware,
+    requireCsrf,
+    authorizeRoles('admin', 'system_admin'),
+    [
+        body('days').optional().isInt({ min: 1, max: 3650 }).toInt(),
+        body('dry').optional().isBoolean(),
+    ],
+    validate,
+    async (req, res, next) => {
+        try {
+            const { default: archiveService } = await import('../Utils/archiveService.js')
+            const days = typeof req.body?.days === 'number' ? req.body.days : undefined
+            const dryRun = req.body?.dry === true
+            const result = await archiveService.archiveOldAppointments({ olderThanDays: days, dryRun })
+            return res.json({ ok: true, result })
+        } catch (err) {
+            next(err)
+        }
     }
-})
+)
 
 //ADMIN Routes
 router.get('/users',
@@ -387,6 +513,7 @@ router.get('/ledger',
 )
 router.put('/admin/users/:userId',
     authMiddleware,
+    requireCsrf,
     authorizeRoles('admin', 'system_admin'),
     [
         body('role')
@@ -407,11 +534,13 @@ router.get('/admin/staff-applications',
 )
 router.patch('/admin/staff-applications/:userId/approve',
     authMiddleware,
+    requireCsrf,
     authorizeRoles('admin', 'system_admin'),
     approveStaffApplication
 )
 router.delete('/admin/staff-applications/:userId/reject',
     authMiddleware,
+    requireCsrf,
     authorizeRoles('admin', 'system_admin'),
     rejectStaffApplication
 )
@@ -489,6 +618,7 @@ router.get('/doctor/queue/timeline',
 )
 router.patch('/doctor/appointments/:appointmentId/queue-status',
     authMiddleware,
+    requireCsrf,
     authorizeRoles('doctor', 'admin', 'system_admin'),
     [
         body('queueStatus').isIn(['Waiting', 'Arrived', 'In-Consultation', 'Checked-Out', 'No-Show']).withMessage('Invalid queue status'),
@@ -505,12 +635,13 @@ router.patch('/doctor/appointments/:appointmentId/queue-status',
 )
 router.put('/doctor/appointments/:appointmentId/soap-note',
     authMiddleware,
+    requireCsrf,
     authorizeRoles('doctor', 'admin', 'system_admin'),
     [
-        body('subjective').optional().isString(),
-        body('objective').optional().isString(),
-        body('assessment').optional().isString(),
-        body('plan').optional().isString(),
+        body('subjective').optional().isString().trim().isLength({ max: 4000 }),
+        body('objective').optional().isString().trim().isLength({ max: 4000 }),
+        body('assessment').optional().isString().trim().isLength({ max: 4000 }),
+        body('plan').optional().isString().trim().isLength({ max: 4000 }),
     ],
     validate,
     async (req, res, next) => {
@@ -524,9 +655,16 @@ router.put('/doctor/appointments/:appointmentId/soap-note',
 )
 router.put('/doctor/appointments/:appointmentId/prescriptions',
     authMiddleware,
+    requireCsrf,
     authorizeRoles('doctor', 'admin', 'system_admin'),
     [
         body('prescriptions').isArray({ min: 1 }).withMessage('prescriptions must be a non-empty array'),
+        body('prescriptions').isArray({ max: 20 }),
+        body('prescriptions.*.medication').trim().notEmpty().isLength({ max: 120 }).escape(),
+        body('prescriptions.*.dosage').trim().notEmpty().isLength({ max: 120 }).escape(),
+        body('prescriptions.*.frequency').optional().trim().isLength({ max: 120 }).escape(),
+        body('prescriptions.*.durationDays').optional().isInt({ min: 1, max: 365 }).toInt(),
+        body('prescriptions.*.instructions').optional().trim().isLength({ max: 500 }).escape(),
     ],
     validate,
     async (req, res, next) => {

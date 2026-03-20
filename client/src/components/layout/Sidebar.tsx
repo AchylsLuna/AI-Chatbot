@@ -63,6 +63,7 @@ type SidebarProps = {
     name: string
     subtitle: string
     avatarText?: string
+    active?: boolean
     onClick?: () => void
   }
 }
@@ -378,9 +379,10 @@ const Sidebar = ({
           {footerProfile ? (
             <button
               type="button"
-              className="tab-sidebar-profile"
+              className={`tab-sidebar-profile ${footerProfile.active ? 'is-active' : ''}`}
               onClick={footerProfile.onClick}
               disabled={!footerProfile.onClick}
+              aria-current={footerProfile.active ? 'page' : undefined}
               data-sidebar-nav-item={footerProfile.onClick ? 'true' : undefined}
             >
               <span className="tab-sidebar-profile-avatar">

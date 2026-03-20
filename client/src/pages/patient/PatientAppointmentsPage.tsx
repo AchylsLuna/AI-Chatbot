@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import PageCanvas from '../../components/layout/PageCanvas'
+import PageTopShell from '../../components/layout/PageTopShell'
+import SectionCard from '../../components/layout/SectionCard'
 import Sidebar, { type SidebarItem } from '../../components/layout/Sidebar'
 import SidebarShell from '../../components/layout/SidebarShell'
-import { buildRouteFromCanonicalPath, normalizePath } from '../../config/routing'
 import {
   getAppointmentsTabPath,
   resolveAppointmentsTabFromPath,
 } from '../../config/roleTabRoutes'
+import useTabRouteState from '../../hooks/useTabRouteState'
 import type { AppPage } from '../../types/navigation'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import type { AuthSession, Reservation, ReservationDraft } from '../../types'
@@ -23,6 +25,7 @@ import {
   type DoctorAvailability,
   type DoctorAvailableSlot,
   type DoctorScheduleDay,
+  type UserSettings,
 } from '../../services/api'
 
 type PatientAppointmentsPageProps = {
@@ -83,13 +86,34 @@ const sidebarItems: SidebarItem[] = [
   { key: 'history', label: 'History', icon: 'report' },
 ]
 
-const notificationPrefKey = 'pulse-ledger-notification-preferences'
+const patientUtilityItems: SidebarItem[] = [
+  { key: 'notifications', label: 'Notifications', icon: 'alert' },
+  { key: 'settings', label: 'Account Settings', icon: 'settings' },
+]
+
 const defaultNotificationPrefs: NotificationPreferences = {
   emailAlerts: true,
   browserAlerts: true,
   appointmentReminders: true,
   securityAlerts: true,
 }
+
+const mapUserSettingsToNotificationPrefs = (settings: UserSettings): NotificationPreferences => ({
+  emailAlerts: settings.notifications.email,
+  browserAlerts: settings.notifications.push,
+  appointmentReminders: settings.notifications.appointmentReminders,
+  securityAlerts: settings.notifications.securityAlerts,
+})
+
+const mapNotificationPrefsToSettings = (
+  prefs: NotificationPreferences
+): UserSettings['notifications'] => ({
+  email: prefs.emailAlerts,
+  sms: false,
+  push: prefs.browserAlerts,
+  appointmentReminders: prefs.appointmentReminders,
+  securityAlerts: prefs.securityAlerts,
+})
 
 const notificationDeliveryItems: Array<{
   key: keyof NotificationPreferences
@@ -137,12 +161,6 @@ const patientCompactPrimaryActionButtonClass =
   'inline-flex items-center justify-center rounded-[0.95rem] bg-[color:var(--agent-accent)] px-3.5 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]'
 const patientHistoryFilterClass =
   'px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize'
-const patientPageHeaderClass = 'border-b border-[color:var(--card-border)] pb-4 pt-1'
-const patientPageTitleClass =
-  'text-[clamp(1.95rem,1.72rem+0.62vw,2.35rem)] font-semibold tracking-[-0.03em] leading-[1.02] text-[color:var(--agent-ink)]'
-const patientPageSubtitleClass =
-  'mt-2 text-[clamp(0.98rem,0.94rem+0.18vw,1.08rem)] leading-[1.45] text-[color:var(--agent-muted)]'
-
 const departmentIconMap: Record<string, string> = {
   'Internal Medicine': '🩺',
   Cardiology: '❤️',
@@ -235,18 +253,18 @@ const resolvePatientDisplayName = (user: AuthSession['user'] | null) => {
   return 'Patient'
 }
 
-const renderPatientPageHeader = (title: string, subtitle: string) => (
-  <section className={patientPageHeaderClass}>
-    <h1 className={patientPageTitleClass}>{title}</h1>
-    <p className={patientPageSubtitleClass}>{subtitle}</p>
-  </section>
-)
-
 const resolvePatientInitials = (name: string) => {
   const tokens = name.trim().split(/\s+/).filter(Boolean)
   if (!tokens.length) return 'PT'
   if (tokens.length === 1) return tokens[0].slice(0, 2).toUpperCase()
   return `${tokens[0][0] ?? ''}${tokens[1][0] ?? ''}`.toUpperCase()
+}
+
+type PatientTopMetric = {
+  key: string
+  label: string
+  value: number | string
+  caption?: string
 }
 
 const getReservationStatusMeta = (status: Reservation['status']) => {
@@ -312,30 +330,21 @@ const PatientAppointmentsPage = ({
   onCreateReservation,
   onLogout,
 }: PatientAppointmentsPageProps) => {
-  const [activeSection, setActiveSection] = useState<UserSidebarSection>(() => {
-    if (typeof window === 'undefined') return 'booking_appointments'
-    return resolveAppointmentsTabFromPath(window.location.pathname) ?? 'booking_appointments'
+  const { activeTab: activeSection, setTab } = useTabRouteState<UserSidebarSection>({
+    page: 'appointments',
+    fallbackTab: 'booking_appointments',
+    resolveTabFromPath: resolveAppointmentsTabFromPath,
+    getTabPath: getAppointmentsTabPath,
   })
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
   const [bookingStep, setBookingStep] = useState<1 | 2 | 3>(1)
-
-  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => {
-    if (typeof window === 'undefined') return defaultNotificationPrefs
-    const stored = window.localStorage.getItem(notificationPrefKey)
-    if (!stored) return defaultNotificationPrefs
-    try {
-      return { ...defaultNotificationPrefs, ...JSON.parse(stored) }
-    } catch {
-      return defaultNotificationPrefs
-    }
-  })
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(notificationPrefKey, JSON.stringify(notificationPrefs))
-  }, [notificationPrefs])
+  const [notificationPrefs, setNotificationPrefs] =
+    useState<NotificationPreferences>(defaultNotificationPrefs)
+  const [isLoadingNotificationPrefs, setIsLoadingNotificationPrefs] = useState(false)
+  const [notificationPrefsError, setNotificationPrefsError] = useState<string | null>(null)
+  const [notificationPrefsMessage, setNotificationPrefsMessage] = useState<string | null>(null)
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [bookingDepartment, setBookingDepartment] = useState<(typeof departmentOptions)[number]>(
@@ -362,6 +371,7 @@ const PatientAppointmentsPage = ({
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [isSavingPassword, setIsSavingPassword] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
   const [profileForm, setProfileForm] = useState<PatientProfileForm>({
@@ -390,31 +400,8 @@ const PatientAppointmentsPage = ({
   const [profileMessage, setProfileMessage] = useState<string | null>(null)
 
   const setSection = (next: UserSidebarSection) => {
-    setActiveSection(next)
-    if (typeof window === 'undefined') return
-
-    const targetPath = getAppointmentsTabPath(next)
-    if (normalizePath(window.location.pathname) === normalizePath(targetPath)) return
-
-    window.history.pushState(
-      { ...(window.history.state ?? {}), appRoute: true, appPage: 'appointments' },
-      '',
-      buildRouteFromCanonicalPath(targetPath)
-    )
+    setTab(next)
   }
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const handlePopState = () => {
-      setActiveSection(resolveAppointmentsTabFromPath(window.location.pathname) ?? 'booking_appointments')
-    }
-
-    window.addEventListener('popstate', handlePopState)
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-    }
-  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -474,6 +461,34 @@ const PatientAppointmentsPage = ({
     }
 
     void loadProfileData()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadNotificationSettings = async () => {
+      setIsLoadingNotificationPrefs(true)
+      setNotificationPrefsError(null)
+      try {
+        const settings = await api.getUserSettings()
+        if (!isMounted) return
+        setNotificationPrefs(mapUserSettingsToNotificationPrefs(settings))
+      } catch (error) {
+        if (!isMounted) return
+        setNotificationPrefsError(
+          error instanceof Error ? error.message : 'Failed to load notification settings.'
+        )
+      } finally {
+        if (isMounted) {
+          setIsLoadingNotificationPrefs(false)
+        }
+      }
+    }
+
+    void loadNotificationSettings()
     return () => {
       isMounted = false
     }
@@ -721,8 +736,27 @@ const PatientAppointmentsPage = ({
     [profileChecklist]
   )
 
-  const toggleNotificationPreference = (key: keyof NotificationPreferences) => {
-    setNotificationPrefs((previous) => ({ ...previous, [key]: !previous[key] }))
+  const toggleNotificationPreference = async (key: keyof NotificationPreferences) => {
+    const nextPrefs = {
+      ...notificationPrefs,
+      [key]: !notificationPrefs[key],
+    }
+
+    setNotificationPrefs(nextPrefs)
+    setNotificationPrefsError(null)
+    setNotificationPrefsMessage(null)
+
+    try {
+      await api.updateUserSettings({
+        notifications: mapNotificationPrefsToSettings(nextPrefs),
+      })
+      setNotificationPrefsMessage('Notification preferences updated.')
+    } catch (error) {
+      setNotificationPrefs(notificationPrefs)
+      setNotificationPrefsError(
+        error instanceof Error ? error.message : 'Failed to update notification preferences.'
+      )
+    }
   }
 
   const renderNotificationPreferenceGroup = (
@@ -751,7 +785,9 @@ const PatientAppointmentsPage = ({
               </div>
               <button
                 type="button"
-                onClick={() => toggleNotificationPreference(item.key)}
+                onClick={() => {
+                  void toggleNotificationPreference(item.key)
+                }}
                 className={`relative h-6 w-11 rounded-full transition-colors ${active ? 'bg-blue-500' : 'bg-slate-200'}`}
                 aria-pressed={active}
               >
@@ -897,367 +933,470 @@ const PatientAppointmentsPage = ({
     }
   }
 
+  const handleSavePassword = async () => {
+    const oldValue = currentPassword.trim()
+    const nextValue = newPassword.trim()
+    const confirmValue = confirmPassword.trim()
+
+    setPasswordError(null)
+    setPasswordMessage(null)
+
+    if (!oldValue || !nextValue || !confirmValue) {
+      setPasswordError('Fill in current, new, and confirm password.')
+      return
+    }
+
+    if (!meetsPasswordPolicy(nextValue)) {
+      setPasswordError(
+        'New password must be at least 8 characters and include uppercase, lowercase, number, and special character.'
+      )
+      return
+    }
+
+    if (oldValue === nextValue) {
+      setPasswordError('New password must be different from current password.')
+      return
+    }
+
+    if (nextValue !== confirmValue) {
+      setPasswordError('New password and confirm password do not match.')
+      return
+    }
+
+    setIsSavingPassword(true)
+    try {
+      const result = await api.changePassword(oldValue, nextValue)
+      if (result.requiresReauth) {
+        setPasswordMessage('Password changed. Redirecting you to sign in again...')
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+        window.setTimeout(() => {
+          onLogout?.()
+        }, 900)
+        return
+      }
+
+      setPasswordMessage('Password changed successfully.')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : 'Unable to change password right now.')
+    } finally {
+      setIsSavingPassword(false)
+    }
+  }
+
+  const profileName = resolvePatientDisplayName(authUser)
+  const profileInitials = resolvePatientInitials(profileName)
+
+  const renderPatientTopShell = ({
+    title,
+    description,
+    eyebrow,
+    metrics,
+    showSearch = false,
+    searchPlaceholder,
+    quickActions,
+  }: {
+    title: string
+    description: string
+    eyebrow: string
+    metrics: readonly PatientTopMetric[]
+    showSearch?: boolean
+    searchPlaceholder?: string
+    quickActions?: ReactNode
+  }) => (
+    <PageTopShell
+      eyebrow={eyebrow}
+      statusLabel={sessionStatus}
+      title={title}
+      description={description}
+      searchValue={showSearch ? searchQuery : ''}
+      searchPlaceholder={searchPlaceholder}
+      onSearchChange={setSearchQuery}
+      showSearch={showSearch}
+      profileName={profileName}
+      profileCaption={`${getRoleLabel(authUser?.role)} · ${authUser?.username ?? 'No email on file'}`}
+      showNotifications={false}
+      onSignOut={() => setShowLogoutConfirm(true)}
+      quickActions={quickActions}
+      metrics={metrics}
+    />
+  )
+
   const renderProfileSection = () => {
     const fullName = `${profileForm.firstName} ${profileForm.lastName}`.trim() || profileName
 
     return (
-      <div className="max-w-6xl p-6 md:p-10">
-        <div className={`${patientPageCardClass} mb-6 overflow-hidden p-6 sm:p-7`}>
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[1.75rem] bg-yellow-400 text-2xl font-bold text-white shadow-sm">
-                {profileInitials}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Profile
-                </p>
-                <h1 className="mt-2 text-3xl font-bold tracking-[-0.03em] text-slate-900">
-                  {fullName || 'Demo User'}
-                </h1>
-                <p className="mt-2 text-sm text-slate-500">{authUser?.username ?? 'No email on file'}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600">
-                    Patient
-                  </span>
-                  <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                    {completedProfileChecklistCount}/{profileChecklist.length} sections complete
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2 lg:max-w-[24rem] lg:justify-end">
-              <button
-                type="button"
-                className={patientCompactActionButtonClass}
-                onClick={() => setSection('notifications')}
-              >
-                Notifications
-              </button>
-              <button
-                type="button"
-                className={patientCompactActionButtonClass}
-                onClick={() => setSection('settings')}
-              >
-                Account Settings
-              </button>
-              <button
-                type="button"
-                className={patientCompactPrimaryActionButtonClass}
-                onClick={() => setSection('booking_appointments')}
-              >
-                Book Appointment
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {!isProfileComplete ? (
-          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700">
-            Complete the required fields below before booking an appointment.
-          </div>
-        ) : null}
-
-        {isProfileLoading ? (
-          <div className={`${patientPageCardClass} p-6 text-sm text-slate-500`}>
-            Loading profile data...
-          </div>
-        ) : (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_20rem]">
-            <div className="space-y-6">
-              <div className={`${patientPageCardClass} p-6`}>
-                <div className="mb-5">
-                  <h2 className="text-xl font-semibold text-slate-900">Personal Information</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Update your primary details used for appointment intake.
-                  </p>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Full Name</label>
-                    <input value={fullName} disabled className={patientMutedFieldClass} />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Email Address</label>
-                    <input value={authUser?.username ?? ''} disabled className={patientMutedFieldClass} />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Phone Number</label>
-                    <input
-                      value={profileForm.phoneNumber}
-                      onChange={(event) =>
-                        setProfileForm((prev) => ({ ...prev, phoneNumber: event.target.value }))
-                      }
-                      placeholder="+63 900 000 0000"
-                      className={requiredFieldClass(!profileForm.phoneNumber.trim(), profileSaveAttempted)}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Date of Birth</label>
-                    <input
-                      type="date"
-                      value={profileForm.dateOfBirth}
-                      onChange={(event) =>
-                        setProfileForm((prev) => ({ ...prev, dateOfBirth: event.target.value }))
-                      }
-                      className={requiredFieldClass(!profileForm.dateOfBirth.trim(), profileSaveAttempted)}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Gender</label>
-                    <input
-                      value={profileForm.gender}
-                      onChange={(event) =>
-                        setProfileForm((prev) => ({ ...prev, gender: event.target.value }))
-                      }
-                      placeholder="Gender"
-                      className={requiredFieldClass(!profileForm.gender.trim(), profileSaveAttempted)}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Address</label>
-                    <input
-                      value={profileForm.address}
-                      onChange={(event) =>
-                        setProfileForm((prev) => ({ ...prev, address: event.target.value }))
-                      }
-                      placeholder="Street, city, province"
-                      className={requiredFieldClass(!profileForm.address.trim(), profileSaveAttempted)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className={`${patientPageCardClass} p-6`}>
-                <div className="mb-5">
-                  <h2 className="text-xl font-semibold text-slate-900">Health Information</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Keep your intake details updated before scheduling care.
-                  </p>
-                </div>
-
-                <div className="space-y-5">
-                  <div className="max-w-xs">
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Blood Type</label>
-                    <input
-                      value={healthForm.bloodType}
-                      onChange={(event) =>
-                        setHealthForm((prev) => ({ ...prev, bloodType: event.target.value }))
-                      }
-                      placeholder="Blood type"
-                      className={requiredFieldClass(!healthForm.bloodType.trim(), profileSaveAttempted)}
-                    />
-                  </div>
-
-                  <div className="grid gap-5 lg:grid-cols-2">
-                    {renderHealthListEditor('allergies', 'Allergies', 'Allergy', 'Add allergy')}
-                    {renderHealthListEditor('medications', 'Medications', 'Medication', 'Add medication')}
-                    {renderHealthListEditor(
-                      'chronicConditions',
-                      'Chronic Conditions',
-                      'Condition',
-                      'Add condition'
-                    )}
-                    {renderHealthListEditor('surgeries', 'Surgeries', 'Surgery', 'Add surgery')}
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Notes</label>
-                    <textarea
-                      value={healthForm.notes}
-                      onChange={(event) =>
-                        setHealthForm((prev) => ({ ...prev, notes: event.target.value }))
-                      }
-                      rows={4}
-                      className={patientFieldClass}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className={`${patientPageCardClass} p-6`}>
-                <div className="mb-5">
-                  <h2 className="text-xl font-semibold text-slate-900">Emergency Contact</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Required so the care team can contact the right person if needed.
-                  </p>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Contact Name</label>
-                    <input
-                      value={healthForm.emergencyContactName}
-                      onChange={(event) =>
-                        setHealthForm((prev) => ({
-                          ...prev,
-                          emergencyContactName: event.target.value,
-                        }))
-                      }
-                      placeholder="Contact name"
-                      className={requiredFieldClass(
-                        !healthForm.emergencyContactName.trim(),
-                        profileSaveAttempted
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Phone Number</label>
-                    <input
-                      value={healthForm.emergencyContactPhone}
-                      onChange={(event) =>
-                        setHealthForm((prev) => ({
-                          ...prev,
-                          emergencyContactPhone: event.target.value,
-                        }))
-                      }
-                      placeholder="+63 900 000 0000"
-                      className={requiredFieldClass(
-                        !healthForm.emergencyContactPhone.trim(),
-                        profileSaveAttempted
-                      )}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="mb-1.5 block text-sm font-medium text-slate-600">Relationship</label>
-                    <input
-                      value={healthForm.emergencyContactRelationship}
-                      onChange={(event) =>
-                        setHealthForm((prev) => ({
-                          ...prev,
-                          emergencyContactRelationship: event.target.value,
-                        }))
-                      }
-                      placeholder="Relationship"
-                      className={requiredFieldClass(
-                        !healthForm.emergencyContactRelationship.trim(),
-                        profileSaveAttempted
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {profileError ? <p className="mt-4 text-sm font-medium text-rose-600">{profileError}</p> : null}
-                {profileMessage ? <p className="mt-4 text-sm font-medium text-emerald-600">{profileMessage}</p> : null}
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    className={patientPrimaryButtonClass}
-                    onClick={() => void handleSavePatientProfile()}
-                    disabled={isSavingProfile}
-                  >
-                    {isSavingProfile ? 'Saving...' : 'Save Changes'}
-                  </button>
-                  <button
-                    type="button"
-                    className={patientSecondaryButtonClass}
-                    onClick={() => setSection('booking_appointments')}
-                  >
-                    Open booking
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className={`${patientPageCardClass} p-6`}>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Completion Status
-                </p>
-                <p className="mt-3 text-3xl font-bold tracking-[-0.03em] text-slate-900">
-                  {completedProfileChecklistCount}/{profileChecklist.length}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">Required sections completed</p>
-
-                <div className="mt-5 space-y-3">
-                  {profileChecklist.map((item) => (
-                    <div
-                      key={item.key}
-                      className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-800">{item.label}</p>
-                          <p className="mt-1 text-sm text-slate-500">{item.description}</p>
-                        </div>
-                        <span
-                          className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${item.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}
-                        >
-                          {item.complete ? 'Ready' : 'Pending'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={`${patientPageCardClass} p-6`}>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Preferences
-                </p>
-                <h3 className="mt-3 text-lg font-semibold text-slate-900">
-                  Settings and notifications
-                </h3>
-                <p className="mt-2 text-sm text-slate-500">
-                  Manage reminders, password changes, theme, and account controls from the lower menu.
-                </p>
-
-                <div className="mt-5 grid gap-3">
-                  <button
-                    type="button"
-                    className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left transition hover:bg-slate-50"
-                    onClick={() => setSection('notifications')}
-                  >
-                    <span>
-                      <span className="block text-sm font-semibold text-slate-800">Notifications</span>
-                      <span className="mt-1 block text-sm text-slate-500">
-                        Email alerts, browser alerts, and reminders
-                      </span>
-                    </span>
-                    <span className="text-slate-400">›</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left transition hover:bg-slate-50"
-                    onClick={() => setSection('settings')}
-                  >
-                    <span>
-                      <span className="block text-sm font-semibold text-slate-800">Account Settings</span>
-                      <span className="mt-1 block text-sm text-slate-500">
-                        Theme, password, session, and sign out controls
-                      </span>
-                    </span>
-                    <span className="text-slate-400">›</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className={`${patientPageCardClass} p-6`}>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Booking Access
-                </p>
-                <p className="mt-3 text-lg font-semibold text-slate-900">
-                  {isProfileComplete ? 'You can book appointments now.' : 'Booking is still locked.'}
-                </p>
-                <p className="mt-2 text-sm text-slate-500">
-                  {isProfileComplete
-                    ? 'Your required profile and emergency details are complete.'
-                    : 'Finish the required profile blocks before moving back to appointment booking.'}
-                </p>
+      <div className="p-6 md:p-8 xl:p-10">
+        <div className="mx-auto max-w-[84rem] space-y-6">
+          {renderPatientTopShell({
+            eyebrow: 'Profile',
+            title: fullName || 'Patient profile',
+            description: 'Keep your contact details, health information, and emergency contact ready before booking care.',
+            metrics: [
+              {
+                key: 'profile-complete',
+                label: 'Completion',
+                value: `${completedProfileChecklistCount}/${profileChecklist.length}`,
+                caption: 'Required sections ready',
+              },
+              {
+                key: 'profile-booking',
+                label: 'Booking',
+                value: isProfileComplete ? 'Ready' : 'Locked',
+                caption: 'Appointment access',
+              },
+              {
+                key: 'profile-alerts',
+                label: 'Alerts',
+                value: activeNotificationPreferenceCount,
+                caption: 'Active preferences',
+              },
+              {
+                key: 'profile-session',
+                label: 'Session',
+                value: sessionStatus,
+                caption: 'Current sync state',
+              },
+            ],
+            quickActions: (
+              <>
                 <button
                   type="button"
-                  className={`mt-5 w-full ${isProfileComplete ? patientPrimaryButtonClass : patientSecondaryButtonClass}`}
+                  className={patientCompactActionButtonClass}
+                  onClick={() => setSection('notifications')}
+                >
+                  Notifications
+                </button>
+                <button
+                  type="button"
+                  className={patientCompactActionButtonClass}
+                  onClick={() => setSection('settings')}
+                >
+                  Account Settings
+                </button>
+                <button
+                  type="button"
+                  className={patientCompactPrimaryActionButtonClass}
                   onClick={() => setSection('booking_appointments')}
                 >
-                  Go to booking
+                  Book Appointment
                 </button>
+              </>
+            ),
+          })}
+
+          {!isProfileComplete ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700">
+              Complete the required fields below before booking an appointment.
+            </div>
+          ) : null}
+
+          {isProfileLoading ? (
+            <div className={`${patientPageCardClass} p-6 text-sm text-slate-500`}>
+              Loading profile data...
+            </div>
+          ) : (
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_20rem]">
+              <div className="space-y-6">
+                <div className={`${patientPageCardClass} p-6`}>
+                  <div className="mb-5">
+                    <h2 className="text-xl font-semibold text-slate-900">Personal Information</h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Update your primary details used for appointment intake.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Full Name</label>
+                      <input value={fullName} disabled className={patientMutedFieldClass} />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Email Address</label>
+                      <input value={authUser?.username ?? ''} disabled className={patientMutedFieldClass} />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Phone Number</label>
+                      <input
+                        value={profileForm.phoneNumber}
+                        onChange={(event) =>
+                          setProfileForm((prev) => ({ ...prev, phoneNumber: event.target.value }))
+                        }
+                        placeholder="+63 900 000 0000"
+                        className={requiredFieldClass(!profileForm.phoneNumber.trim(), profileSaveAttempted)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={profileForm.dateOfBirth}
+                        onChange={(event) =>
+                          setProfileForm((prev) => ({ ...prev, dateOfBirth: event.target.value }))
+                        }
+                        className={requiredFieldClass(!profileForm.dateOfBirth.trim(), profileSaveAttempted)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Gender</label>
+                      <input
+                        value={profileForm.gender}
+                        onChange={(event) =>
+                          setProfileForm((prev) => ({ ...prev, gender: event.target.value }))
+                        }
+                        placeholder="Gender"
+                        className={requiredFieldClass(!profileForm.gender.trim(), profileSaveAttempted)}
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Address</label>
+                      <input
+                        value={profileForm.address}
+                        onChange={(event) =>
+                          setProfileForm((prev) => ({ ...prev, address: event.target.value }))
+                        }
+                        placeholder="Street, city, province"
+                        className={requiredFieldClass(!profileForm.address.trim(), profileSaveAttempted)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`${patientPageCardClass} p-6`}>
+                  <div className="mb-5">
+                    <h2 className="text-xl font-semibold text-slate-900">Health Information</h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Keep your intake details updated before scheduling care.
+                    </p>
+                  </div>
+
+                  <div className="space-y-5">
+                    <div className="max-w-xs">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Blood Type</label>
+                      <input
+                        value={healthForm.bloodType}
+                        onChange={(event) =>
+                          setHealthForm((prev) => ({ ...prev, bloodType: event.target.value }))
+                        }
+                        placeholder="Blood type"
+                        className={requiredFieldClass(!healthForm.bloodType.trim(), profileSaveAttempted)}
+                      />
+                    </div>
+
+                    <div className="grid gap-5 lg:grid-cols-2">
+                      {renderHealthListEditor('allergies', 'Allergies', 'Allergy', 'Add allergy')}
+                      {renderHealthListEditor('medications', 'Medications', 'Medication', 'Add medication')}
+                      {renderHealthListEditor(
+                        'chronicConditions',
+                        'Chronic Conditions',
+                        'Condition',
+                        'Add condition'
+                      )}
+                      {renderHealthListEditor('surgeries', 'Surgeries', 'Surgery', 'Add surgery')}
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Notes</label>
+                      <textarea
+                        value={healthForm.notes}
+                        onChange={(event) =>
+                          setHealthForm((prev) => ({ ...prev, notes: event.target.value }))
+                        }
+                        rows={4}
+                        className={patientFieldClass}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`${patientPageCardClass} p-6`}>
+                  <div className="mb-5">
+                    <h2 className="text-xl font-semibold text-slate-900">Emergency Contact</h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Required so the care team can contact the right person if needed.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Contact Name</label>
+                      <input
+                        value={healthForm.emergencyContactName}
+                        onChange={(event) =>
+                          setHealthForm((prev) => ({
+                            ...prev,
+                            emergencyContactName: event.target.value,
+                          }))
+                        }
+                        placeholder="Contact name"
+                        className={requiredFieldClass(
+                          !healthForm.emergencyContactName.trim(),
+                          profileSaveAttempted
+                        )}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Phone Number</label>
+                      <input
+                        value={healthForm.emergencyContactPhone}
+                        onChange={(event) =>
+                          setHealthForm((prev) => ({
+                            ...prev,
+                            emergencyContactPhone: event.target.value,
+                          }))
+                        }
+                        placeholder="+63 900 000 0000"
+                        className={requiredFieldClass(
+                          !healthForm.emergencyContactPhone.trim(),
+                          profileSaveAttempted
+                        )}
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Relationship</label>
+                      <input
+                        value={healthForm.emergencyContactRelationship}
+                        onChange={(event) =>
+                          setHealthForm((prev) => ({
+                            ...prev,
+                            emergencyContactRelationship: event.target.value,
+                          }))
+                        }
+                        placeholder="Relationship"
+                        className={requiredFieldClass(
+                          !healthForm.emergencyContactRelationship.trim(),
+                          profileSaveAttempted
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {profileError ? <p className="mt-4 text-sm font-medium text-rose-600">{profileError}</p> : null}
+                  {profileMessage ? (
+                    <p className="mt-4 text-sm font-medium text-emerald-600">{profileMessage}</p>
+                  ) : null}
+
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className={patientPrimaryButtonClass}
+                      onClick={() => void handleSavePatientProfile()}
+                      disabled={isSavingProfile}
+                    >
+                      {isSavingProfile ? 'Saving...' : 'Save Changes'}
+                    </button>
+                    <button
+                      type="button"
+                      className={patientSecondaryButtonClass}
+                      onClick={() => setSection('booking_appointments')}
+                    >
+                      Open booking
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className={`${patientPageCardClass} p-6`}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Completion Status
+                  </p>
+                  <p className="mt-3 text-3xl font-bold tracking-[-0.03em] text-slate-900">
+                    {completedProfileChecklistCount}/{profileChecklist.length}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">Required sections completed</p>
+
+                  <div className="mt-5 space-y-3">
+                    {profileChecklist.map((item) => (
+                      <div
+                        key={item.key}
+                        className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-800">{item.label}</p>
+                            <p className="mt-1 text-sm text-slate-500">{item.description}</p>
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${item.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}
+                          >
+                            {item.complete ? 'Ready' : 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={`${patientPageCardClass} p-6`}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Preferences
+                  </p>
+                  <h3 className="mt-3 text-lg font-semibold text-slate-900">
+                    Settings and notifications
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Manage reminders, password changes, theme, and account controls from the lower menu.
+                  </p>
+
+                  <div className="mt-5 grid gap-3">
+                    <button
+                      type="button"
+                      className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left transition hover:bg-slate-50"
+                      onClick={() => setSection('notifications')}
+                    >
+                      <span>
+                        <span className="block text-sm font-semibold text-slate-800">Notifications</span>
+                        <span className="mt-1 block text-sm text-slate-500">
+                          Email alerts, browser alerts, and reminders
+                        </span>
+                      </span>
+                      <span className="text-slate-400">›</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left transition hover:bg-slate-50"
+                      onClick={() => setSection('settings')}
+                    >
+                      <span>
+                        <span className="block text-sm font-semibold text-slate-800">Account Settings</span>
+                        <span className="mt-1 block text-sm text-slate-500">
+                          Theme, password, session, and sign out controls
+                        </span>
+                      </span>
+                      <span className="text-slate-400">›</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className={`${patientPageCardClass} p-6`}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Booking Access
+                  </p>
+                  <p className="mt-3 text-lg font-semibold text-slate-900">
+                    {isProfileComplete ? 'You can book appointments now.' : 'Booking is still locked.'}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {isProfileComplete
+                      ? 'Your required profile and emergency details are complete.'
+                      : 'Finish the required profile blocks before moving back to appointment booking.'}
+                  </p>
+                  <button
+                    type="button"
+                    className={`mt-5 w-full ${isProfileComplete ? patientPrimaryButtonClass : patientSecondaryButtonClass}`}
+                    onClick={() => setSection('booking_appointments')}
+                  >
+                    Go to booking
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     )
   }
@@ -1593,11 +1732,56 @@ const PatientAppointmentsPage = ({
 
     return (
       <div className="p-6 md:p-8 xl:p-10">
-        <div className="mx-auto max-w-[84rem] space-y-5">
-          {renderPatientPageHeader(
-            'Book an Appointment',
-            'Schedule your visit with our specialists'
-          )}
+        <div className="mx-auto max-w-[84rem] space-y-6">
+          {renderPatientTopShell({
+            eyebrow: 'Appointments',
+            title: 'Book an Appointment',
+            description: 'Schedule your visit with our specialists and keep the request synced across each step.',
+            metrics: [
+              {
+                key: 'booking-profile',
+                label: 'Profile',
+                value: isProfileComplete ? 'Ready' : 'Needs work',
+                caption: 'Required details',
+              },
+              {
+                key: 'booking-step',
+                label: 'Current step',
+                value: `${bookingStep}/3`,
+                caption: 'Booking progress',
+              },
+              {
+                key: 'booking-doctors',
+                label: 'Doctors',
+                value: availableDoctors.length,
+                caption: `${bookingDepartment} roster`,
+              },
+              {
+                key: 'booking-slot',
+                label: 'Slot',
+                value: selectedSlotStartIso ? 'Selected' : 'Pending',
+                caption: selectedSlotLabel,
+              },
+            ],
+            quickActions: (
+              <>
+                <button
+                  type="button"
+                  className={patientCompactActionButtonClass}
+                  onClick={() => setSection('profile')}
+                >
+                  Review profile
+                </button>
+                <button
+                  type="button"
+                  className={patientCompactActionButtonClass}
+                  onClick={() => setSection('history')}
+                >
+                  View history
+                </button>
+              </>
+            ),
+          })}
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.12fr)_23rem] xl:items-start">
             <section className={`${patientPageCardClass} overflow-hidden border-slate-200/90 p-6 shadow-[0_22px_50px_rgba(15,23,42,0.05)] md:p-8`}>
@@ -1703,34 +1887,35 @@ const PatientAppointmentsPage = ({
 
   const renderHistoryList = () => (
     <div className="p-6 md:p-8 xl:p-10">
-      <div className="mx-auto max-w-[84rem] space-y-8">
-        {renderPatientPageHeader('History', 'View and track all your medical appointments')}
+      <div className="mx-auto max-w-[84rem] space-y-6">
+        {renderPatientTopShell({
+          eyebrow: 'Appointments',
+          title: 'History',
+          description: 'Search and filter all booked, completed, and cancelled appointments.',
+          showSearch: true,
+          searchPlaceholder: 'Search by id, department, summary, or name...',
+          metrics: [
+            { key: 'history-total', label: 'Total', value: historyStats.total, caption: 'All appointments' },
+            { key: 'history-upcoming', label: 'Upcoming', value: historyStats.upcoming, caption: 'Still scheduled' },
+            { key: 'history-completed', label: 'Completed', value: historyStats.completed, caption: 'Recorded visits' },
+            { key: 'history-cancelled', label: 'Cancelled', value: historyStats.cancelled, caption: 'Closed bookings' },
+          ],
+          quickActions: (
+            <button
+              type="button"
+              className={patientPrimaryButtonClass}
+              onClick={() => setSection('booking_appointments')}
+            >
+              Book appointment
+            </button>
+          ),
+        })}
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {[
-            { key: 'total', label: 'Total', value: historyStats.total, color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200' },
-            { key: 'upcoming', label: 'Upcoming', value: historyStats.upcoming, color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
-            { key: 'completed', label: 'Completed', value: historyStats.completed, color: 'text-green-700', bg: 'bg-green-50 border-green-200' },
-            { key: 'cancelled', label: 'Cancelled', value: historyStats.cancelled, color: 'text-red-700', bg: 'bg-red-50 border-red-200' },
-          ].map((item) => (
-            <div key={item.key} className={`rounded-xl border p-4 ${item.bg}`}>
-              <p className={`text-2xl font-bold ${item.color}`}>{item.value}</p>
-              <p className="mt-0.5 text-sm text-slate-500">{item.label}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="relative flex-1">
-            <input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search by id, department, summary, or name..."
-              className={`${patientFieldClass} pl-4`}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1">
+        <SectionCard
+          title="History timeline"
+          description="Use the status filter to narrow the list before opening another booking."
+          toolbar={
+            <div className="flex flex-wrap gap-1">
               {(['all', 'upcoming', 'completed', 'cancelled'] as HistoryFilter[]).map((filter) => (
                 <button
                   key={filter}
@@ -1742,97 +1927,88 @@ const PatientAppointmentsPage = ({
                 </button>
               ))}
             </div>
-          </div>
-        </div>
+          }
+        >
+          {visibleReservations.length === 0 ? (
+            <div className="py-16 text-center text-slate-400">
+              <div className="mx-auto mb-3 text-4xl opacity-40">📂</div>
+              <p className="font-medium text-slate-500">No appointments found</p>
+              <p className="mt-1 text-sm">
+                {sortedReservations.length === 0
+                  ? "You haven't booked any appointments yet."
+                  : 'Try adjusting your search or filters.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {visibleReservations.map((item) => {
+                const statusMeta = getReservationStatusMeta(item.status)
+                const prescriptionSummary =
+                  item.prescriptions && item.prescriptions.length > 0
+                    ? item.prescriptions
+                        .map((prescription) => `${prescription.medication} ${prescription.dosage}`)
+                        .join(', ')
+                    : null
 
-        {visibleReservations.length === 0 ? (
-          <div className="py-16 text-center text-slate-400">
-            <div className="mx-auto mb-3 text-4xl opacity-40">📂</div>
-            <p className="font-medium text-slate-500">No appointments found</p>
-            <p className="mt-1 text-sm">
-              {sortedReservations.length === 0
-                ? "You haven't booked any appointments yet."
-                : 'Try adjusting your search or filters.'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {visibleReservations.map((item) => {
-              const statusMeta = getReservationStatusMeta(item.status)
-              const prescriptionSummary =
-                item.prescriptions && item.prescriptions.length > 0
-                  ? item.prescriptions
-                      .map((prescription) => `${prescription.medication} ${prescription.dosage}`)
-                      .join(', ')
-                  : null
-
-              return (
-                <div
-                  key={item.id}
-                  className={`${patientPageCardClass} p-5 transition-shadow hover:shadow-md`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-2xl">
-                      {resolveDepartmentIcon(item.department)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-slate-800">{item.department}</p>
-                          <p className="text-sm text-slate-500">
-                            {dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName}
-                          </p>
+                return (
+                  <div
+                    key={item.id}
+                    className={`${patientPageCardClass} p-5 transition-shadow hover:shadow-md`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-2xl">
+                        {resolveDepartmentIcon(item.department)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold text-slate-800">{item.department}</p>
+                            <p className="text-sm text-slate-500">
+                              {dataMaskingEnabled ? maskPersonName(item.patientName) : item.patientName}
+                            </p>
+                          </div>
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${statusMeta.color}`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
+                            {statusMeta.label}
+                          </span>
                         </div>
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${statusMeta.color}`}
-                        >
-                          <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
-                          {statusMeta.label}
-                        </span>
+                        <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-500">
+                          <span>{formatPatientDate(item.requestedTime)}</span>
+                          <span>{formatPatientTime(item.requestedTime)}</span>
+                          <span>{item.id}</span>
+                        </div>
+                        {item.summary ? <p className="mt-2 text-sm text-slate-400">📝 {item.summary}</p> : null}
+                        {prescriptionSummary ? (
+                          <p className="mt-2 text-sm text-slate-400">💊 {prescriptionSummary}</p>
+                        ) : null}
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-500">
-                        <span>{formatPatientDate(item.requestedTime)}</span>
-                        <span>{formatPatientTime(item.requestedTime)}</span>
-                        <span>{item.id}</span>
-                      </div>
-                      {item.summary ? <p className="mt-2 text-sm text-slate-400">📝 {item.summary}</p> : null}
-                      {prescriptionSummary ? (
-                        <p className="mt-2 text-sm text-slate-400">💊 {prescriptionSummary}</p>
-                      ) : null}
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+                )
+              })}
+            </div>
+          )}
+        </SectionCard>
       </div>
     </div>
   )
 
   const renderNotificationsSection = () => (
     <div className="p-6 md:p-8 xl:p-10">
-      <div className="mx-auto max-w-[84rem] space-y-8">
-        {renderPatientPageHeader(
-          'Notifications',
-          'Manage how booking alerts and account updates are delivered.'
-        )}
-
-        <div className={`max-w-3xl ${patientPageCardClass} space-y-6 p-6`}>
-          {renderNotificationPreferenceGroup('Delivery Channels', notificationDeliveryItems)}
-          {renderNotificationPreferenceGroup('Booking Updates', notificationBookingItems)}
-
-          <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
-              Notification Status
-            </p>
-            <p className="mb-3 text-sm text-slate-500">
-              Current sync status: <span className="font-medium text-slate-700">{sessionStatus}</span>
-            </p>
-            <p className="mb-4 text-sm text-slate-500">
-              {activeNotificationPreferenceCount} active notification preference
-              {activeNotificationPreferenceCount === 1 ? '' : 's'}.
-            </p>
+      <div className="mx-auto max-w-[84rem] space-y-6">
+        {renderPatientTopShell({
+          eyebrow: 'Preferences',
+          title: 'Notifications',
+          description: 'Choose how booking reminders, alerts, and account updates are delivered.',
+          metrics: [
+            { key: 'notif-active', label: 'Active', value: activeNotificationPreferenceCount, caption: 'Enabled preferences' },
+            { key: 'notif-delivery', label: 'Delivery', value: notificationDeliveryItems.length, caption: 'Channel groups' },
+            { key: 'notif-booking', label: 'Booking alerts', value: notificationBookingItems.length, caption: 'Care update groups' },
+            { key: 'notif-session', label: 'Session', value: sessionStatus, caption: 'Current sync state' },
+          ],
+          quickActions: (
             <button
               type="button"
               className={patientSecondaryButtonClass}
@@ -1840,124 +2016,157 @@ const PatientAppointmentsPage = ({
             >
               View booking history
             </button>
+          ),
+        })}
+
+        <SectionCard
+          title="Notification preferences"
+          description="Changes sync to your account settings so reminders and alerts stay consistent across sessions."
+          className="max-w-3xl"
+        >
+          <div className="space-y-6">
+            {isLoadingNotificationPrefs ? (
+              <p className="text-sm text-slate-500">Loading notification settings...</p>
+            ) : null}
+            {renderNotificationPreferenceGroup('Delivery Channels', notificationDeliveryItems)}
+            {renderNotificationPreferenceGroup('Booking Updates', notificationBookingItems)}
+
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                Notification Status
+              </p>
+              <p className="mb-3 text-sm text-slate-500">
+                Current sync status: <span className="font-medium text-slate-700">{sessionStatus}</span>
+              </p>
+              {notificationPrefsError ? (
+                <p className="mb-3 text-sm text-rose-600">{notificationPrefsError}</p>
+              ) : null}
+              {notificationPrefsMessage ? (
+                <p className="mb-3 text-sm text-emerald-600">{notificationPrefsMessage}</p>
+              ) : null}
+              <p className="text-sm text-slate-500">
+                {activeNotificationPreferenceCount} active notification preference
+                {activeNotificationPreferenceCount === 1 ? '' : 's'}.
+              </p>
+            </div>
           </div>
-        </div>
+        </SectionCard>
       </div>
     </div>
   )
 
   const renderAccountSettingsSection = () => (
     <div className="p-6 md:p-8 xl:p-10">
-      <div className="mx-auto max-w-[84rem] space-y-8">
-        {renderPatientPageHeader(
-          'Account settings',
-          'Manage your session controls, privacy preferences, and password.'
-        )}
+      <div className="mx-auto max-w-[84rem] space-y-6">
+        {renderPatientTopShell({
+          eyebrow: 'Account',
+          title: 'Account settings',
+          description: 'Manage session controls, theme preferences, password, and sign-out actions.',
+          metrics: [
+            { key: 'settings-role', label: 'Role', value: getRoleLabel(authUser?.role), caption: 'Access scope' },
+            { key: 'settings-theme', label: 'Theme', value: theme === 'dark' ? 'Dark' : 'Light', caption: 'Current preference' },
+            { key: 'settings-session', label: 'Session', value: sessionStatus, caption: 'Authentication state' },
+            { key: 'settings-notif', label: 'Alerts', value: activeNotificationPreferenceCount, caption: 'Active preferences' },
+          ],
+          quickActions: (
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              className={patientSecondaryButtonClass}
+            >
+              Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
+            </button>
+          ),
+        })}
 
-        <div className={`max-w-3xl ${patientPageCardClass} space-y-8 p-6`}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1 rounded-xl border border-slate-100 p-4">
-              <p className="text-sm text-slate-500">
-                Signed in as <span className="font-medium text-slate-700">{authUser?.username ?? '—'}</span>
-              </p>
-              <p className="text-sm text-slate-500">
-                Role: <span className="font-medium text-slate-700">{getRoleLabel(authUser?.role)}</span>
-              </p>
-              <p className="text-sm text-slate-400">Session: {sessionStatus}</p>
+        <SectionCard
+          title="Account controls"
+          description="Use these controls to review your current session and update your password."
+          className="max-w-3xl"
+        >
+          <div className="space-y-8">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1 rounded-xl border border-slate-100 p-4">
+                <p className="text-sm text-slate-500">
+                  Signed in as <span className="font-medium text-slate-700">{authUser?.username ?? '—'}</span>
+                </p>
+                <p className="text-sm text-slate-500">
+                  Role: <span className="font-medium text-slate-700">{getRoleLabel(authUser?.role)}</span>
+                </p>
+                <p className="text-sm text-slate-400">Session: {sessionStatus}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                  Quick Controls
+                </p>
+                <button
+                  type="button"
+                  onClick={onToggleTheme}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  Theme: {theme === 'dark' ? 'Dark' : 'Light'}
+                </button>
+              </div>
             </div>
-            <div className="rounded-xl border border-slate-100 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
-                Quick Controls
+
+            <form
+              onSubmit={(event) => {
+                event.preventDefault()
+                void handleSavePassword()
+              }}
+            >
+              <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                Change Password
               </p>
+              <div className="grid gap-3 md:grid-cols-3">
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  placeholder="Current password"
+                  className={patientFieldClass}
+                />
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  placeholder="New password"
+                  className={patientFieldClass}
+                />
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Confirm password"
+                  className={patientFieldClass}
+                />
+              </div>
+              {passwordError ? <p className="mt-3 text-sm text-rose-600">{passwordError}</p> : null}
+              {passwordMessage ? <p className="mt-3 text-sm text-emerald-600">{passwordMessage}</p> : null}
+              <button
+                type="submit"
+                disabled={isSavingPassword}
+                className={`mt-4 ${patientPrimaryButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
+              >
+                {isSavingPassword ? 'Updating password...' : 'Update password'}
+              </button>
+            </form>
+
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Session</p>
               <button
                 type="button"
-                onClick={onToggleTheme}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                onClick={() => setShowLogoutConfirm(true)}
+                className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
               >
-                Theme: {theme === 'dark' ? 'Dark' : 'Light'}
+                Sign out
               </button>
             </div>
           </div>
-
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              setPasswordError(null)
-              setPasswordMessage(null)
-
-              if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
-                setPasswordError('Fill in current, new, and confirm password.')
-                return
-              }
-
-              if (!meetsPasswordPolicy(newPassword.trim())) {
-                setPasswordError(
-                  'New password must be at least 8 characters and include uppercase, lowercase, and number.'
-                )
-                return
-              }
-
-              if (newPassword.trim() !== confirmPassword.trim()) {
-                setPasswordError('New password and confirm password do not match.')
-                return
-              }
-
-              setPasswordMessage('Password updated successfully for this session.')
-              setCurrentPassword('')
-              setNewPassword('')
-              setConfirmPassword('')
-            }}
-          >
-            <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-400">
-              Change Password
-            </p>
-            <div className="grid gap-3 md:grid-cols-3">
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                placeholder="Current password"
-                className={patientFieldClass}
-              />
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                placeholder="New password"
-                className={patientFieldClass}
-              />
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="Confirm password"
-                className={patientFieldClass}
-              />
-            </div>
-            {passwordError ? <p className="mt-3 text-sm text-rose-600">{passwordError}</p> : null}
-            {passwordMessage ? <p className="mt-3 text-sm text-emerald-600">{passwordMessage}</p> : null}
-            <button type="submit" className={`mt-4 ${patientPrimaryButtonClass}`}>
-              Update password
-            </button>
-          </form>
-
-          <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Session</p>
-            <button
-              type="button"
-              onClick={() => setShowLogoutConfirm(true)}
-              className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
+        </SectionCard>
       </div>
     </div>
   )
-
-  const profileName = resolvePatientDisplayName(authUser)
-  const profileInitials = resolvePatientInitials(profileName)
 
   return (
     <PageCanvas className="patient-theme">
@@ -1984,10 +2193,18 @@ const PatientAppointmentsPage = ({
                   setSection(key)
                 }
               }}
+              auxiliaryLabel="Account"
+              secondaryItems={patientUtilityItems}
+              onSelectAuxiliary={(key) => {
+                if (key === 'notifications' || key === 'settings') {
+                  setSection(key)
+                }
+              }}
               footerProfile={{
                 name: profileName,
                 subtitle: 'Patient',
                 avatarText: profileInitials,
+                active: activeSection === 'profile',
                 onClick: () => setSection('profile'),
               }}
             />

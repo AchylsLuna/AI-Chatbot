@@ -46,3 +46,39 @@ export const sendOTP = async (email, otp) => {
     return { delivered: false, preview: otp }
   }
 }
+
+export const sendPasswordResetEmail = async (email, resetUrl) => {
+  if (!transporter) {
+    if (!appConfig.isProduction) {
+      console.warn(`[password-reset] Email transport is not configured. Preview reset link for ${email}: ${resetUrl}`)
+      return { delivered: false, previewUrl: resetUrl }
+    }
+
+    throw new Error('Password reset email transport is not configured.')
+  }
+
+  try {
+    await transporter.sendMail({
+      from: emailFrom,
+      to: email,
+      subject: 'Reset Your Password',
+      text: `Use this link to reset your password: ${resetUrl}`,
+      html: `
+        <p>You requested a password reset.</p>
+        <p><a href="${resetUrl}">Reset your password</a></p>
+        <p>If you did not request this, you can ignore this email.</p>
+      `,
+    })
+    return { delivered: true, previewUrl: undefined }
+  } catch (error) {
+    if (appConfig.isProduction) {
+      throw error
+    }
+
+    console.warn(
+      `[password-reset] Failed to send reset email. Falling back to preview link for ${email}.`,
+      error
+    )
+    return { delivered: false, previewUrl: resetUrl }
+  }
+}

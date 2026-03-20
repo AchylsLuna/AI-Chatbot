@@ -34,6 +34,21 @@ const normalizeUrl = (value, fallback) => {
   return normalized || fallback
 }
 
+const resolveAllowedOrigins = () => {
+  const rawOrigins = [
+    process.env.CLIENT_ORIGINS,
+    process.env.CLIENT_ORIGIN,
+    process.env.FRONTEND_URL,
+    process.env.CLIENT_URL,
+  ]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .flatMap((value) => String(value).split(','))
+    .map((value) => normalizeUrl(value, '').replace(/\/$/, ''))
+    .filter(Boolean)
+
+  return Array.from(new Set(rawOrigins.length > 0 ? rawOrigins : ['http://localhost:5173']))
+}
+
 const isProduction = process.env.NODE_ENV === 'production'
 
 const resolveSecret = (envKey, weakValues) => {
@@ -68,6 +83,7 @@ export const appConfig = Object.freeze({
   dbName,
   useInMemoryMongo: isTruthy(process.env.USE_IN_MEMORY_MONGO || ''),
   clientOrigin: normalizeUrl(process.env.CLIENT_ORIGIN, 'http://localhost:5173'),
+  clientOrigins: resolveAllowedOrigins(),
   frontendUrl: normalizeUrl(process.env.FRONTEND_URL || process.env.CLIENT_URL, 'http://localhost:5173'),
   googleClientId: String(process.env.GOOGLE_CLIENT_ID || '').trim(),
   googleClientSecret: String(process.env.GOOGLE_CLIENT_SECRET || '').trim(),

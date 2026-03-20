@@ -18,13 +18,16 @@
 
 ## Active sidebar tab routes
 - Patient routes (`appointments`)
-  - `book_appointment` -> `/BookAppointment`
+  - `booking_appointments` -> `/BookAppointment`
   - `history` -> `/History`
   - `profile` -> `/Profile`
   - `notifications` -> `/Notifications`
   - `settings` -> `/AccountSettings`
 - Doctor dashboard (`doctor_dashboard`)
-  - `appointments` -> `/doctor/dashboard`
+  - `dashboard` -> `/doctor/dashboard`
+  - `appointments` -> `/doctor/appointments`
+  - `calendar` -> `/doctor/calendar`
+  - `schedule` -> `/doctor/schedule`
   - `queue` -> `/doctor/queue`
   - `analytics` -> `/doctor/analytics`
   - `settings` -> `/doctor/settings`
@@ -40,6 +43,8 @@
 - Sidebar tabs are deep-linkable on active pages, and URLs update on tab changes.
 - Browser Back/Forward traverses prior sidebar tabs within the active area.
 - Protected tab URLs are restored after login/OTP when access is granted.
+- Forgot-password returns to the auth page that opened it when route state is available.
+- Terms and privacy pages return to the signup page that opened them when route state is available.
 
 ## Compatibility aliases
 - Legacy `/appointments/*` patient namespace routes remain supported and canonicalize to the new patient routes.

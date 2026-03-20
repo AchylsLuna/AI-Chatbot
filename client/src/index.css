@@ -2505,6 +2505,16 @@
     cursor: default;
   }
 
+  .tab-sidebar-profile.is-active {
+    border-color: color-mix(in srgb, var(--agent-accent) 24%, var(--tab-sidebar-border));
+    background: color-mix(in srgb, var(--agent-accent-soft) 40%, var(--tab-sidebar-surface-soft));
+  }
+
+  .tab-sidebar-profile.is-active .tab-sidebar-profile-name,
+  .tab-sidebar-profile.is-active .tab-sidebar-chevron {
+    color: var(--agent-accent);
+  }
+
   .tab-sidebar-profile-avatar {
     width: 1.96rem;
     height: 1.96rem;
@@ -2918,6 +2928,11 @@
     background: #ffffff;
   }
 
+  .tab-sidebar[data-sidebar-variant='patient'] .tab-sidebar-profile.is-active {
+    border-color: rgba(6, 182, 212, 0.3);
+    background: linear-gradient(140deg, rgba(236, 254, 255, 1) 0%, rgba(255, 255, 255, 1) 100%);
+  }
+
   .tab-sidebar[data-sidebar-variant='patient'] .tab-sidebar-profile-avatar {
     width: 3.25rem;
     height: 3.25rem;
@@ -2985,6 +3000,11 @@
   .theme-dark .tab-sidebar[data-sidebar-variant='patient'] .tab-sidebar-profile {
     border-color: rgba(71, 85, 105, 0.5);
     background: rgba(15, 23, 42, 0.96);
+  }
+
+  .theme-dark .tab-sidebar[data-sidebar-variant='patient'] .tab-sidebar-profile.is-active {
+    border-color: color-mix(in srgb, var(--agent-accent) 28%, rgba(71, 85, 105, 0.5));
+    background: color-mix(in srgb, var(--agent-accent-soft) 28%, rgba(15, 23, 42, 0.96));
   }
 
   .patient-theme .bg-blue-50,

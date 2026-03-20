@@ -7,7 +7,10 @@ import {
   type SVGProps,
 } from 'react'
 import ConfirmModal from '../../components/ui/ConfirmModal'
+import Sidebar, { type SidebarItem } from '../../components/layout/Sidebar'
 import PageCanvas from '../../components/layout/PageCanvas'
+import SidebarShell from '../../components/layout/SidebarShell'
+import PageTopShell from '../../components/layout/PageTopShell'
 import {
   pageChipButtonClass,
   pageFieldClass,
@@ -18,8 +21,8 @@ import {
   pagePrimaryButtonClass,
   pageSubtleTextClass,
 } from '../../styles/pageUi'
-import { buildRouteFromCanonicalPath, normalizePath } from '../../config/routing'
 import { getDoctorTabPath, resolveDoctorTabFromPath } from '../../config/roleTabRoutes'
+import useTabRouteState from '../../hooks/useTabRouteState'
 import {
   api,
   type DoctorDashboardOverview,
@@ -95,13 +98,6 @@ type MetricCardData = {
   tone?: MetricTone
 }
 
-type DoctorNavItem = {
-  key: Exclude<DoctorSection, 'settings'>
-  label: string
-  description: string
-  icon: (props: IconProps) => ReactNode
-}
-
 const svgStrokeProps = {
   fill: 'none',
   stroke: 'currentColor',
@@ -116,80 +112,10 @@ const BrandPulseIcon = (props: IconProps) => (
   </svg>
 )
 
-const DashboardIcon = (props: IconProps) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-    <path {...svgStrokeProps} d="M4 13.5 12 6l8 7.5" />
-    <path {...svgStrokeProps} d="M6.5 11.5V20h11v-8.5" />
-  </svg>
-)
-
-const AppointmentIcon = (props: IconProps) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-    <path {...svgStrokeProps} d="M8 3v3" />
-    <path {...svgStrokeProps} d="M16 3v3" />
-    <rect {...svgStrokeProps} x="4" y="5.5" width="16" height="14.5" rx="2.5" />
-    <path {...svgStrokeProps} d="M4 9.5h16" />
-    <path {...svgStrokeProps} d="m9 14 2 2 4-4" />
-  </svg>
-)
-
-const CalendarIcon = (props: IconProps) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-    <path {...svgStrokeProps} d="M8 3v3" />
-    <path {...svgStrokeProps} d="M16 3v3" />
-    <rect {...svgStrokeProps} x="4" y="5.5" width="16" height="14.5" rx="2.5" />
-    <path {...svgStrokeProps} d="M4 9.5h16" />
-    <path {...svgStrokeProps} d="M8 13h.01" />
-    <path {...svgStrokeProps} d="M12 13h.01" />
-    <path {...svgStrokeProps} d="M16 13h.01" />
-    <path {...svgStrokeProps} d="M8 17h.01" />
-    <path {...svgStrokeProps} d="M12 17h.01" />
-  </svg>
-)
-
-const ScheduleIcon = (props: IconProps) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-    <circle {...svgStrokeProps} cx="12" cy="12" r="8" />
-    <path {...svgStrokeProps} d="M12 8v4l3 2" />
-  </svg>
-)
-
-const QueueIcon = (props: IconProps) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-    <path {...svgStrokeProps} d="M4 17h16" />
-    <path {...svgStrokeProps} d="M7 17v-7a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v7" />
-    <path {...svgStrokeProps} d="M9 8V6a3 3 0 0 1 6 0v2" />
-  </svg>
-)
-
-const AnalyticsIcon = (props: IconProps) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-    <path {...svgStrokeProps} d="M4 19h16" />
-    <path {...svgStrokeProps} d="M7 16v-5" />
-    <path {...svgStrokeProps} d="M12 16V8" />
-    <path {...svgStrokeProps} d="M17 16v-9" />
-  </svg>
-)
-
-const SearchIcon = (props: IconProps) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-    <circle {...svgStrokeProps} cx="11" cy="11" r="6" />
-    <path {...svgStrokeProps} d="m20 20-4.2-4.2" />
-  </svg>
-)
-
 const RefreshIcon = (props: IconProps) => (
   <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
     <path {...svgStrokeProps} d="M20 11a8 8 0 1 0 2 5.5" />
     <path {...svgStrokeProps} d="M20 4v7h-7" />
-  </svg>
-)
-
-const LogoutIcon = (props: IconProps) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-    <path {...svgStrokeProps} d="M10 7V5.5A1.5 1.5 0 0 1 11.5 4h5A1.5 1.5 0 0 1 18 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 10 18.5V17" />
-    <path {...svgStrokeProps} d="M15 12H4" />
-    <path {...svgStrokeProps} d="m7.5 8.5-3.5 3.5 3.5 3.5" />
   </svg>
 )
 
@@ -205,44 +131,44 @@ const ChevronRightIcon = (props: IconProps) => (
   </svg>
 )
 
-const DOCTOR_NAV_ITEMS: readonly DoctorNavItem[] = [
+const doctorSidebarItems: SidebarItem[] = [
   {
     key: 'dashboard',
     label: 'Dashboard',
-    description: 'Clinical overview',
-    icon: DashboardIcon,
+    caption: 'Clinical overview',
+    icon: 'home',
   },
   {
     key: 'appointments',
     label: 'Appointments',
-    description: 'Patient bookings',
-    icon: AppointmentIcon,
+    caption: 'Patient bookings',
+    icon: 'book',
   },
   {
     key: 'calendar',
     label: 'Calendar',
-    description: 'Monthly view',
-    icon: CalendarIcon,
+    caption: 'Monthly view',
+    icon: 'calendar',
   },
   {
     key: 'schedule',
     label: 'Schedule',
-    description: 'Availability setup',
-    icon: ScheduleIcon,
+    caption: 'Availability setup',
+    icon: 'settings',
   },
   {
     key: 'queue',
-    label: 'Queue Management',
-    description: 'Live patient queue',
-    icon: QueueIcon,
+    label: 'Queue',
+    caption: 'Live patient queue',
+    icon: 'alert',
   },
   {
     key: 'analytics',
     label: 'Analytics',
-    description: 'Department insights',
-    icon: AnalyticsIcon,
+    caption: 'Department insights',
+    icon: 'chart',
   },
-] as const
+]
 
 const queueStatusOptions: readonly DoctorQueueStatus[] = [
   'Waiting',
@@ -528,9 +454,11 @@ const DoctorDashboardPage = ({
   onToggleTheme,
   dataMaskingEnabled,
 }: DoctorDashboardPageProps) => {
-  const [activeSection, setActiveSection] = useState<DoctorSection>(() => {
-    if (typeof window === 'undefined') return 'dashboard'
-    return resolveDoctorTabFromPath(window.location.pathname) ?? 'dashboard'
+  const { activeTab: activeSection, setTab } = useTabRouteState<DoctorSection>({
+    page: 'doctor_dashboard',
+    fallbackTab: 'dashboard',
+    resolveTabFromPath: resolveDoctorTabFromPath,
+    getTabPath: getDoctorTabPath,
   })
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -684,7 +612,18 @@ const DoctorDashboardPage = ({
 
     setIsSavingPassword(true)
     try {
-      await api.changePassword(oldValue, nextValue)
+      const result = await api.changePassword(oldValue, nextValue)
+      if (result.requiresReauth) {
+        setPasswordMessage('Password changed. Redirecting you to sign in again...')
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+        window.setTimeout(() => {
+          onLogout()
+        }, 900)
+        return
+      }
+
       setPasswordMessage('Password changed successfully.')
       setCurrentPassword('')
       setNewPassword('')
@@ -697,38 +636,11 @@ const DoctorDashboardPage = ({
   }
 
   const setSection = (next: DoctorSection) => {
-    setActiveSection(next)
+    setTab(next)
     setSearchQuery('')
     setSelectedAppointment(null)
     setShowAppointmentDetail(false)
-
-    if (typeof window === 'undefined') return
-
-    const targetPath = getDoctorTabPath(next)
-    if (normalizePath(window.location.pathname) === normalizePath(targetPath)) return
-
-    window.history.pushState(
-      { ...(window.history.state ?? {}), appRoute: true, appPage: 'doctor_dashboard' },
-      '',
-      buildRouteFromCanonicalPath(targetPath)
-    )
   }
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const handlePopState = () => {
-      setActiveSection(resolveDoctorTabFromPath(window.location.pathname) ?? 'dashboard')
-      setSearchQuery('')
-      setSelectedAppointment(null)
-      setShowAppointmentDetail(false)
-    }
-
-    window.addEventListener('popstate', handlePopState)
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-    }
-  }, [])
 
   const loadDoctorDashboardData = async () => {
     setIsLoadingDoctorData(true)
@@ -1480,6 +1392,12 @@ const DoctorDashboardPage = ({
   const doctorInitials = buildInitials(profileName)
   const doctorEmail = authUser?.username ?? 'Doctor account'
   const canShowSearch = activeSection !== 'schedule' && activeSection !== 'settings'
+  const doctorTopMetrics = activeMetricCards.map((card) => ({
+    key: card.key,
+    label: card.label,
+    value: card.value,
+    caption: card.subtitle,
+  }))
 
   const runSectionAction = () => {
     if (activeSection === 'schedule') {
@@ -1513,80 +1431,81 @@ const DoctorDashboardPage = ({
 
   return (
     <PageCanvas className="staff-theme">
-      <div className="min-h-screen lg:flex">
-        <aside
-          className={`border-b border-[color:var(--card-border)] bg-[color:var(--agent-surface)] transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r ${isSidebarCollapsed ? 'lg:w-[68px]' : 'lg:w-[220px]'}`}
-        >
-          <div className="flex h-16 items-center gap-2 border-b border-[color:var(--card-border)] px-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[color:var(--agent-accent)] text-[color:var(--agent-on-accent)]">
-              <BrandPulseIcon className="h-4 w-4" />
-            </div>
-            {!isSidebarCollapsed ? (
-              <span className={`truncate text-sm font-semibold ${pageHeadingTextClass}`}>
-                AI Health Care
-              </span>
-            ) : null}
-            <button
-              type="button"
-              className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg text-[color:var(--agent-muted)] transition hover:bg-[color:var(--agent-overlay)] hover:text-[color:var(--agent-ink)]"
-              onClick={() => setIsSidebarCollapsed((previous) => !previous)}
-              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {isSidebarCollapsed ? (
-                <ChevronRightIcon className="h-4 w-4" />
-              ) : (
-                <ChevronLeftIcon className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-
-          <nav className="flex-1 px-2 py-3">
-            <div className="space-y-1">
-              {DOCTOR_NAV_ITEMS.map((item) => {
-                const isActive = activeSection === item.key
-                const Icon = item.icon
-                return (
+      <div className="w-full">
+        <SidebarShell
+          className={`page-shell--full-side${isSidebarCollapsed ? ' page-shell--rail-collapsed' : ''}`}
+          contentClassName="px-4 pb-10 pt-5 sm:px-6 lg:px-8"
+          mobileTitle="Doctor"
+          stickyOffsetMode="auto"
+          sidebar={
+            <Sidebar
+              variant="staff"
+              mobileMode="drawer"
+              fullRail
+              isCollapsed={isSidebarCollapsed}
+              onToggleCollapse={() => setIsSidebarCollapsed((previous) => !previous)}
+              brandTitle="AI Health Care"
+              brandSubtitle="Doctor"
+              sectionLabel="Clinic"
+              items={doctorSidebarItems}
+              activeKey={activeSection}
+              onSelect={(key) => {
+                if (
+                  key === 'dashboard' ||
+                  key === 'appointments' ||
+                  key === 'calendar' ||
+                  key === 'schedule' ||
+                  key === 'queue' ||
+                  key === 'analytics'
+                ) {
+                  setSection(key)
+                }
+              }}
+              footerProfile={{
+                name: profileName,
+                subtitle: doctorEmail,
+                avatarText: doctorInitials,
+                active: activeSection === 'settings',
+                onClick: () => setSection('settings'),
+              }}
+            />
+          }
+          content={
+            <section className="space-y-6">
+              <PageTopShell
+                eyebrow={activeMeta.eyebrow}
+                statusLabel={doctorSyncStatus}
+                title={activeMeta.title}
+                description={activeMeta.description}
+                searchValue={searchQuery}
+                searchPlaceholder={activeMeta.searchPlaceholder}
+                onSearchChange={setSearchQuery}
+                showSearch={canShowSearch}
+                profileName={profileName}
+                profileCaption={`${getRoleLabel(authUser?.role)} · ${doctorEmail}`}
+                showNotifications={false}
+                onSignOut={confirmAndLogout}
+                quickActions={
                   <button
-                    key={item.key}
                     type="button"
-                    onClick={() => setSection(item.key)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${isActive ? 'bg-[color:var(--agent-accent-soft)] text-[color:var(--agent-accent)]' : 'text-[color:var(--agent-muted)] hover:bg-[color:var(--agent-overlay)] hover:text-[color:var(--agent-ink)]'}`}
+                    className={compactGhostButtonClass}
+                    onClick={runSectionAction}
+                    disabled={
+                      activeSection === 'schedule'
+                        ? isScheduleLoading || isSavingSchedule
+                        : activeSection === 'settings'
+                          ? false
+                          : isLoadingDoctorData
+                    }
                   >
-                    <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-[color:var(--agent-accent)]' : 'text-[color:var(--agent-muted-soft)]'}`} />
-                    {!isSidebarCollapsed ? (
-                      <span className="min-w-0">
-                        <span className="block truncate">{item.label}</span>
-                      </span>
-                    ) : null}
+                    {sectionActionIcon}
+                    {sectionActionLabel}
                   </button>
-                )
-              })}
-            </div>
-          </nav>
+                }
+                metrics={doctorTopMetrics}
+              />
 
-          <div className="border-t border-[color:var(--card-border)] p-3">
-            <button
-              type="button"
-              onClick={() => setSection('settings')}
-              className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-[color:var(--agent-overlay)] ${activeSection === 'settings' ? 'bg-[color:var(--agent-overlay)]' : ''}`}
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[color:var(--agent-accent-soft)] text-sm font-semibold text-[color:var(--agent-accent)]">
-                {doctorInitials}
-              </div>
-              {!isSidebarCollapsed ? (
-                <div className="min-w-0 text-left">
-                  <p className={`truncate text-xs ${pageSubtleTextClass}`}>{doctorEmail}</p>
-                  <p className={`truncate text-sm font-semibold ${pageHeadingTextClass}`}>
-                    {profileName}
-                  </p>
-                </div>
-              ) : null}
-            </button>
-          </div>
-        </aside>
-
-        <main className="min-w-0 flex-1 bg-[color:var(--agent-bg)]">
-          <div className="mx-auto max-w-[1240px] p-4 lg:p-8">
+              <div className="mx-auto max-w-[1240px] space-y-6">
             <ConfirmModal
               open={showLogoutConfirm}
               title="Confirm logout"
@@ -1600,76 +1519,11 @@ const DoctorDashboardPage = ({
               onCancel={() => setShowLogoutConfirm(false)}
             />
 
-            <DoctorPanel className="mb-6">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={pageChipButtonClass}>{activeMeta.eyebrow}</span>
-                    <span className={pageChipButtonClass}>{doctorSyncStatus}</span>
-                  </div>
-                  <h1 className={`mt-4 text-4xl font-bold tracking-[-0.04em] ${pageHeadingTextClass}`}>
-                    {activeMeta.title}
-                  </h1>
-                  <p className={`mt-2 max-w-2xl text-base ${pageMutedTextClass}`}>
-                    {activeMeta.description}
-                  </p>
-                </div>
-
-                <div className="flex w-full flex-col gap-3 lg:max-w-xl lg:items-end">
-                  <div className="flex w-full flex-col gap-3 sm:flex-row lg:justify-end">
-                    {canShowSearch ? (
-                      <label className="relative block min-w-0 flex-1">
-                        <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--agent-muted-soft)]" />
-                        <input
-                          value={searchQuery}
-                          onChange={(event) => setSearchQuery(event.target.value)}
-                          className={`${compactFieldClass} pl-10`}
-                          placeholder={activeMeta.searchPlaceholder}
-                        />
-                      </label>
-                    ) : null}
-                    <button
-                      type="button"
-                      className={compactGhostButtonClass}
-                      onClick={runSectionAction}
-                      disabled={
-                        activeSection === 'schedule'
-                          ? isScheduleLoading || isSavingSchedule
-                          : activeSection === 'settings'
-                            ? false
-                            : isLoadingDoctorData
-                      }
-                    >
-                      {sectionActionIcon}
-                      {sectionActionLabel}
-                    </button>
-                    <button
-                      type="button"
-                      className={compactPrimaryButtonClass}
-                      onClick={confirmAndLogout}
-                    >
-                      <LogoutIcon className="h-4 w-4" />
-                      Sign out
-                    </button>
-                  </div>
-                  <div className={`text-xs ${pageSubtleTextClass}`}>
-                    Signed in as {profileName} · {getRoleLabel(authUser?.role)}
-                  </div>
-                </div>
-              </div>
-            </DoctorPanel>
-
             {doctorDataError ? (
-              <DoctorPanel className="mb-6 border-[color:var(--agent-danger)]">
+              <DoctorPanel className="border-[color:var(--agent-danger)]">
                 <p className="text-sm font-semibold text-[color:var(--agent-danger)]">{doctorDataError}</p>
               </DoctorPanel>
             ) : null}
-
-            <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {activeMetricCards.map(({ key, ...card }) => (
-                <DoctorMetricCard key={key} {...card} />
-              ))}
-            </div>
 
             {activeSection === 'dashboard' ? (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -2740,8 +2594,10 @@ const DoctorDashboardPage = ({
                 </DoctorPanel>
               </div>
             ) : null}
-          </div>
-        </main>
+              </div>
+            </section>
+          }
+        />
       </div>
 
       {selectedAppointment && showAppointmentDetail ? (

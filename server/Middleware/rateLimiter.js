@@ -28,6 +28,18 @@ export const otpResendLimiter = createJsonLimiter({
     message: 'Too many OTP resend requests. Please wait before requesting another code.',
 });
 
+export const passwordResetRequestLimiter = createJsonLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 8,
+    message: 'Too many password reset requests. Please wait before trying again.',
+});
+
+export const passwordResetConfirmLimiter = createJsonLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 12,
+    message: 'Too many password reset attempts. Please wait before trying again.',
+});
+
 export const symptomCheckLimiter = createJsonLimiter({
     windowMs: 60 * 1000,
     max: 20,

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { requiresAuth } from '../config/accessControl'
-import { fallbackLedger, fallbackReservations } from '../config/fallbackData'
-import { api, setAuthToken } from '../services/api'
+import { api, setAuthToken, setCsrfToken } from '../services/api'
 import {
   getAuth0Session,
   getAuthProvider,
@@ -19,6 +18,7 @@ import type {
   AuthSession,
   LedgerEntry,
   LoginOtpChallenge,
+  Reservation,
   ReservationDraft,
 } from '../types'
 import {
@@ -31,6 +31,12 @@ import {
   isTabPathForPage,
   resolveTabCanonicalPath,
 } from '../config/roleTabRoutes'
+import { resolveReturnTo } from '../utils/appRouteState'
+import {
+  clearStoredPostLoginTarget,
+  readStoredPostLoginTarget,
+  writeStoredPostLoginTarget,
+} from '../utils/postLoginTarget'
 import type { NavigateToPage } from './useAppRouting'
 
 type UseAuthDataArgs = {
@@ -51,6 +57,24 @@ const unauthorizedSessionPattern =
   /invalid|expired|missing authorization|forbidden|unauthorized|mfa token required|mfa required|multi-factor|2fa|required for this role/i
 
 const isUnauthorizedSessionError = (message: string) => unauthorizedSessionPattern.test(message)
+const areAuthUsersEqual = (
+  left: AuthSession['user'] | null,
+  right: AuthSession['user'] | null
+) => {
+  if (left === right) return true
+  if (!left || !right) return false
+
+  return (
+    left.username === right.username &&
+    left.firstName === right.firstName &&
+    left.lastName === right.lastName &&
+    left.role === right.role &&
+    left.accountType === right.accountType &&
+    left.authMethod === right.authMethod &&
+    left.mfa === right.mfa &&
+    left.sessionId === right.sessionId
+  )
+}
 const otpRestartPattern = /otp has expired|otp challenge not found|challenge not found|start login again/i
 const isOtpSourcePage = (page?: AppPage | null): page is OtpSourcePage =>
   page === 'login' || page === 'doctor_login' || page === 'admin_login'
@@ -60,6 +84,34 @@ const resolveAuthPageForProtectedPage = (page?: AppPage | null): OtpSourcePage =
   if (page === 'admin') return 'admin_login'
   if (page === 'doctor_dashboard') return 'doctor_login'
   return 'login'
+}
+
+const GOOGLE_CODE_QUERY_PARAM = 'google_code'
+const GOOGLE_ERROR_QUERY_PARAM = 'google_error'
+
+const readGoogleAuthSearch = () => {
+  if (typeof window === 'undefined') {
+    return { googleCode: null as string | null, googleError: null as string | null }
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const googleCode = params.get(GOOGLE_CODE_QUERY_PARAM)
+  const googleError = params.get(GOOGLE_ERROR_QUERY_PARAM)
+  return {
+    googleCode: googleCode && googleCode.trim() ? googleCode.trim() : null,
+    googleError: googleError && googleError.trim() ? googleError.trim() : null,
+  }
+}
+
+const clearGoogleAuthSearch = () => {
+  if (typeof window === 'undefined') return
+
+  const url = new URL(window.location.href)
+  url.searchParams.delete(GOOGLE_CODE_QUERY_PARAM)
+  url.searchParams.delete(GOOGLE_ERROR_QUERY_PARAM)
+  const nextSearch = url.searchParams.toString()
+  const nextUrl = `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}${url.hash}`
+  window.history.replaceState(window.history.state, document.title, nextUrl)
 }
 
 const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
@@ -99,15 +151,18 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
 
   const clearUnauthorizedSession = useCallback(() => {
     setAuthTokenState(null)
+    setCsrfToken(null)
     setAuthUser(null)
     setApiReady(false)
     setAuthUiAction(null)
     clearLocalTokenStorage()
     clearSensitiveData()
+    clearStoredPostLoginTarget()
   }, [clearLocalTokenStorage, clearSensitiveData])
 
   const clearActiveSessionState = useCallback(() => {
     setAuthTokenState(null)
+    setCsrfToken(null)
     setAuthUser(null)
     setApiReady(false)
     clearSensitiveData()
@@ -302,14 +357,39 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     ;(async () => {
       try {
         setIsAuthLoading(true)
+        const { googleCode, googleError } = readGoogleAuthSearch()
+
+        if (googleError) {
+          setAuthError('Google sign in failed. Try again.')
+          clearGoogleAuthSearch()
+        }
+
+        if (googleCode) {
+          setAuthUiAction('provider')
+          const session = await api.exchangeGoogleAuthCode(googleCode)
+          if (!isMounted) return
+          clearGoogleAuthSearch()
+          clearActiveSessionState()
+          finalizeAuthenticatedSession(session)
+          return
+        }
+
         const user = await api.getSession()
         if (!isMounted || !user) return
         setAuthUser(user)
         setApiReady(true)
-      } catch {
+      } catch (error) {
         if (!isMounted) return
+        const message = error instanceof Error ? error.message : ''
+        if (readGoogleAuthSearch().googleCode) {
+          clearGoogleAuthSearch()
+        }
+        if (message) {
+          setAuthError(message)
+        }
       } finally {
         if (isMounted) {
+          setAuthUiAction(null)
           setIsAuthLoading(false)
         }
       }
@@ -318,25 +398,35 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     return () => {
       isMounted = false
     }
-  }, [auth0Enabled, authProvider])
+  }, [auth0Enabled, authProvider, clearActiveSessionState])
 
   useEffect(() => {
     const needsAuth = Boolean(requiresAuth[currentPage])
     if (!needsAuth) return
+    if (!isOtpTargetPage(currentPage)) return
     if (authUser) return
     if (authToken) return
     if (auth0Enabled && isAuthLoading) return
     if (authProvider === 'local' && isAuthLoading) return
 
-    if (currentPage !== 'login' && currentPage !== 'admin_login' && currentPage !== 'otp') {
-      const targetPath = resolveTabCanonicalPath(window.location.pathname)
-      setPostLoginPage(currentPage)
-      setPostLoginAuthPage(resolveAuthPageFromPath(window.location.pathname))
-      setPostLoginPath(
-        targetPath && isTabPathForPage(targetPath, currentPage) ? targetPath : null
-      )
-      navigateToPage(resolveAuthPageFromPath(window.location.pathname), { replace: true })
-    }
+    const targetPath = resolveTabCanonicalPath(window.location.pathname) ?? resolveReturnTo()
+    const authPage = resolveAuthPageFromPath(window.location.pathname)
+    setPostLoginPage(currentPage)
+    setPostLoginAuthPage(authPage)
+    setPostLoginPath(
+      targetPath && isTabPathForPage(targetPath, currentPage) ? targetPath : null
+    )
+    writeStoredPostLoginTarget({
+      page: currentPage,
+      authPage,
+      path: targetPath && isTabPathForPage(targetPath, currentPage) ? targetPath : null,
+    })
+    navigateToPage(authPage, {
+      replace: true,
+      state: {
+        returnTo: targetPath && isTabPathForPage(targetPath, currentPage) ? targetPath : undefined,
+      },
+    })
   }, [auth0Enabled, authProvider, authToken, authUser, currentPage, isAuthLoading, navigateToPage])
 
   useEffect(() => {
@@ -349,40 +439,59 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       setIsAuthLoading(true)
       try {
         const user = await api.getSession()
-        const reservationData = await api.getAppointments()
+        if (!isMounted) return
+        setAuthUser((previous) => (areAuthUsersEqual(previous, user) ? previous : user))
+
+        let reservationData: Reservation[] = []
         let ledgerData: LedgerEntry[] = []
+        let protectedDataError: string | null = null
+
+        try {
+          reservationData = await api.getAppointments()
+        } catch (error) {
+          const message = error instanceof Error ? error.message : ''
+          if (isUnauthorizedSessionError(message)) {
+            throw error
+          }
+          protectedDataError = message || 'Unable to load appointments right now.'
+        }
 
         if (user.role === 'admin' || user.role === 'system_admin') {
           try {
             ledgerData = await api.getLedger()
-          } catch (ledgerError) {
-            console.warn('Ledger unavailable for current session.', ledgerError)
+          } catch (error) {
+            const message = error instanceof Error ? error.message : ''
+            if (isUnauthorizedSessionError(message)) {
+              throw error
+            }
+            if (!protectedDataError) {
+              protectedDataError = message || 'Unable to load ledger data right now.'
+            }
           }
         }
 
         if (!isMounted) return
-        setAuthUser(user)
         setStoreReservations(reservationData)
         setStoreLedgerEntries(ledgerData)
         setApiReady(true)
+        setAuthError(protectedDataError)
       } catch (error) {
-        console.error('API unavailable or unauthorized, using fallback data.', error)
+        console.error('API unavailable or unauthorized for authenticated session.', error)
         const message = error instanceof Error ? error.message : ''
         const isUnauthorized = isUnauthorizedSessionError(message)
 
-        if (isUnauthorized) {
+        if (isUnauthorized && isMounted) {
           clearUnauthorizedSession()
           setAuthError('Session expired or unauthorized. Please sign in again.')
+          setStoreReservations([])
+          setStoreLedgerEntries([])
+          return
         }
 
         if (isMounted) {
-          if (isUnauthorized) {
-            setStoreReservations([])
-            setStoreLedgerEntries([])
-          } else {
-            setStoreReservations(fallbackReservations)
-            setStoreLedgerEntries(fallbackLedger)
-          }
+          setStoreReservations([])
+          setStoreLedgerEntries([])
+          setAuthError(message || 'Unable to load account data right now.')
         }
       } finally {
         if (isMounted) setIsAuthLoading(false)
@@ -426,11 +535,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     if (!auth0Enabled) {
       throw new Error('Auth0 is not enabled in this environment.')
     }
+    const storedTarget = getStoredTarget()
     setAuthError(null)
     setAuthUiAction('provider')
     setIsAuthLoading(true)
     try {
-      await startAuth0Login(targetPage ?? postLoginPage ?? undefined)
+      await startAuth0Login(targetPage ?? postLoginPage ?? storedTarget?.page ?? undefined)
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'Auth0 login failed')
       setAuthUiAction(null)
@@ -449,9 +559,13 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     return canonical
   }
 
+  const getStoredTarget = () => readStoredPostLoginTarget()
+
   const resolveIntendedProtectedPage = (requestedPage?: AppPage | null): OtpTargetPage => {
     if (isOtpTargetPage(requestedPage)) return requestedPage
     if (isOtpTargetPage(postLoginPage)) return postLoginPage
+    const storedTarget = getStoredTarget()
+    if (isOtpTargetPage(storedTarget?.page)) return storedTarget.page
     if (currentPage === 'admin_login') return 'admin'
     if (currentPage === 'doctor_login') return 'doctor_dashboard'
     return 'appointments'
@@ -466,8 +580,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     sourcePage?: OtpSourcePage | null,
     options?: { replace?: boolean }
   ) => {
+    const storedTarget = getStoredTarget()
     navigateToPage(
-      sourcePage ?? postLoginAuthPage ?? resolveAuthPageForProtectedPage(postLoginPage),
+      sourcePage ??
+        postLoginAuthPage ??
+        storedTarget?.authPage ??
+        resolveAuthPageForProtectedPage(postLoginPage),
       {
         replace: options?.replace,
       }
@@ -479,13 +597,15 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     preferredTargetPage?: AppPage | null,
     preferredTargetPath?: string | null
   ) => {
+    const storedTarget = getStoredTarget()
     const resolvedToken = authProvider === 'local' ? null : session.token ?? null
     setAuthTokenState(resolvedToken)
+    setCsrfToken(session.csrfToken ?? null)
     setAuthUser(session.user)
     setApiReady(true)
 
     const defaultPageByRole = getDefaultPageForRole(session.user.role, session.user.accountType)
-    const resolvedTargetPage = preferredTargetPage ?? defaultPageByRole
+    const resolvedTargetPage = preferredTargetPage ?? storedTarget?.page ?? defaultPageByRole
     const finalTargetPage = session.user.role === 'user' ? defaultPageByRole : resolvedTargetPage
     const isAdminDashboardTarget = finalTargetPage === 'admin'
     const isDoctorDashboardTarget = finalTargetPage === 'doctor_dashboard'
@@ -496,6 +616,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setPostLoginPage(null)
     setPostLoginPath(null)
     setPostLoginAuthPage(null)
+    clearStoredPostLoginTarget()
 
     if (isAdminDashboardTarget && !hasAdminDashboardRole) {
       if (hasDoctorDashboardRole) {
@@ -519,7 +640,8 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
 
     const resolvedTargetPath =
       resolveTargetDashboardPath(preferredTargetPath, finalTargetPage) ??
-      resolveTargetDashboardPath(postLoginPath, finalTargetPage)
+      resolveTargetDashboardPath(postLoginPath, finalTargetPage) ??
+      resolveTargetDashboardPath(storedTarget?.path, finalTargetPage)
 
     if (resolvedTargetPath) {
       navigateToPage(finalTargetPage, { path: resolvedTargetPath })
@@ -534,8 +656,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       await handleProviderLogin(targetPage)
       return
     }
+    const storedTarget = getStoredTarget()
     const resolvedTargetPage = resolveIntendedProtectedPage(targetPage)
-    const resolvedTargetPath = resolveTargetDashboardPath(postLoginPath, resolvedTargetPage)
+    const resolvedTargetPath =
+      resolveTargetDashboardPath(postLoginPath, resolvedTargetPage) ??
+      resolveTargetDashboardPath(resolveReturnTo(), resolvedTargetPage) ??
+      resolveTargetDashboardPath(storedTarget?.path, resolvedTargetPage)
     const sourcePage = resolveOtpSourcePage(resolvedTargetPage)
 
     setAuthError(null)
@@ -545,6 +671,11 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setPostLoginPage(resolvedTargetPage)
     setPostLoginPath(resolvedTargetPath)
     setPostLoginAuthPage(sourcePage)
+    writeStoredPostLoginTarget({
+      page: resolvedTargetPage,
+      authPage: sourcePage,
+      path: resolvedTargetPath,
+    })
     try {
       const result = await api.login(username, password)
 
@@ -556,7 +687,11 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
           targetPage: resolvedTargetPage,
           targetPath: resolvedTargetPath,
         })
-        navigateToPage('otp')
+        navigateToPage('otp', {
+          state: {
+            returnTo: resolvedTargetPath ?? undefined,
+          },
+        })
         return
       }
 
@@ -583,11 +718,14 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setIsAuthLoading(true)
     try {
       const session = await api.verifyOtpLogin(pendingOtpChallenge.challengeId, code)
-      const resolvedTargetPage = pendingOtpChallenge.targetPage ?? postLoginPage ?? null
+      const storedTarget = getStoredTarget()
+      const resolvedTargetPage =
+        pendingOtpChallenge.targetPage ?? postLoginPage ?? storedTarget?.page ?? null
       const resolvedTargetPath =
         pendingOtpChallenge.targetPath ??
         (resolvedTargetPage
-          ? resolveTargetDashboardPath(postLoginPath, resolvedTargetPage)
+          ? resolveTargetDashboardPath(postLoginPath, resolvedTargetPage) ??
+            resolveTargetDashboardPath(storedTarget?.path, resolvedTargetPage)
           : null)
       finalizeAuthenticatedSession(session, resolvedTargetPage, resolvedTargetPath)
     } catch (error) {
@@ -606,9 +744,11 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   }
 
   const handleCancelOtp = () => {
+    const storedTarget = getStoredTarget()
     const sourcePage =
       pendingOtpChallenge?.sourcePage ??
       postLoginAuthPage ??
+      storedTarget?.authPage ??
       resolveAuthPageForProtectedPage(postLoginPage)
     setAuthError(null)
     setAuthUiAction(null)
@@ -658,10 +798,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
 
     setAuthError(null)
     setAuthUiAction(null)
+    setCsrfToken(null)
     setPendingOtpChallenge(null)
     setPostLoginPage(null)
     setPostLoginPath(null)
     setPostLoginAuthPage(null)
+    clearStoredPostLoginTarget()
     navigateToPage('login')
   }
 
@@ -689,6 +831,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     }
 
     setAuthTokenState(null)
+    setCsrfToken(null)
     setAuthUser(null)
     setAuthError(null)
     setAuthUiAction(null)
@@ -699,6 +842,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     setPostLoginPage(null)
     setPostLoginPath(null)
     setPostLoginAuthPage(null)
+    clearStoredPostLoginTarget()
 
     // Determine where to navigate after logout
     if (target) {

@@ -14,7 +14,7 @@ This document summarizes the primary security controls and areas of interest for
 - **File Upload Safety:** Upload handling and validation in `server/Middleware/uploadMiddleware.js` — validate types/sizes and store safely.
 - **Audit & Logging:** Audit logging model and usage in `server/Models/AuditLogModel.js` and relevant controllers.
 - **Secrets & Configuration:** Environment secrets in `server/.env`. Avoid committing secrets; rotate keys if exposed.
-- **Backups & Encryption:** Encrypted backup artifact at `decrypt_backup/audit_logs_backup.zip.enc` and helper `decrypt_backup/decrypt_backup.js`.
+- **Backups & Encryption:** Encrypted backup exports use a versioned AES-256-GCM envelope with per-backup salt/IV; helper script lives at `decrypt_backup/decrypt_backup.js`.
 - **Email / Outbound Services:** Email logic in `server/Utils/emailService.js` — avoid leaking PII in messages.
 - **Dependencies & Supply Chain:** See `server/package.json` and `client/package.json` for dependency lists — run periodic dependency scans.
 

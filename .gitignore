@@ -1,5 +1,10 @@
 .env
+**/.env
 node_modules
+**/node_modules/
 dist
+**/dist/
+server/uploads/
+blockchain/ignition/deployments/
 audit_logs_backup.zip.enc
 restored_logs.zip

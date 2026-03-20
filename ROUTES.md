@@ -22,6 +22,7 @@ This document reflects the current frontend routing and redirect behavior implem
 | `/otp` | `otp` | OTP verification |
 | `/forgot-password` | `forgot_password` | Password recovery |
 | `/signup` | `signup` | Account registration |
+| `/signup/doctor` | `doctor_signup` | Doctor registration |
 | `/terms` | `terms` | Terms and Conditions |
 | `/privacy-policy` | `privacy_policy` | Privacy Policy (RA 10173) |
 
@@ -39,7 +40,10 @@ This document reflects the current frontend routing and redirect behavior implem
 
 | Path | Page | Tab |
 | --- | --- | --- |
-| `/doctor/dashboard` | `doctor_dashboard` | `appointments` |
+| `/doctor/dashboard` | `doctor_dashboard` | `dashboard` |
+| `/doctor/appointments` | `doctor_dashboard` | `appointments` |
+| `/doctor/calendar` | `doctor_dashboard` | `calendar` |
+| `/doctor/schedule` | `doctor_dashboard` | `schedule` |
 | `/doctor/queue` | `doctor_dashboard` | `queue` |
 | `/doctor/analytics` | `doctor_dashboard` | `analytics` |
 | `/doctor/settings` | `doctor_dashboard` | `settings` |
@@ -50,7 +54,8 @@ This document reflects the current frontend routing and redirect behavior implem
 | --- | --- | --- |
 | `/admin` | `admin` | `user_management` |
 | `/admin/staff-management` | `admin` | `staff_management` |
-| `/admin/history` | `admin` | `history` |
+| `/admin/audit-log` | `admin` | `audit_log` |
+| `/admin/error-log` | `admin` | `error_log` |
 | `/admin/notifications` | `admin` | `notifications` |
 | `/admin/settings` | `admin` | `settings` |
 
@@ -59,12 +64,12 @@ This document reflects the current frontend routing and redirect behavior implem
 | Page | Allowed roles |
 | --- | --- |
 | `appointments` | `user` |
-| `doctor_dashboard` | `nurse` |
+| `doctor_dashboard` | `doctor`, `nurse` |
 | `admin` | `admin`, `system_admin` |
 
 Notes:
 
-- Legacy `doctor` role values are normalized to `nurse`.
+- Doctor-role aliases normalize into the doctor dashboard access model.
 - `admin` and `system_admin` both land on the admin dashboard by default.
 
 ## Default Role Redirects
@@ -73,7 +78,7 @@ When an authenticated user opens `/`, the app redirects them to:
 
 | Role | Default destination |
 | --- | --- |
-| `user` | `/appointments` |
+| `user` | `/BookAppointment` |
 | `nurse` | `/doctor/dashboard` |
 | `admin` | `/admin` |
 | `system_admin` | `/admin` |
@@ -84,10 +89,12 @@ When an authenticated user opens `/`, the app redirects them to:
 2. Unauthenticated access to patient routes goes to `/login`.
 3. Unauthenticated access to doctor dashboard routes goes to `/doctor-sign-in`.
 4. Unauthenticated access to admin dashboard routes goes to `/admin-login`.
-5. A patient hitting doctor or admin pages is redirected to `/appointments`.
+5. A patient hitting doctor or admin pages is redirected to `/BookAppointment`.
 6. A doctor hitting admin pages is redirected to `/doctor/dashboard`.
 7. An admin hitting doctor pages is redirected to `/admin`.
 8. Protected route URLs are canonicalized on initial load and browser back/forward navigation.
+9. Forgot-password returns to the auth page that opened it when source state is available.
+10. Terms and privacy pages return to the signup page that opened them when source state is available.
 
 ## Supported Legacy Aliases
 

@@ -1,21 +1,42 @@
 import User from "../Models/UserModel.js";
 import AuditLog from "../Models/AuditLogModel.js";
 import crypto from "node:crypto";
-import jwt from "jsonwebtoken";
 import Sessions from "../Models/SessionModel.js";
-import {sendOTP} from "../Utils/emailService.js";
+import {sendOTP, sendPasswordResetEmail} from "../Utils/emailService.js";
 import Appointments from "../Models/AppointmentsModel.js";
 import { appConfig } from "../Config/env.js";
-import { hashSessionToken } from "../Utils/sessionTokens.js";
 import { isAdminRole, normalizeRole } from "../Utils/roles.js";
+import {
+    cleanupUploadedLicenseFiles,
+    getUploadedLicenseFiles,
+} from "../Middleware/uploadMiddleware.js";
+import {
+    clearAuthCookies,
+    consumeGoogleAuthExchange,
+    createGoogleAuthExchange,
+    createGoogleOauthState,
+    GOOGLE_CODE_QUERY_PARAM,
+    GOOGLE_ERROR_QUERY_PARAM,
+    issueAuthenticatedSession,
+    readGoogleOauthState,
+} from "../Utils/authSecurity.js";
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
 const OTP_MAX_FAILED_ATTEMPTS = 5;
 const OTP_LOCK_WINDOW_MS = 15 * 60 * 1000;
 const OTP_MAX_SENDS_PER_WINDOW = 3;
 const OTP_SEND_WINDOW_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_EXPIRY_MS = 30 * 60 * 1000;
 const OTP_SELECT_FIELDS = "+otp +otpExpires +otpChallengeId +otpFailedAttempts +otpLockUntil +otpSendCount +otpSendWindowStartedAt";
 const LOGIN_SELECT_FIELDS = `+passwordHashed ${OTP_SELECT_FIELDS}`;
+const RESET_PASSWORD_SELECT_FIELDS = "+resetPasswordTokenHash +resetPasswordExpiresAt";
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+const PASSWORD_HASH_MIN_ROUNDS = 12;
+const FRONTEND_AUTH_PATHS = Object.freeze({
+    login: '/login',
+    doctor_login: '/doctor-sign-in',
+    admin_login: '/admin-login',
+})
 
 const ALLOWED_DOCTOR_DEPARTMENTS = new Set([
     "Internal Medicine",
@@ -39,20 +60,6 @@ const ALLOWED_DOCTOR_DEPARTMENTS = new Set([
     "Gastroenterology",
 ]);
 
-const extractUploadedLicenses = (req) => {
-    if (Array.isArray(req.files)) return req.files;
-    if (req.files && typeof req.files === 'object') {
-        const byField = req.files;
-        return [
-            ...(Array.isArray(byField.licenses) ? byField.licenses : []),
-            ...(Array.isArray(byField.license) ? byField.license : []),
-            ...(Array.isArray(byField.licenseFile) ? byField.licenseFile : []),
-        ];
-    }
-    if (req.file) return [req.file];
-    return [];
-};
-
 const generateOtpCode = () => crypto.randomInt(0, 1000000).toString().padStart(6, "0");
 
 const generateOtpChallengeId = () => crypto.randomUUID();
@@ -61,6 +68,12 @@ const hashOtpCode = (challengeId, otpCode) =>
     crypto
         .createHmac("sha256", appConfig.jwtSecret)
         .update(`${String(challengeId || "")}:${String(otpCode || "")}`)
+        .digest("hex");
+
+const hashPasswordResetToken = (resetToken) =>
+    crypto
+        .createHmac("sha256", appConfig.jwtSecret)
+        .update(String(resetToken || ""))
         .digest("hex");
 
 const clearOtpChallenge = (user, { keepChallengeId = false, keepRateLimitWindow = false } = {}) => {
@@ -75,6 +88,44 @@ const clearOtpChallenge = (user, { keepChallengeId = false, keepRateLimitWindow 
         user.otpSendCount = 0;
         user.otpSendWindowStartedAt = undefined;
     }
+};
+
+const clearPasswordResetState = (user) => {
+    user.resetPasswordTokenHash = undefined;
+    user.resetPasswordExpiresAt = undefined;
+};
+
+const isStrongPassword = (password) => PASSWORD_REGEX.test(String(password || ""));
+
+const getPasswordHashRounds = (passwordHash) => {
+    const hash = String(passwordHash || '')
+    const match = /^\$2[abxy]?\$(\d{2})\$/.exec(hash)
+    return match ? Number(match[1]) : 0
+}
+
+const shouldRehashPassword = (passwordHash) => {
+    const rounds = getPasswordHashRounds(passwordHash)
+    return rounds > 0 && rounds < PASSWORD_HASH_MIN_ROUNDS
+}
+
+const cleanupDoctorRegistrationUploads = async (req) => {
+    await cleanupUploadedLicenseFiles(req).catch((error) => {
+        console.warn('Failed to clean up doctor registration uploads:', error);
+    });
+};
+
+const rejectDoctorRegistration = async (req, res, status, payload) => {
+    await cleanupDoctorRegistrationUploads(req);
+    return res.status(status).json(payload);
+};
+
+const buildPasswordResetUrl = (resetToken, sourcePage = "login") => {
+    const url = new URL("/forgot-password", appConfig.frontendUrl.replace(/\/$/, "") + "/");
+    url.searchParams.set("reset", String(resetToken || ""));
+    if (sourcePage) {
+        url.searchParams.set("source", String(sourcePage));
+    }
+    return url.toString();
 };
 
 const resetOtpSendWindowIfNeeded = (user, now = new Date()) => {
@@ -136,13 +187,32 @@ const applyRetryAfter = (res, error) => {
     }
 };
 
-const persistSession = async (userId, token) => {
-    const session = await Sessions.create({
-        userId,
-        tokenHash: hashSessionToken(token),
-    });
-    return session;
-};
+const resolveSourcePage = (value) =>
+    value === 'doctor_login' || value === 'admin_login' || value === 'login'
+        ? value
+        : 'login'
+
+const buildFrontendAuthUrl = (sourcePage, params = {}) => {
+    const pathname = FRONTEND_AUTH_PATHS[resolveSourcePage(sourcePage)] || FRONTEND_AUTH_PATHS.login
+    const url = new URL(pathname, appConfig.frontendUrl.replace(/\/$/, "") + "/");
+    for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && String(value).trim()) {
+            url.searchParams.set(key, String(value))
+        }
+    }
+    return url.toString()
+}
+
+const buildAuthSessionUser = (user, session, authMethod = "local") => ({
+    id: user._id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    role: normalizeRole(user.role) || 'user',
+    authMethod,
+    mfa: true,
+    sessionId: session._id,
+})
 
 export async function register(req, res) {
     try {
@@ -163,10 +233,7 @@ export async function register(req, res) {
             return res.status(409).json({ message: "Email is already registered." });
         }
 
-        // Require: min 8, at least one lower, one upper, one digit, and one non-alphanumeric (any special char)
-        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-
-        if (!passwordRegex.test(password)) {
+        if (!isStrongPassword(password)) {
             return res.status(400).json({ 
                 message: "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character." 
             });
@@ -189,13 +256,11 @@ export async function register(req, res) {
 
 export async function login(req, res) {
     try{
-        console.log("Login request body:", req.body.email);
         const {email, password} = req.body;
 
         if(!email || !password) {
             return res.status(400).json({message: "Missing Fields."});
         }
-        // Search by phoneNumber or email
         const user = await User.findOne({ email: email}).select(LOGIN_SELECT_FIELDS);
 
         if(!user || !(await user.validatePassword(password))) {
@@ -216,6 +281,9 @@ export async function login(req, res) {
         const previousSendCount = Number(user.otpSendCount || 0);
         const previousWindowStart = user.otpSendWindowStartedAt;
         const { otpCode, challengeId } = assignOtpChallenge(user, { reuseChallengeId: false }, now);
+        if (shouldRehashPassword(user.passwordHashed)) {
+            await user.setPassword(password)
+        }
         await user.save();
         
         let otpDelivery = null;
@@ -238,7 +306,7 @@ export async function login(req, res) {
             requires2FA: true 
         });
     } catch (error){
-        console.log("Login request body:", req.body.email);
+        console.error("Login failed:", error);
         res.status(500).json({message: "Login failed."});
     }
 }
@@ -251,7 +319,7 @@ export async function logout(req, res) {
             try {
                 // find session to get userId for audit logging
                 const session = await Sessions.findOne({
-                    $or: [{ tokenHash: hashSessionToken(token) }, { token }],
+                    tokenHash: crypto.createHash("sha256").update(String(token || "")).digest("hex"),
                 });
                 if (session) {
                     // create audit log for logout
@@ -268,10 +336,6 @@ export async function logout(req, res) {
                     }
 
                     await Sessions.deleteOne({ _id: session._id });
-                } else {
-                    await Sessions.deleteMany({
-                        $or: [{ tokenHash: hashSessionToken(token) }, { token }],
-                    });
                 }
             } catch (e) {
                 // non-fatal, continue to clear cookie
@@ -293,11 +357,7 @@ export async function logout(req, res) {
             }
         }
 
-        res.clearCookie("token", {
-            httpOnly: true,
-            sameSite: "strict",
-            secure: appConfig.isProduction
-        });
+        clearAuthCookies(res);
 
         return res.status(200).json({ message: "Logout successful." });
     } catch (error) {
@@ -338,7 +398,7 @@ export async function verifyOTP(req, res) {
         }
 
         const providedOtpHash = hashOtpCode(challengeId, otp);
-        const isOtpValid = user.otp === providedOtpHash || user.otp === otp;
+        const isOtpValid = user.otp === providedOtpHash;
 
         if (!isOtpValid) {
             user.otpFailedAttempts = Number(user.otpFailedAttempts || 0) + 1;
@@ -347,6 +407,13 @@ export async function verifyOTP(req, res) {
                 user.otpExpires = undefined;
                 user.otpLockUntil = new Date(Date.now() + OTP_LOCK_WINDOW_MS);
                 await user.save();
+                await AuditLog.create({
+                    userId: user._id,
+                    action: "OTP_LOCKOUT",
+                    details: `OTP challenge locked for ${user.email}.`,
+                    ipAddress: req.ip || req.connection?.remoteAddress,
+                    userAgent: req.headers['user-agent']
+                }).catch(() => {})
                 const retryAfterSeconds = getRetryAfterSeconds(user.otpLockUntil);
                 res.set("Retry-After", String(retryAfterSeconds));
                 return res.status(429).json({ message: "Too many invalid OTP attempts. Please try again later." });
@@ -358,20 +425,7 @@ export async function verifyOTP(req, res) {
         clearOtpChallenge(user);
         await user.save();
         const normalizedRole = normalizeRole(user.role) || 'user';
-
-        const token = jwt.sign(
-            {id: user._id, role: normalizedRole, email: user.email},
-            appConfig.jwtSecret,
-            {expiresIn: "7d"}
-        );
-        const session = await persistSession(user._id, token);
-
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: appConfig.isProduction,
-            sameSite: "strict",
-            maxAge: 7* 24 * 60 * 60 * 1000,
-        });
+        const { csrfToken, session } = await issueAuthenticatedSession(res, user);
         await AuditLog.create({
             userId: user._id,
             action: "LOGIN_SUCCESS",
@@ -382,16 +436,8 @@ export async function verifyOTP(req, res) {
 
         return res.status(200).json({
             message: "Login successful.",
-            user: {
-                id: user._id,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                email: user.email,
-                role: normalizedRole,
-                authMethod: user.googleId ? "google" : "local",
-                mfa: true,
-                sessionId: session._id,
-            }
+            user: buildAuthSessionUser(user, session, user.googleId ? "google" : "local"),
+            csrfToken,
         });
     } catch (error) {
         console.error("OTP Verification Error:", error);
@@ -454,6 +500,173 @@ export async function resendOTP(req, res) {
     }
 }
 
+export async function requestPasswordReset(req, res) {
+    try {
+        const email = String(req.body?.email || "").trim().toLowerCase();
+        const sourcePage = ["login", "doctor_login", "admin_login"].includes(String(req.body?.sourcePage || ""))
+            ? String(req.body.sourcePage)
+            : "login";
+
+        if (!email) {
+            return res.status(400).json({ message: "Email is required." });
+        }
+
+        const successPayload = {
+            message: "If an account exists for that email, reset instructions were sent.",
+        };
+
+        const user = await User.findOne({ email }).select(`email status ${RESET_PASSWORD_SELECT_FIELDS}`);
+        if (!user || user.status !== "active") {
+            return res.status(200).json(successPayload);
+        }
+
+        const resetToken = crypto.randomBytes(32).toString("hex");
+        user.resetPasswordTokenHash = hashPasswordResetToken(resetToken);
+        user.resetPasswordExpiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
+        await user.save();
+
+        const resetUrl = buildPasswordResetUrl(resetToken, sourcePage);
+        const delivery = await sendPasswordResetEmail(user.email, resetUrl);
+
+        await AuditLog.create({
+            userId: user._id,
+            action: "PASSWORD_RESET_REQUEST",
+            details: `Password reset requested for ${user.email}.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        });
+
+        return res.status(200).json({
+            ...successPayload,
+            ...(delivery?.previewUrl && !appConfig.isProduction ? { previewUrl: delivery.previewUrl } : {}),
+        });
+    } catch (error) {
+        console.error("Password reset request failed:", error);
+        return res.status(500).json({ message: "Unable to start password reset right now." });
+    }
+}
+
+export async function resetPassword(req, res) {
+    try {
+        const resetToken = String(req.body?.resetToken || "").trim();
+        const newPassword = String(req.body?.newPassword || "");
+
+        if (!resetToken || !newPassword) {
+            return res.status(400).json({ message: "Reset token and new password are required." });
+        }
+
+        if (!isStrongPassword(newPassword)) {
+            return res.status(400).json({
+                message: "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character.",
+            });
+        }
+
+        const tokenHash = hashPasswordResetToken(resetToken);
+        const user = await User.findOne({
+            resetPasswordTokenHash: tokenHash,
+            resetPasswordExpiresAt: { $gt: new Date() },
+        }).select(RESET_PASSWORD_SELECT_FIELDS);
+
+        if (!user) {
+            return res.status(400).json({ message: "This reset link is invalid or has expired." });
+        }
+
+        await user.setPassword(newPassword);
+        clearOtpChallenge(user);
+        clearPasswordResetState(user);
+        await user.save();
+        const revokedSessions = await Sessions.deleteMany({ userId: user._id });
+
+        await AuditLog.create({
+            userId: user._id,
+            action: "PASSWORD_RESET_COMPLETE",
+            details: `Password reset completed for ${user.email}.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        });
+        await AuditLog.create({
+            userId: user._id,
+            action: "SESSIONS_REVOKED",
+            details: `Password reset revoked ${revokedSessions.deletedCount || 0} sessions for ${user.email}.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        }).catch(() => {})
+
+        return res.status(200).json({ message: "Password reset successful." });
+    } catch (error) {
+        console.error("Password reset failed:", error);
+        return res.status(500).json({ message: "Unable to reset password right now." });
+    }
+}
+
+export async function changePassword(req, res) {
+    try {
+        const userId = req.user?.id || req.user?._id;
+        const currentPassword = String(req.body?.currentPassword || "");
+        const newPassword = String(req.body?.newPassword || "");
+
+        if (!userId) {
+            return res.status(401).json({ message: "Invalid session." });
+        }
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: "Current password and new password are required." });
+        }
+
+        if (!isStrongPassword(newPassword)) {
+            return res.status(400).json({
+                message: "New password must be at least 8 characters, include uppercase, lowercase, number, and a special character.",
+            });
+        }
+
+        if (currentPassword === newPassword) {
+            return res.status(400).json({ message: "New password must be different from the current password." });
+        }
+
+        const user = await User.findById(userId).select(`+passwordHashed ${RESET_PASSWORD_SELECT_FIELDS}`);
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        if (!user.passwordHashed || !String(user.passwordHashed).startsWith("$2")) {
+            return res.status(400).json({ message: "Password change is not available for this account." });
+        }
+
+        const isCurrentPasswordValid = await user.validatePassword(currentPassword);
+        if (!isCurrentPasswordValid) {
+            return res.status(400).json({ message: "Current password is incorrect." });
+        }
+
+        await user.setPassword(newPassword);
+        clearOtpChallenge(user);
+        clearPasswordResetState(user);
+        await user.save();
+
+        const revokedSessions = await Sessions.deleteMany({ userId: user._id });
+        clearAuthCookies(res)
+
+        await AuditLog.create({
+            userId: user._id,
+            action: "PASSWORD_CHANGE",
+            details: `Password changed for ${user.email}.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        });
+        await AuditLog.create({
+            userId: user._id,
+            action: "SESSIONS_REVOKED",
+            details: `Password change revoked ${revokedSessions.deletedCount || 0} sessions for ${user.email}.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        }).catch(() => {})
+
+        return res.status(200).json({ message: "Password changed successfully.", requiresReauth: true });
+    } catch (error) {
+        console.error("Change password failed:", error);
+        return res.status(500).json({ message: "Unable to change password right now." });
+    }
+}
+
 export async function getSettings(req, res) {
     try {
         const userId = req.user?.id || req.user?._id
@@ -478,13 +691,26 @@ export async function updateSettings(req, res) {
 
         // Only allow updating known keys
         const update = {}
+        if (settings.theme === 'light' || settings.theme === 'dark') {
+            update['settings.theme'] = settings.theme
+        }
         if (settings.notifications && typeof settings.notifications === 'object') {
             update['settings.notifications.email'] = !!settings.notifications.email
             update['settings.notifications.sms'] = !!settings.notifications.sms
             update['settings.notifications.push'] = !!settings.notifications.push
+            if (typeof settings.notifications.appointmentReminders === 'boolean') {
+                update['settings.notifications.appointmentReminders'] = settings.notifications.appointmentReminders
+            }
+            if (typeof settings.notifications.securityAlerts === 'boolean') {
+                update['settings.notifications.securityAlerts'] = settings.notifications.securityAlerts
+            }
         }
 
-        const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true }).select('settings')
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { $set: update },
+            { returnDocument: 'after' }
+        ).select('settings')
         if (!user) return res.status(404).json({ message: 'User not found' })
         return res.json({ settings: user.settings })
     } catch (error) {
@@ -517,80 +743,89 @@ export async function debugUser(req, res) {
 
 export async function googleCallback(req, res) {
     try {
-        // Passport already put the user in req.user
-        const user = req.user; 
+        const user = req.user;
+        const sourcePage = readGoogleOauthState(req.query?.state);
 
         if (!user) {
-            return res.redirect('/login-failed');
+            return res.redirect(buildFrontendAuthUrl(sourcePage, {
+                [GOOGLE_ERROR_QUERY_PARAM]: 'google_login_failed',
+            }));
         }
 
-        // 1. Generate Token
-        const normalizedRole = normalizeRole(user.role) || 'user';
-        const token = jwt.sign(
-            { id: user._id, role: normalizedRole, email: user.email },
-            appConfig.jwtSecret,
-            { expiresIn: "7d" }
-        );
-
-        // 2. Create Session (This makes logout work!)
-        await persistSession(user._id, token);
-        await AuditLog.create({
-            userId: user._id,
-            action: "LOGIN_GOOGLE",
-            details: `User ${user.email} logged in via Google OAuth.`,
-            ipAddress: req.ip,
-            userAgent: req.headers['user-agent'],
-            
-        });
-
-        // 4. Set Cookie
-        // For cross-site OAuth flows the cookie must be SameSite=None and Secure in production
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: appConfig.isProduction,
-            sameSite: appConfig.isProduction ? 'none' : 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
-
-        // 5. Redirect to Frontend
-        return res.redirect(`${appConfig.frontendUrl.replace(/\/$/, '')}/appointments`);
+        const exchangeCode = await createGoogleAuthExchange(user._id, sourcePage);
+        return res.redirect(buildFrontendAuthUrl(sourcePage, {
+            [GOOGLE_CODE_QUERY_PARAM]: exchangeCode,
+        }));
 
     } catch (error) {
         console.error("Google Auth Error:", error);
-        return res.redirect('/login-failed');
+        return res.redirect(buildFrontendAuthUrl('login', {
+            [GOOGLE_ERROR_QUERY_PARAM]: 'google_login_failed',
+        }));
+    }
+}
+
+export async function exchangeGoogleAuthCode(req, res) {
+    try {
+        const exchangeCode = String(req.body?.exchangeCode || '').trim()
+        if (!exchangeCode) {
+            return res.status(400).json({ message: 'Missing exchange code.' })
+        }
+
+        const exchange = await consumeGoogleAuthExchange(exchangeCode)
+        if (!exchange) {
+            return res.status(400).json({ message: 'Exchange code is invalid or expired.' })
+        }
+
+        const user = await User.findById(exchange.userId).select('email firstName lastName role googleId status')
+        if (!user || user.status !== 'active') {
+            return res.status(401).json({ message: 'Account is not available for sign in.' })
+        }
+
+        const { csrfToken, session } = await issueAuthenticatedSession(res, user)
+
+        await AuditLog.create({
+            userId: user._id,
+            action: "LOGIN_GOOGLE_EXCHANGE",
+            details: `User ${user.email} completed Google OAuth exchange.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        });
+
+        return res.status(200).json({
+            message: 'Google sign in successful.',
+            user: buildAuthSessionUser(user, session, 'google'),
+            csrfToken,
+        })
+    } catch (error) {
+        console.error("Google exchange failed:", error);
+        return res.status(500).json({ message: 'Unable to complete Google sign in right now.' })
     }
 }
 
 export async function registerDoctor(req, res) {
     try {
         const { email, firstName, lastName, password, department } = req.body;
-        const licenseFiles = extractUploadedLicenses(req);
+        const licenseFiles = getUploadedLicenseFiles(req);
         const licensePaths = licenseFiles.map((file) => String(file.path || '').trim()).filter(Boolean);
         const normalizedDepartment = String(department || '').trim();
 
         if (!firstName || !lastName || !password || !email || !normalizedDepartment) {
-            return res.status(400).json({ message: "Missing required field" });
+            return rejectDoctorRegistration(req, res, 400, { message: "Missing required field" });
         }
         if (!ALLOWED_DOCTOR_DEPARTMENTS.has(normalizedDepartment)) {
-            return res.status(400).json({ message: "Selected doctor department is not allowed." });
+            return rejectDoctorRegistration(req, res, 400, { message: "Selected doctor department is not allowed." });
         }
         if (licensePaths.length === 0) {
-            return res.status(400).json({message: "At least one medical license file is required"})
-        }
-        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com|yahoo\.com|outlook\.com)$/i;
-        if (!emailRegex.test(email)) {
-            return res.status(400).json({ 
-                message: "Email is invalid" 
-            });
+            return rejectDoctorRegistration(req, res, 400, {message: "At least one medical license file is required"})
         }
         const emailExists = await User.findOne({ email });
         if (emailExists) {
-            return res.status(409).json({ message: "Email is already registered." });
+            return rejectDoctorRegistration(req, res, 409, { message: "Email is already registered." });
         }
 
-        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-        if (!passwordRegex.test(password)) {
-            return res.status(400).json({ 
+        if (!isStrongPassword(password)) {
+            return rejectDoctorRegistration(req, res, 400, {
                 message: "Password must be at least 8 characters, include uppercase, lowercase, number, and a special character." 
             });
         }
@@ -615,6 +850,10 @@ export async function registerDoctor(req, res) {
         });
 
     } catch (error) {
+        if (error?.code === 11000 && error?.keyPattern?.email) {
+            return rejectDoctorRegistration(req, res, 409, { message: "Email is already registered." });
+        }
+        await cleanupDoctorRegistrationUploads(req);
         console.error("Doctor Registration Failed:", error);
         return res.status(500).json({ message: "Registration Failed." });
     }
@@ -673,7 +912,11 @@ export async function updateMyProfile(req, res) {
             return res.status(400).json({ message: 'No updatable fields provided.' })
         }
 
-        const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true })
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { $set: update },
+            { returnDocument: 'after' }
+        )
             .select('email firstName lastName role status department profile')
         if (!user) return res.status(404).json({ message: 'User not found' })
 
@@ -763,7 +1006,7 @@ export async function upsertPersonalHealthInfo(req, res) {
         const user = await User.findByIdAndUpdate(
             userId,
             { $set: setPayload },
-            { new: true }
+            { returnDocument: 'after' }
         ).select('email personalHealthInfo')
 
         if (!user) return res.status(404).json({ message: 'User not found' })

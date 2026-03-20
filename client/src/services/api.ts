@@ -18,6 +18,7 @@ import {
   parseApiSchema,
   supportTicketReceiptResponseSchema,
 } from '../schemas/apiSchemas'
+import type { AppPage } from '../types/navigation'
 import { normalizeRoleForSession } from '../utils/roleRoutes'
 
 const resolveApiBase = () => {
@@ -48,13 +49,56 @@ const resolveApiBase = () => {
 
 const API_BASE = resolveApiBase()
 let authToken: string | null = null
+let csrfToken: string | null = null
 const NETWORK_ERROR_MESSAGE =
   'Cannot reach API server. Start the backend and verify your API URL.'
 const REQUEST_TIMEOUT_MS = 8000
 const EMPTY_LEDGER: LedgerEntry[] = []
+const CSRF_COOKIE_NAME = 'XSRF-TOKEN'
+type AuthSourcePage = Extract<AppPage, 'login' | 'doctor_login' | 'admin_login'>
 
 export const setAuthToken = (token: string | null) => {
   authToken = token
+}
+
+export const setCsrfToken = (token: string | null) => {
+  csrfToken = token
+}
+
+const readCookie = (name: string) => {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie
+    .split('; ')
+    .find((entry) => entry.startsWith(`${name}=`))
+  if (!match) return null
+
+  const [, rawValue = ''] = match.split('=')
+  const value = rawValue ? decodeURIComponent(rawValue) : ''
+  return value.trim() ? value : null
+}
+
+const getEffectiveCsrfToken = () => csrfToken ?? readCookie(CSRF_COOKIE_NAME)
+
+const updateCsrfTokenFromPayload = (payload: unknown) => {
+  const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
+  const nextToken =
+    record && typeof record.csrfToken === 'string' && record.csrfToken.trim()
+      ? record.csrfToken.trim()
+      : readCookie(CSRF_COOKIE_NAME)
+
+  if (nextToken) {
+    csrfToken = nextToken
+  }
+}
+
+const resolveApiUrl = (path: string) => {
+  const normalizedPath = path.replace(/^\//, '')
+  const absoluteBase =
+    typeof window !== 'undefined' && !/^https?:\/\//i.test(API_BASE)
+      ? `${window.location.origin}${API_BASE}`
+      : API_BASE
+  const base = absoluteBase.endsWith('/') ? absoluteBase : `${absoluteBase}/`
+  return new URL(normalizedPath, base).toString()
 }
 
 const handleResponse = async (response: Response): Promise<unknown> => {
@@ -131,9 +175,19 @@ const request = async (url: string, init?: RequestInit) => {
 
   try {
     // Ensure cross-origin cookies are included when the API sets auth cookies
+    const headers = new Headers(init?.headers)
+    const method = String(init?.method || 'GET').toUpperCase()
+    const isMutating = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
+    if (isMutating && !headers.has('Authorization')) {
+      const effectiveCsrfToken = getEffectiveCsrfToken()
+      if (effectiveCsrfToken) {
+        headers.set('X-CSRF-Token', effectiveCsrfToken)
+      }
+    }
     const options: RequestInit = {
       credentials: 'include' as RequestCredentials,
       ...init,
+      headers,
       signal: controller.signal,
     }
     return await fetch(url, options)
@@ -379,6 +433,8 @@ export type UserSettings = {
     email: boolean
     sms: boolean
     push: boolean
+    appointmentReminders: boolean
+    securityAlerts: boolean
   }
 }
 
@@ -388,6 +444,8 @@ const defaultUserSettings: UserSettings = {
     email: true,
     sms: false,
     push: true,
+    appointmentReminders: true,
+    securityAlerts: true,
   },
 }
 
@@ -553,6 +611,11 @@ type ResendOtpResult = {
 }
 
 export const api = {
+  buildGoogleAuthUrl: (sourcePage: AuthSourcePage = 'login') => {
+    const url = new URL(resolveApiUrl('/auth/google'))
+    url.searchParams.set('sourcePage', sourcePage)
+    return url.toString()
+  },
   login: async (username: string, password: string): Promise<AuthSession | LoginOtpChallenge> => {
     const response = await request(`${API_BASE}/login`, {
       method: 'POST',
@@ -616,11 +679,14 @@ export const api = {
       body: JSON.stringify({ challengeId, otp: code }),
     })
     const payload = await handleResponse(response)
+    updateCsrfTokenFromPayload(payload)
 
     // Map server response to client authSession shape
     const payloadUser = (payload as Record<string, unknown>)?.user as Record<string, unknown> | undefined
     const mapped = {
       token: typeof (payload as any).token === 'string' ? (payload as any).token : undefined,
+      csrfToken:
+        typeof (payload as any).csrfToken === 'string' ? (payload as any).csrfToken : undefined,
       user: {
         username:
           (payloadUser?.email as string | undefined) ??
@@ -639,6 +705,39 @@ export const api = {
       },
     }
     return parseApiSchema(authSessionSchema, mapped, 'OTP verification')
+  },
+  exchangeGoogleAuthCode: async (exchangeCode: string): Promise<AuthSession> => {
+    const response = await request(`${API_BASE}/auth/google/exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exchangeCode }),
+    })
+    const payload = await handleResponse(response)
+    updateCsrfTokenFromPayload(payload)
+
+    const payloadUser = (payload as Record<string, unknown>)?.user as Record<string, unknown> | undefined
+    const mapped = {
+      token: typeof (payload as any).token === 'string' ? (payload as any).token : undefined,
+      csrfToken:
+        typeof (payload as any).csrfToken === 'string' ? (payload as any).csrfToken : undefined,
+      user: {
+        username:
+          (payloadUser?.email as string | undefined) ??
+          (payloadUser?.username as string | undefined) ??
+          '',
+        firstName: (payloadUser?.firstName as string | undefined) ?? undefined,
+        lastName: (payloadUser?.lastName as string | undefined) ?? undefined,
+        role: normalizeRoleForSession(
+          payloadUser?.role as string | undefined,
+          payloadUser?.accountType as string | undefined
+        ),
+        accountType: (payloadUser?.accountType as string | undefined) ?? undefined,
+        authMethod: (payloadUser?.authMethod as string | undefined) ?? undefined,
+        mfa: (payloadUser?.mfa as boolean | undefined) ?? undefined,
+        sessionId: (payloadUser?.sessionId as string | undefined) ?? undefined,
+      },
+    }
+    return parseApiSchema(authSessionSchema, mapped, 'Google exchange')
   },
   resendOtp: async (challengeId: string): Promise<ResendOtpResult> => {
     const response = await request(`${API_BASE}/resend-otp`, {
@@ -703,6 +802,7 @@ export const api = {
   getSession: async (): Promise<AuthSession['user']> => {
     const response = await request(`${API_BASE}/session`, withAuth())
     const payload = await handleResponse(response)
+    updateCsrfTokenFromPayload(payload)
     const payloadRecord = payload as Record<string, unknown>
     const mapped = {
       username:
@@ -756,6 +856,14 @@ export const api = {
           typeof notificationsRaw.push === 'boolean'
             ? notificationsRaw.push
             : defaultUserSettings.notifications.push,
+        appointmentReminders:
+          typeof notificationsRaw.appointmentReminders === 'boolean'
+            ? notificationsRaw.appointmentReminders
+            : defaultUserSettings.notifications.appointmentReminders,
+        securityAlerts:
+          typeof notificationsRaw.securityAlerts === 'boolean'
+            ? notificationsRaw.securityAlerts
+            : defaultUserSettings.notifications.securityAlerts,
       },
     }
   },
@@ -885,9 +993,12 @@ export const api = {
     )
     await handleResponse(response as Response)
   },
-  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+  changePassword: async (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ requiresReauth: boolean }> => {
     try {
-      await handleResponse(
+      const payload = await handleResponse(
         await request(
           `${API_BASE}/users/me/password`,
           withAuth({
@@ -897,6 +1008,12 @@ export const api = {
           })
         )
       )
+      updateCsrfTokenFromPayload(payload)
+      return {
+        requiresReauth: Boolean(
+          (payload as Record<string, unknown> | null)?.requiresReauth
+        ),
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to change password.'
       if (/cannot|not found|failed/i.test(message)) {
@@ -904,6 +1021,29 @@ export const api = {
       }
       throw error
     }
+  },
+  requestPasswordReset: async (
+    email: string,
+    sourcePage: Extract<AppPage, 'login' | 'doctor_login' | 'admin_login'> = 'login'
+  ): Promise<{ previewUrl?: string }> => {
+    const response = await request(`${API_BASE}/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, sourcePage }),
+    })
+    const payload = (await handleResponse(response as Response)) as Record<string, unknown>
+    return {
+      previewUrl: typeof payload.previewUrl === 'string' ? payload.previewUrl : undefined,
+    }
+  },
+  resetPassword: async (resetToken: string, newPassword: string): Promise<void> => {
+    await handleResponse(
+      await request(`${API_BASE}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resetToken, newPassword }),
+      })
+    )
   },
   getAppointments: async (): Promise<Reservation[]> => {
     const payload = await handleResponse(await request(`${API_BASE}/appointments`, withAuth()))
@@ -1082,12 +1222,8 @@ export const api = {
     await downloadEncryptedFile(`${API_BASE}/admin/error-logs/download`, 'error_logs_backup.zip.enc')
   },
   getLedger: async (): Promise<LedgerEntry[]> => {
-    try {
-      const payload = await handleResponse(await request(`${API_BASE}/ledger`, withAuth()))
-      return Array.isArray((payload as any)?.ledger) ? (payload as any).ledger : EMPTY_LEDGER
-    } catch {
-      return EMPTY_LEDGER
-    }
+    const payload = await handleResponse(await request(`${API_BASE}/ledger`, withAuth()))
+    return Array.isArray((payload as any)?.ledger) ? (payload as any).ledger : EMPTY_LEDGER
   },
   createReservation: async (
     draft: ReservationDraft
@@ -1604,6 +1740,7 @@ export const api = {
     const response = await request(`${API_BASE}/logout`, withAuth({ method: 'POST' }))
     try {
       await handleResponse(response as Response)
+      csrfToken = null
       return true
     } catch (err) {
       return false

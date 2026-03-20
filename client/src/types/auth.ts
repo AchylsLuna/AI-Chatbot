@@ -3,6 +3,7 @@ export type AuthProvider = 'local' | 'auth0'
 
 export type AuthSession = {
   token?: string
+  csrfToken?: string
   user: {
     username: string
     firstName?: string

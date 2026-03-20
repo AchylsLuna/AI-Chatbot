@@ -9,6 +9,14 @@ import fs from 'fs/promises';
 import path from 'path';
 import { appConfig } from "../Config/env.js";
 import { DOCTOR_ROLE_ALIASES, isAdminRole, isDoctorRole, normalizeRole } from "../Utils/roles.js";
+import {
+    BACKUP_AUTH_TAG_LENGTH,
+    BACKUP_ENCRYPTION_ALGORITHM,
+    BACKUP_IV_LENGTH,
+    BACKUP_SALT_LENGTH,
+    buildBackupEnvelopeHeader,
+    deriveBackupKey,
+} from "../Utils/backupEncryption.js";
 
 async function resolveActorEmail(req) {
     const fallbackId = req.user?.id || req.user?._id;
@@ -22,6 +30,75 @@ async function resolveActorEmail(req) {
         return String(fallbackId);
     }
 }
+
+const streamEncryptedBackupArchive = async (res, { filename, appendEntries }) => {
+    const salt = crypto.randomBytes(BACKUP_SALT_LENGTH);
+    const iv = crypto.randomBytes(BACKUP_IV_LENGTH);
+    const key = deriveBackupKey(appConfig.backupPassword, salt);
+    const header = buildBackupEnvelopeHeader({ salt, iv, authTagLength: BACKUP_AUTH_TAG_LENGTH });
+    const cipher = crypto.createCipheriv(BACKUP_ENCRYPTION_ALGORITHM, key, iv, {
+        authTagLength: BACKUP_AUTH_TAG_LENGTH,
+    });
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    cipher.setAAD(header);
+
+    res.type('application/octet-stream');
+    res.attachment(filename);
+    res.write(header);
+
+    const completion = new Promise((resolve, reject) => {
+        let settled = false;
+
+        const fail = (error) => {
+            if (settled) return;
+            settled = true;
+            archive.destroy(error);
+            cipher.destroy(error);
+            if (!res.writableEnded) {
+                res.destroy(error);
+            }
+            reject(error);
+        };
+
+        archive.on('warning', (warning) => {
+            if (warning?.code === 'ENOENT') {
+                console.warn('Backup archive warning:', warning);
+                return;
+            }
+            fail(warning);
+        });
+        archive.once('error', fail);
+        cipher.once('error', fail);
+        res.once('error', fail);
+        res.once('close', () => {
+            if (!settled && !res.writableEnded) {
+                fail(new Error('Backup download connection closed.'));
+            }
+        });
+        res.once('finish', () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+        });
+        cipher.once('end', () => {
+            if (settled) return;
+            try {
+                res.write(cipher.getAuthTag());
+                res.end();
+            } catch (error) {
+                fail(error);
+            }
+        });
+    });
+
+    cipher.pipe(res, { end: false });
+    archive.pipe(cipher);
+
+    await appendEntries(archive);
+    await archive.finalize();
+    await completion;
+};
 
 const STAFF_ROLE_FILTER = { $in: DOCTOR_ROLE_ALIASES };
 
@@ -292,7 +369,7 @@ export async function updateUserByAdmin(req, res) {
         const updated = await User.findByIdAndUpdate(
             userId,
             { $set: update },
-            { new: true }
+            { returnDocument: 'after' }
         ).select("email firstName lastName role status department profile");
         const updatedUser = {
             ...updated.toObject(),
@@ -464,37 +541,19 @@ export async function downloadAuditBackup(req, res) {
             userAgent: req.headers['user-agent']
         });
 
-        // 3. Setup Encryption (AES-256)
-        const algorithm = 'aes-256-cbc';
-        const password = appConfig.backupPassword;
-        // Create a 32-byte key from the password
-        const key = crypto.scryptSync(password, 'salt', 32);
-        // Create a random Initialization Vector (IV)
-        const iv = crypto.randomBytes(16);
-
-        // 4. Set Response Headers
-        // We name it .enc so the OS knows it's not a normal zip
-        res.attachment('audit_logs_backup.zip.enc'); 
-        
-        // 5. Send the IV first (needed for decryption), then the encrypted stream
-        res.write(iv);
-
-        const cipher = crypto.createCipheriv(algorithm, key, iv);
-        const archive = archiver('zip', { zlib: { level: 9 } });
-
-        // Pipe: Archive (Zip) -> Cipher (Encrypt) -> Response (Download)
-        archive.pipe(cipher).pipe(res);
-
-        // Add CSV to the zip
-        archive.append(csv, { name: 'audit_logs.csv' });
-        
-        // Finalize
-        await archive.finalize();
+        await streamEncryptedBackupArchive(res, {
+            filename: 'audit_logs_backup.zip.enc',
+            appendEntries: async (archive) => {
+                archive.append(csv, { name: 'audit_logs.csv' });
+            },
+        });
 
     } catch (error) {
         console.error("Backup failed:", error);
         if (!res.headersSent) {
             res.status(500).json({ message: "Failed to generate backup." });
+        } else if (!res.writableEnded) {
+            res.destroy(error);
         }
     }
 }
@@ -522,25 +581,18 @@ export async function downloadErrorBackup(req, res) {
             userAgent: req.headers['user-agent']
         });
 
-        const algorithm = 'aes-256-cbc';
-        const password = appConfig.backupPassword;
-        const key = crypto.scryptSync(password, 'salt', 32);
-        const iv = crypto.randomBytes(16);
-
-        res.attachment('error_logs_backup.zip.enc');
-        res.write(iv);
-
-        const cipher = crypto.createCipheriv(algorithm, key, iv);
-        const archive = archiver('zip', { zlib: { level: 9 } });
-        archive.pipe(cipher).pipe(res);
-
-        archive.append(csv, { name: 'error_logs.csv' });
-
-        await archive.finalize();
+        await streamEncryptedBackupArchive(res, {
+            filename: 'error_logs_backup.zip.enc',
+            appendEntries: async (archive) => {
+                archive.append(csv, { name: 'error_logs.csv' });
+            },
+        });
     } catch (error) {
         console.error("Error backup failed:", error);
         if (!res.headersSent) {
             res.status(500).json({ message: "Failed to generate error backup." });
+        } else if (!res.writableEnded) {
+            res.destroy(error);
         }
     }
 }
@@ -580,28 +632,21 @@ export async function downloadSystemBackup(req, res) {
             userAgent: req.headers['user-agent']
         });
 
-        const algorithm = 'aes-256-cbc';
-        const password = appConfig.backupPassword;
-        const key = crypto.scryptSync(password, 'salt', 32);
-        const iv = crypto.randomBytes(16);
-
-        res.attachment('system_backup.zip.enc');
-        res.write(iv);
-
-        const cipher = crypto.createCipheriv(algorithm, key, iv);
-        const archive = archiver('zip', { zlib: { level: 9 } });
-        archive.pipe(cipher).pipe(res);
-
-        if (appointmentsCsv) archive.append(appointmentsCsv, { name: 'appointments.csv' });
-        if (archivedAppointmentsCsv) archive.append(archivedAppointmentsCsv, { name: 'appointments_archive.csv' });
-        if (auditCsv) archive.append(auditCsv, { name: 'audit_logs.csv' });
-        if (errorCsv) archive.append(errorCsv, { name: 'error_logs.csv' });
-
-        await archive.finalize();
+        await streamEncryptedBackupArchive(res, {
+            filename: 'system_backup.zip.enc',
+            appendEntries: async (archive) => {
+                if (appointmentsCsv) archive.append(appointmentsCsv, { name: 'appointments.csv' });
+                if (archivedAppointmentsCsv) archive.append(archivedAppointmentsCsv, { name: 'appointments_archive.csv' });
+                if (auditCsv) archive.append(auditCsv, { name: 'audit_logs.csv' });
+                if (errorCsv) archive.append(errorCsv, { name: 'error_logs.csv' });
+            },
+        });
     } catch (error) {
         console.error("System backup failed:", error);
         if (!res.headersSent) {
             return res.status(500).json({ message: "Failed to generate system backup." });
+        } else if (!res.writableEnded) {
+            res.destroy(error);
         }
     }
 }

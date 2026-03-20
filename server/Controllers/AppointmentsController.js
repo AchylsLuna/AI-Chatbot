@@ -272,6 +272,15 @@ export async function createAppointment(req, res) {
         return res.status(201).json({ message: "Appointment created successfully.", appointment });
 
     } catch (error) {
+        if (
+            error?.code === 11000 &&
+            error?.keyPattern?.doctor === 1 &&
+            error?.keyPattern?.scheduledDate === 1
+        ) {
+            return res.status(409).json({
+                message: 'Selected slot is already booked for this doctor.',
+            })
+        }
         console.error("Failed to create appointment:", error);
         return res.status(500).json({ message: "Failed to create appointment." });
     }
@@ -356,7 +365,7 @@ export async function upsertDoctorWeeklySchedule(req, res) {
                 },
             },
             {
-                new: true,
+                returnDocument: 'after',
                 upsert: true,
                 setDefaultsOnInsert: true,
             }

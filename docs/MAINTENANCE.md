@@ -23,7 +23,7 @@
 
 ## Audit backups
 - Endpoint: `GET /api/admin/audit-logs/download`
-- Output: encrypted `.zip.enc` stream.
+- Output: encrypted `.zip.enc` stream using a versioned AES-256-GCM envelope.
 - Ensure `BACKUP_PASSWORD` is managed securely and rotated.
 
 ## Troubleshooting

@@ -4,12 +4,51 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
 
-const LICENSE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'licenses');
+export const resolveLicenseUploadDir = () =>
+    path.resolve(process.env.LICENSE_UPLOAD_DIR || path.join(process.cwd(), 'uploads', 'licenses'));
+
+export const getUploadedLicenseFiles = (req) => {
+    if (Array.isArray(req.files)) return req.files;
+    if (req.files && typeof req.files === 'object') {
+        const byField = req.files;
+        return [
+            ...(Array.isArray(byField.licenses) ? byField.licenses : []),
+            ...(Array.isArray(byField.license) ? byField.license : []),
+            ...(Array.isArray(byField.licenseFile) ? byField.licenseFile : []),
+        ];
+    }
+    if (req.file) return [req.file];
+    return [];
+};
+
+export const cleanupUploadedLicenseFiles = async (req) => {
+    const files = getUploadedLicenseFiles(req);
+    const uploadDir = resolveLicenseUploadDir();
+    const allowedRoot = `${uploadDir}${path.sep}`;
+    const uniquePaths = Array.from(
+        new Set(
+            files
+                .map((file) => String(file?.path || '').trim())
+                .filter(Boolean)
+        )
+    );
+
+    await Promise.all(
+        uniquePaths.map(async (rawPath) => {
+            const resolvedPath = path.resolve(rawPath);
+            if (resolvedPath !== uploadDir && !resolvedPath.startsWith(allowedRoot)) {
+                return;
+            }
+            await fs.unlink(resolvedPath).catch(() => {});
+        })
+    );
+};
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        fs.mkdir(LICENSE_UPLOAD_DIR, { recursive: true })
-            .then(() => cb(null, LICENSE_UPLOAD_DIR))
+        const uploadDir = resolveLicenseUploadDir();
+        fs.mkdir(uploadDir, { recursive: true })
+            .then(() => cb(null, uploadDir))
             .catch((error) => cb(error));
     },
     filename: function (req, file, cb) {
@@ -38,7 +77,16 @@ export const uploadLicense = multer({
 });
 
 // 2. Export the error handling middleware
-export const handleUploadError = (err, req, res, next) => {
+export const handleUploadError = async (err, req, res, next) => {
+    if (!err) {
+        next();
+        return;
+    }
+
+    await cleanupUploadedLicenseFiles(req).catch((cleanupError) => {
+        console.warn('Failed to clean up uploaded license files after upload error:', cleanupError);
+    });
+
     if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
             return res.status(400).json({ message: "File is too large. Maximum size is 5MB." });
@@ -59,5 +107,4 @@ export const handleUploadError = (err, req, res, next) => {
         }
         return res.status(500).json({ message: "File upload failed." });
     }
-    next();
 };

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "nodemon server.js --watch . --ext js,json",
     "start": "node server.js",
+    "test": "node --test tests/*.test.js",
+    "smoke:routes": "node scripts/smokeRoutes.js",
     "create-admin": "node scripts/createAdmin.js",
     "create-doctor": "node scripts/createDoctor.js",
     "create-patient": "node scripts/createPatient.js",
@@ -25,6 +27,7 @@
     "express-rate-limit": "^8.3.1",
     "express-validator": "^7.3.1",
     "helmet": "^8.1.0",
+    "hpp": "^0.2.3",
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.3",
     "mongodb": "^6.21.0",

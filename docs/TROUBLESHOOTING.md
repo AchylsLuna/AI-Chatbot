@@ -80,14 +80,12 @@ Note: server currently connects with hardcoded DB name `hospital_ai_blockchain` 
 - `Email is already registered.`
 
 ### Causes
-- Registration accepts only `gmail.com`, `hotmail.com`, `yahoo.com`, `outlook.com` domains in current controller logic.
 - Password complexity checks fail.
 - Email already exists.
 
 ### Fix
-1. Use an allowed email domain.
-2. Use a compliant password (8+ chars, upper/lowercase, number, special character).
-3. Sign in instead of re-registering existing account.
+1. Use a compliant password (8+ chars, upper/lowercase, number, special character).
+2. Sign in instead of re-registering an existing account.
 
 ## OTP Not Received / OTP Verification Fails
 
@@ -197,11 +195,11 @@ If `JWT_SECRET` is missing, OTP verification can fail when signing tokens in `se
 - Corrupted/incomplete downloaded file.
 
 ### Fix
-1. Use the same password used during backup encryption.
-2. Ensure first 16 bytes (IV) are preserved (do not edit file).
-3. Re-download backup if needed.
+1. Set `BACKUP_PASSWORD` to the same value used by the server at backup time.
+2. Run `node decrypt_backup/decrypt_backup.js <input.enc> <output.zip>`.
+3. Re-download the backup if authentication fails during decrypt.
 
-Note: `decrypt_backup/decrypt_backup.js` currently has a hardcoded password; update it before use.
+Note: backups now use a versioned AES-256-GCM envelope with authenticated metadata, random salt, and random IV. Do not edit any bytes in the `.enc` file.
 
 ## Frontend "Cannot reach API server"
 

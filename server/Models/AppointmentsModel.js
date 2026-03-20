@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+const ACTIVE_APPOINTMENT_STATUSES = ["Pending", "Confirmed"];
+
 const AppointmentsSchema = new mongoose.Schema(
     {
         patient: {
@@ -86,5 +88,15 @@ AppointmentsSchema.add({
 })
 
 AppointmentsSchema.index({ doctor: 1, scheduledDate: 1, status: 1 })
+AppointmentsSchema.index(
+    { doctor: 1, scheduledDate: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            status: { $in: ACTIVE_APPOINTMENT_STATUSES },
+        },
+        name: 'unique_active_doctor_slot',
+    }
+)
 
 export default mongoose.model("Appointments", AppointmentsSchema)

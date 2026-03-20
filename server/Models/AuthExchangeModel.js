@@ -1,22 +1,24 @@
 import mongoose from "mongoose";
 
-const SessionSchema = new mongoose.Schema({
+const AuthExchangeSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true,
+        index: true,
     },
-    tokenHash: {
+    codeHash: {
         type: String,
         required: true,
         unique: true,
         index: true,
     },
-    csrfTokenHash: {
+    sourcePage: {
         type: String,
-        required: true,
+        enum: ['login', 'doctor_login', 'admin_login'],
+        default: 'login',
     },
-    lastSeenAt: {
+    createdAt: {
         type: Date,
         default: Date.now,
     },
@@ -25,10 +27,6 @@ const SessionSchema = new mongoose.Schema({
         required: true,
         index: { expires: 0 },
     },
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    }
 })
 
-export default mongoose.model("Sessions", SessionSchema)
+export default mongoose.model("AuthExchange", AuthExchangeSchema)

@@ -4,6 +4,7 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import type { Reservation } from '../types'
 import AppLogoBadge from '../components/branding/AppLogoBadge'
 import { api } from '../services/api'
+import { chipButtonClass, panelCardClass, softPanelClass } from '../styles/uiClassNames'
 
 type LandingPageProps = {
   onNavigate?: (page: AppPage) => void
@@ -78,10 +79,11 @@ const fullNameMinLength = 2
 const fullNameMaxLength = 80
 const messageMinLength = 10
 const messageMaxLength = 1200
-const publicHeaderClass = 'landing-ref-header sticky top-0 z-50'
+const publicHeaderClass =
+  'landing-ref-header sticky top-0 z-50 border-b border-[color:var(--card-border)] bg-[color:var(--agent-bg)]/92 backdrop-blur'
 const publicBrandClass = 'inline-flex items-center gap-3 text-left'
-const sectionPanelClass = 'landing-ref-card rounded-[1.3rem] border p-6 shadow-[var(--card-shadow-soft)]'
-const softCardClass = 'landing-ref-soft-card rounded-[1rem] border'
+const sectionPanelClass = `${panelCardClass} landing-ref-card rounded-[1.3rem] p-6`
+const softCardClass = `${softPanelClass} landing-ref-soft-card rounded-[1rem]`
 const featureIconClass =
   'landing-ref-feature-icon grid h-10 w-10 place-items-center rounded-[0.8rem] text-[color:var(--agent-accent)]'
 
@@ -292,7 +294,7 @@ const LandingPage = ({
                 <button
                   type="button"
                   onClick={() => onNavigate?.('login')}
-                  className="landing-ref-nav-chip"
+                  className={chipButtonClass}
                 >
                   Login
                 </button>

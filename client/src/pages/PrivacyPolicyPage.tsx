@@ -1,3 +1,4 @@
+import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import type { AppPage } from '../types/navigation'
 
 type PrivacyPolicyPageProps = {
@@ -7,9 +8,8 @@ type PrivacyPolicyPageProps = {
 
 const PrivacyPolicyPage = ({ onNavigate, onGoBack }: PrivacyPolicyPageProps) => {
   return (
-    <section className="page-shell">
-      <div className="page-wrap">
-        <div className="mx-auto w-full max-w-4xl">
+    <AuthSplitLayout variant="lovable">
+      <div className="auth-lovable-page">
           <button
             type="button"
             onClick={() => (onGoBack ? onGoBack() : onNavigate?.('signup'))}
@@ -29,33 +29,37 @@ const PrivacyPolicyPage = ({ onNavigate, onGoBack }: PrivacyPolicyPageProps) => 
             Back
           </button>
 
-          <article className="agent-card mt-3 rounded-2xl p-6 sm:p-8">
-            <h1 className="text-2xl font-semibold text-[color:var(--agent-ink)]">
+          <p className="auth-lovable-section-label">Legal</p>
+          <h1 className="auth-lovable-title">
               Privacy Policy (RA 10173)
-            </h1>
-            <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
+          </h1>
+          <p className="auth-lovable-subtitle">
+            Review how personal information is collected, used, and protected on the platform.
+          </p>
+
+          <article className="mt-6 rounded-[1.6rem] border border-[color:var(--auth-lovable-border)] bg-[color:var(--auth-lovable-surface)] p-6 shadow-[var(--card-shadow-soft)] sm:p-8">
+            <p className="text-sm leading-7 text-[color:var(--auth-lovable-muted)]">
               Personal data is collected and processed in accordance with the Data Privacy Act of 2012
               (Republic Act No. 10173).
             </p>
 
-            <h2 className="mt-6 text-lg font-semibold text-[color:var(--agent-ink)]">How Data Is Used</h2>
-            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-7 text-[color:var(--agent-muted)]">
+            <h2 className="mt-6 text-lg font-semibold text-[color:var(--auth-lovable-ink)]">How Data Is Used</h2>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-7 text-[color:var(--auth-lovable-muted)]">
               <li>To create and secure your account.</li>
               <li>To support appointment, care, and operations workflows.</li>
               <li>To enforce session, authentication, and fraud-prevention controls.</li>
               <li>To comply with legal and regulatory obligations.</li>
             </ul>
 
-            <h2 className="mt-6 text-lg font-semibold text-[color:var(--agent-ink)]">Your Rights</h2>
-            <p className="mt-3 text-sm leading-7 text-[color:var(--agent-muted)]">
+            <h2 className="mt-6 text-lg font-semibold text-[color:var(--auth-lovable-ink)]">Your Rights</h2>
+            <p className="mt-3 text-sm leading-7 text-[color:var(--auth-lovable-muted)]">
               Subject to applicable law, you may request access, correction, or deletion of your personal
               information and may raise data privacy concerns through the support channels provided by this
               platform.
             </p>
           </article>
-        </div>
       </div>
-    </section>
+    </AuthSplitLayout>
   )
 }
 

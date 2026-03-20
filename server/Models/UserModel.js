@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
+const PASSWORD_HASH_ROUNDS = 12;
+
 const UserSchema = new mongoose.Schema(
     {
         email: {
@@ -90,11 +92,26 @@ const UserSchema = new mongoose.Schema(
             type: Date,
             select: false
         },
+        resetPasswordTokenHash: {
+            type: String,
+            select: false,
+        },
+        resetPasswordExpiresAt: {
+            type: Date,
+            select: false,
+        },
         settings: {
+            theme: {
+                type: String,
+                enum: ['light', 'dark'],
+                default: 'light',
+            },
             notifications: {
                 email: { type: Boolean, default: true },
                 sms: { type: Boolean, default: false },
                 push: { type: Boolean, default: true },
+                appointmentReminders: { type: Boolean, default: true },
+                securityAlerts: { type: Boolean, default: true },
             },
         },
         profile: {
@@ -120,7 +137,7 @@ const UserSchema = new mongoose.Schema(
     },
 );
 UserSchema.methods.setPassword = async function (password) {
-    this.passwordHashed = await bcrypt.hash(password, 10);
+    this.passwordHashed = await bcrypt.hash(password, PASSWORD_HASH_ROUNDS);
 };
 UserSchema.methods.validatePassword = async function (password) {
     return bcrypt.compare(password, this.passwordHashed);

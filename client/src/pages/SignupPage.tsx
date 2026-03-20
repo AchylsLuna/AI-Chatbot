@@ -6,8 +6,11 @@ import type { AuthSession, LoginOtpChallenge, SignupDraft } from '../types'
 
 type SignupPageProps = {
   onNavigate?: (page: AppPage) => void
+  onOpenTerms?: () => void
+  onOpenPrivacy?: () => void
   onSignupSuccess?: (session: AuthSession) => void
   onGoBack?: () => void
+  sourcePage?: Extract<AppPage, 'signup' | 'doctor_signup'>
   defaultRoleTab?: SignupRoleTab
 }
 
@@ -46,8 +49,11 @@ const meetsPasswordPolicy = (value: string) => {
 
 const SignupPage = ({
   onNavigate,
+  onOpenTerms,
+  onOpenPrivacy,
   onSignupSuccess,
   onGoBack,
+  sourcePage,
   defaultRoleTab = 'patient',
 }: SignupPageProps) => {
   const [fullName, setFullName] = useState('')
@@ -76,6 +82,8 @@ const SignupPage = ({
   const [isResendingOtp, setIsResendingOtp] = useState(false)
   const [otpResendSuccess, setOtpResendSuccess] = useState(false)
   const licenseInputRef = useRef<HTMLInputElement | null>(null)
+  const currentSignupPage: AppPage = defaultRoleTab === 'doctor' ? 'doctor_signup' : 'signup'
+  const resolvedSourcePage = sourcePage ?? (defaultRoleTab === 'doctor' ? 'doctor_signup' : 'signup')
 
   const resetSignupForm = () => {
     setSignupResult(null)
@@ -97,6 +105,17 @@ const SignupPage = ({
     setAcceptedTerms(false)
     if (licenseInputRef.current) {
       licenseInputRef.current.value = ''
+    }
+  }
+
+  const handleRoleTabChange = (nextRole: SignupRoleTab) => {
+    setRoleTab(nextRole)
+    setSubmitError(null)
+    setEmailError(null)
+
+    const targetPage: AppPage = nextRole === 'doctor' ? 'doctor_signup' : 'signup'
+    if (onNavigate && targetPage !== currentSignupPage) {
+      onNavigate(targetPage)
     }
   }
 
@@ -289,10 +308,7 @@ const SignupPage = ({
         <div className="auth-lovable-role-wrap mt-6">
           <button
             type="button"
-            onClick={() => {
-              setRoleTab('patient')
-              if (submitError) setSubmitError(null)
-            }}
+            onClick={() => handleRoleTabChange('patient')}
             className={`auth-lovable-role-button ${roleTab === 'patient' ? 'is-active' : ''}`}
           >
             <svg
@@ -311,10 +327,7 @@ const SignupPage = ({
           </button>
           <button
             type="button"
-            onClick={() => {
-              setRoleTab('doctor')
-              if (submitError) setSubmitError(null)
-            }}
+            onClick={() => handleRoleTabChange('doctor')}
             className={`auth-lovable-role-button ${roleTab === 'doctor' ? 'is-active' : ''}`}
           >
             <svg
@@ -717,6 +730,10 @@ const SignupPage = ({
               className="auth-lovable-link underline underline-offset-2"
               onClick={(event) => {
                 event.preventDefault()
+                if (onOpenTerms) {
+                  onOpenTerms()
+                  return
+                }
                 onNavigate?.('terms')
               }}
             >
@@ -728,6 +745,10 @@ const SignupPage = ({
               className="auth-lovable-link underline underline-offset-2"
               onClick={(event) => {
                 event.preventDefault()
+                if (onOpenPrivacy) {
+                  onOpenPrivacy()
+                  return
+                }
                 onNavigate?.('privacy_policy')
               }}
             >
@@ -753,7 +774,11 @@ const SignupPage = ({
 
           <p className="text-center text-sm text-[color:var(--auth-lovable-muted)]">
             Already have an account?{' '}
-            <button type="button" onClick={() => onNavigate?.('login')} className="auth-lovable-link font-medium">
+            <button
+              type="button"
+              onClick={() => onNavigate?.(resolvedSourcePage === 'doctor_signup' ? 'doctor_login' : 'login')}
+              className="auth-lovable-link font-medium"
+            >
               Sign in
             </button>
           </p>

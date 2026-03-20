@@ -35,6 +35,7 @@ export const authUserSchema = z.object({
 
 export const authSessionSchema = z.object({
   token: safeOptionalTextSchema,
+  csrfToken: safeOptionalTextSchema,
   user: authUserSchema,
 })
 

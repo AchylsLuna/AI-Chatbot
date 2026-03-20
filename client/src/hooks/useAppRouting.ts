@@ -8,11 +8,13 @@ import {
   resolvePageFromPath,
 } from '../config/routing'
 import type { AppPage } from '../types/navigation'
+import { buildAppRouteState, readAppRouteState } from '../utils/appRouteState'
 
-type NavigateOptions = {
+export type NavigateOptions = {
   replace?: boolean
   scroll?: boolean
   path?: string
+  state?: Record<string, unknown>
 }
 
 export type NavigateToPage = (page: AppPage, options?: NavigateOptions) => void
@@ -76,7 +78,7 @@ const useAppRouting = () => {
         : normalizePath(buildRoute(page))
     const target = buildRouteFromCanonicalPath(nextPath)
     const currentPath = normalizePath(window.location.pathname)
-    const state = { appRoute: true, appPage: page }
+    const state = buildAppRouteState(page, options?.state)
 
     if (nextPath !== currentPath) {
       if (options?.replace) {
@@ -123,7 +125,7 @@ const useAppRouting = () => {
       const sanitizedSearch = stripSensitiveSearchParams(window.location.search)
       if (canonicalPath !== currentPath || sanitizedSearch !== window.location.search) {
         window.history.replaceState(
-          { ...(window.history.state ?? {}), appRoute: true, appPage: resolved },
+          buildAppRouteState(resolved, undefined, readAppRouteState()),
           '',
           buildRouteFromCanonicalPath(canonicalPath, sanitizedSearch, window.location.hash)
         )
@@ -153,7 +155,7 @@ const useAppRouting = () => {
 
     if (!hasKnownRoute(window.location.pathname)) {
       window.history.replaceState(
-        { appRoute: true, appPage: 'landing' },
+        buildAppRouteState('landing'),
         '',
         buildRoute('landing')
       )
@@ -164,7 +166,7 @@ const useAppRouting = () => {
 
     const sanitizedSearch = stripSensitiveSearchParams(window.location.search)
     window.history.replaceState(
-      { ...(window.history.state ?? {}), appRoute: true, appPage: resolvedPage },
+      buildAppRouteState(resolvedPage, undefined, readAppRouteState()),
       '',
       buildRouteFromCanonicalPath(canonicalPath, sanitizedSearch, window.location.hash)
     )

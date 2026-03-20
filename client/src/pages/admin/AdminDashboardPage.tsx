@@ -14,8 +14,8 @@ import {
   pagePanelSoftClass,
   pageSubtleTextClass,
 } from '../../styles/pageUi'
-import { buildRouteFromCanonicalPath, normalizePath } from '../../config/routing'
 import { getAdminTabPath, resolveAdminTabFromPath } from '../../config/roleTabRoutes'
+import useTabRouteState from '../../hooks/useTabRouteState'
 import type { AppPage } from '../../types/navigation'
 import type { AuthSession, Reservation } from '../../types'
 import { formatPhilippineDateTime } from '../../utils/dateTime'
@@ -198,9 +198,11 @@ const AdminDashboardPage = ({
   onToggleTheme,
   dataMaskingEnabled,
 }: AdminDashboardPageProps) => {
-  const [activeSection, setActiveSection] = useState<AdminSection>(() => {
-    if (typeof window === 'undefined') return 'user_management'
-    return resolveAdminTabFromPath(window.location.pathname) ?? 'user_management'
+  const { activeTab: activeSection, setTab } = useTabRouteState<AdminSection>({
+    page: 'admin',
+    fallbackTab: 'user_management',
+    resolveTabFromPath: resolveAdminTabFromPath,
+    getTabPath: getAdminTabPath,
   })
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -283,31 +285,8 @@ const AdminDashboardPage = ({
     setSearchQuery('')
     setActionError(null)
     setActionMessage(null)
-    setActiveSection(next)
-    if (typeof window === 'undefined') return
-
-    const targetPath = getAdminTabPath(next)
-    if (normalizePath(window.location.pathname) === normalizePath(targetPath)) return
-
-    window.history.pushState(
-      { ...(window.history.state ?? {}), appRoute: true, appPage: 'admin' },
-      '',
-      buildRouteFromCanonicalPath(targetPath)
-    )
+    setTab(next)
   }
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const handlePopState = () => {
-      setActiveSection(resolveAdminTabFromPath(window.location.pathname) ?? 'user_management')
-    }
-
-    window.addEventListener('popstate', handlePopState)
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-    }
-  }, [])
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
 
@@ -316,10 +295,10 @@ const AdminDashboardPage = ({
       .filter((item) => item.role === 'user')
       .map((item) => {
         const fullName = `${item.firstName} ${item.lastName}`.trim()
-        const summary = buildBookingSummary(reservations, (reservation) => {
-          const patientName = reservation.patientName.trim().toLowerCase()
-          return patientName === fullName.toLowerCase()
-        })
+        const summary = buildBookingSummary(
+          reservations,
+          (reservation) => reservation.patientId === item.id
+        )
         return { user: item, fullName, summary }
       })
       .sort((a, b) => parseDate(b.summary.latestActivity) - parseDate(a.summary.latestActivity))
@@ -330,10 +309,10 @@ const AdminDashboardPage = ({
       .filter((item) => item.role === 'doctor')
       .map((item) => {
         const fullName = `${item.firstName} ${item.lastName}`.trim()
-        const summary = buildBookingSummary(reservations, (reservation) => {
-          const doctorName = (reservation.doctorName ?? '').trim().toLowerCase()
-          return doctorName === fullName.toLowerCase()
-        })
+        const summary = buildBookingSummary(
+          reservations,
+          (reservation) => reservation.doctorId === item.id
+        )
         return { user: item, fullName, summary }
       })
       .sort((a, b) => parseDate(b.summary.latestActivity) - parseDate(a.summary.latestActivity))

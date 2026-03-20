@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import AuthSplitLayout from '../../components/auth/AuthSplitLayout'
+import PasswordVisibilityToggle from '../../components/auth/PasswordVisibilityToggle'
+import { api } from '../../services/api'
 import type { AppPage } from '../../types/navigation'
 import type { AuthProvider, AuthSession } from '../../types'
 import { formatRoleLabel } from '../../utils/roles'
+import { isAdminRole, isDoctorRole } from '../../utils/roleRoutes'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i
 
@@ -16,6 +19,7 @@ type AdminLoginPageProps = {
   isBiometricReady?: boolean
   onLogout: () => void
   onNavigate?: (page: AppPage) => void
+  onForgotPassword?: () => void
   onGoBack?: () => void
 }
 
@@ -29,93 +33,125 @@ const AdminLoginPage = ({
   isBiometricReady = false,
   onLogout,
   onNavigate,
+  onForgotPassword,
+  onGoBack,
 }: AdminLoginPageProps) => {
   const [username, setUsername] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
   const passwordInputRef = useRef<HTMLInputElement | null>(null)
 
-  const hasAdminPortalAccess = authUser
-    ? authUser.role === 'admin' || authUser.role === 'system_admin'
-    : false
-  const hasDoctorDashboardAccess = authUser ? authUser.role === 'doctor' : false
+  const hasAdminPortalAccess = isAdminRole(authUser?.role, authUser?.accountType)
+  const hasDoctorDashboardAccess = isDoctorRole(authUser?.role, authUser?.accountType)
 
-  const clearPasswordField = () => {
+  const clearPasswordInputValue = () => {
     if (passwordInputRef.current) {
       passwordInputRef.current.value = ''
     }
   }
 
+  const resetPasswordField = () => {
+    clearPasswordInputValue()
+    setShowPassword(false)
+  }
+
   useEffect(() => {
     if (!authError) return
-    clearPasswordField()
+    clearPasswordInputValue()
   }, [authError])
 
   return (
-    <AuthSplitLayout layout="center" centerBorderless>
-      <div className="mx-auto w-full max-w-md rounded-3xl bg-[color:var(--agent-surface)] p-6 sm:p-8">
-        <div className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center text-[color:var(--agent-accent)]">
+    <AuthSplitLayout variant="lovable">
+      <div className="auth-lovable-page">
+        {onGoBack ? (
+          <button
+            type="button"
+            onClick={onGoBack}
+            className="auth-lovable-back-link"
+          >
             <svg
               viewBox="0 0 24 24"
-              className="h-5 w-5"
+              className="h-4 w-4"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <path d="M12 3l7 4v5c0 5-3.5 8.5-7 9-3.5-0.5-7-4-7-9V7l7-4z" />
-              <path d="M9 12l2 2 4-4" />
+              <path d="M15 18l-6-6 6-6" />
             </svg>
-          </div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--agent-accent)]">
-            Restricted Access
-          </p>
-          <h2 className="mt-3 text-3xl font-semibold text-[color:var(--agent-ink)]">Admin Login</h2>
-          <p className="mt-2 text-sm text-[color:var(--agent-muted)]">
-            Use an Admin account to continue.
-          </p>
-        </div>
+            Back
+          </button>
+        ) : null}
+
+        <p className="auth-lovable-section-label">Restricted access</p>
+        <h2 className="auth-lovable-title">Admin login</h2>
+        <p className="auth-lovable-subtitle">
+          Use an authorized admin account to access user management, audit history, and operational controls.
+        </p>
 
         {authUser ? (
-          <div className="mt-6 space-y-4 text-center">
-            <div className="rounded-2xl border border-[color:var(--card-border)] bg-[color:var(--agent-surface-strong)] p-4 text-sm text-[color:var(--agent-muted)]">
-              Signed in as <span className="font-semibold text-[color:var(--agent-ink)]">{authUser.username}</span> (
-              {formatRoleLabel(authUser.role)}).
+          <div className="mt-6 space-y-4">
+            <div className="rounded-xl border border-[color:var(--auth-lovable-border)] bg-[color:var(--auth-lovable-surface-soft)] p-3 text-sm text-[color:var(--auth-lovable-muted)]">
+              Signed in as{' '}
+              <span className="font-semibold text-[color:var(--auth-lovable-ink)]">
+                {authUser.username}
+              </span>{' '}
+              ({formatRoleLabel(authUser.role)}).
             </div>
 
             {hasAdminPortalAccess ? (
-              <div className="space-y-3">
-                <p className="text-sm text-emerald-300">
-                  Access verified. Continue to the Admin Dashboard.
+              <div className="space-y-4">
+                <p className="text-sm text-[color:var(--auth-lovable-muted)]">
+                  Access verified. Continue to the Admin Dashboard or sign out to switch accounts.
                 </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button onClick={() => onNavigate?.('admin')} className="agent-button w-full">
+                <div className="auth-lovable-actions">
+                  <button
+                    type="button"
+                    onClick={() => onNavigate?.('admin')}
+                    className="auth-lovable-primary-button px-4 py-2.5"
+                  >
                     Open Admin Dashboard
                   </button>
-                  <button onClick={onLogout} className="agent-button-ghost w-full">
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="auth-lovable-secondary-button px-4 py-2.5"
+                  >
                     Sign out
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-rose-300">
+              <div className="space-y-4">
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">
                   {hasDoctorDashboardAccess
-                    ? 'This account does not have admin portal access. Open the Doctor Dashboard or sign out and use an Admin account.'
-                    : 'This account does not have admin portal access. Sign out and use an Admin account.'}
+                    ? 'This account does not have admin access. Open the Doctor Dashboard or sign out and use an Admin account.'
+                    : 'This account does not have admin access. Sign out and use an Admin account.'}
                 </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button onClick={onLogout} className="agent-button-ghost w-full">
+                <div className="auth-lovable-actions">
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="auth-lovable-secondary-button px-4 py-2.5"
+                  >
                     Sign out
                   </button>
                   {hasDoctorDashboardAccess ? (
-                    <button onClick={() => onNavigate?.('doctor_dashboard')} className="agent-button w-full">
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.('doctor_dashboard')}
+                      className="auth-lovable-primary-button px-4 py-2.5"
+                    >
                       Doctor Dashboard
                     </button>
                   ) : (
-                    <button onClick={() => onNavigate?.('login')} className="agent-button w-full">
-                      Staff login
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.('login')}
+                      className="auth-lovable-primary-button px-4 py-2.5"
+                    >
+                      Patient Login
                     </button>
                   )}
                 </div>
@@ -124,11 +160,12 @@ const AdminLoginPage = ({
           </div>
         ) : (
           <form
-            className="mt-6 space-y-4 text-left"
+            className="mt-6 space-y-4"
             onSubmit={(event) => {
               event.preventDefault()
               const email = username.trim().toLowerCase()
               const passwordValue = passwordInputRef.current?.value ?? ''
+
               if (!EMAIL_PATTERN.test(email)) {
                 setFormError('Use a valid email address before signing in.')
                 return
@@ -137,103 +174,99 @@ const AdminLoginPage = ({
                 setFormError('Enter your password before signing in.')
                 return
               }
+
               setFormError(null)
               onLogin(email, passwordValue, 'admin')
-              clearPasswordField()
+              resetPasswordField()
             }}
           >
-            <div className="space-y-2">
-              <label
-                htmlFor="admin-login-username"
-                className="text-xs font-semibold uppercase tracking-[0.1em] text-[color:var(--agent-muted)]"
-              >
-                Admin email
-              </label>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M4 4h16v16H4z" opacity="0" />
-                    <path d="M4 6h16" />
-                    <path d="M4 6l8 6 8-6" />
-                  </svg>
-                </span>
-                <input
-                  id="admin-login-username"
-                  type="email"
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  value={username}
-                  onChange={(event) => {
-                    setUsername(event.target.value)
-                    if (formError) setFormError(null)
-                  }}
-                  placeholder="Admin email address"
-                  className="agent-input agent-input-icon"
-                />
-              </div>
+            <div className="relative">
+              <span className="auth-lovable-input-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4 6h16" />
+                  <path d="M4 6l8 6 8-6" />
+                  <rect x="4" y="4" width="16" height="16" rx="2" opacity="0" />
+                </svg>
+              </span>
+              <input
+                type="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                value={username}
+                onChange={(event) => {
+                  setUsername(event.target.value)
+                  if (formError) setFormError(null)
+                }}
+                placeholder="Admin email address"
+                className="auth-lovable-input pl-10"
+              />
             </div>
 
-            <div className="space-y-2">
-              <label
-                htmlFor="admin-login-password"
-                className="text-xs font-semibold uppercase tracking-[0.1em] text-[color:var(--agent-muted)]"
-              >
-                Password
-              </label>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[color:var(--agent-muted-soft)]">
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="4" y="10" width="16" height="10" rx="2" />
-                    <path d="M8 10V7a4 4 0 018 0v3" />
-                  </svg>
-                </span>
-                <input
-                  ref={passwordInputRef}
-                  id="admin-login-password"
-                  type="password"
-                  autoComplete="current-password"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  onInput={() => {
-                    if (formError) setFormError(null)
-                  }}
-                  placeholder="Password"
-                  className="agent-input agent-input-icon"
-                />
-              </div>
+            <div className="relative">
+              <span className="auth-lovable-input-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="4" y="10" width="16" height="10" rx="2" />
+                  <path d="M8 10V7a4 4 0 018 0v3" />
+                </svg>
+              </span>
+              <input
+                ref={passwordInputRef}
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                onInput={() => {
+                  if (formError) setFormError(null)
+                }}
+                placeholder="Password"
+                className="auth-lovable-input pl-10 pr-10"
+              />
+              <PasswordVisibilityToggle
+                visible={showPassword}
+                onToggle={() => setShowPassword((previous) => !previous)}
+              />
             </div>
 
-            {(formError || authError) && (
-              <p className="rounded-xl border border-rose-300/30 bg-rose-300/10 px-3 py-2 text-xs font-semibold text-rose-300">
-                {formError ?? authError}
-              </p>
-            )}
+            {formError || authError ? (
+              <p className="auth-lovable-alert-error">{formError ?? authError}</p>
+            ) : null}
 
             <button
               type="submit"
               disabled={isAuthLoading}
-              className="agent-button w-full disabled:cursor-not-allowed"
+              className="auth-lovable-primary-button h-12 w-full disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isAuthLoading ? 'Signing in...' : 'Sign in'}
+              {isAuthLoading ? 'Signing in...' : 'Sign in as Admin'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = api.buildGoogleAuthUrl('admin_login')
+              }}
+              disabled={isAuthLoading}
+              className="auth-lovable-secondary-button w-full px-4 py-2.5 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Continue with Google
             </button>
 
             {onProviderLogin ? (
@@ -241,14 +274,47 @@ const AdminLoginPage = ({
                 type="button"
                 onClick={onProviderLogin}
                 disabled={isAuthLoading}
-                className="agent-button-ghost w-full disabled:cursor-not-allowed"
+                className="auth-lovable-secondary-button w-full px-4 py-2.5 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Continue with Auth0 SSO
               </button>
             ) : null}
 
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onForgotPassword) {
+                    onForgotPassword()
+                    return
+                  }
+                  onNavigate?.('forgot_password')
+                }}
+                className="auth-lovable-link"
+              >
+                Forgot password?
+              </button>
+
+              <div className="flex flex-wrap items-center gap-3 text-[color:var(--auth-lovable-muted)]">
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('login')}
+                  className="auth-lovable-link"
+                >
+                  Patient login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('doctor_login')}
+                  className="auth-lovable-link"
+                >
+                  Doctor login
+                </button>
+              </div>
+            </div>
+
             {authProvider === 'auth0' ? (
-              <p className="text-center text-[11px] text-[color:var(--agent-muted)]">
+              <p className="text-center text-[11px] text-[color:var(--auth-lovable-muted)]">
                 Enterprise SSO active{isBiometricReady ? ' with biometric hook support.' : '.'}
               </p>
             ) : null}

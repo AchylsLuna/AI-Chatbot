@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, type ReactNode } from 'react'
 import GlobalAssistantChat from './components/chat/GlobalAssistantChat'
 import AppHeader from './components/layout/AppHeader'
 import PageHeader from './components/layout/PageHeader'
@@ -10,20 +10,24 @@ import useAppRouting from './hooks/useAppRouting'
 import useScrollReveal from './hooks/useScrollReveal'
 import useAppTheme from './hooks/useAppTheme'
 import { isAdminRole, isDoctorRole } from './utils/roleRoutes'
-import AdminDashboardPage from './pages/admin/AdminDashboardPage'
-import AdminLoginPage from './pages/admin/AdminLoginPage'
-import DoctorDashboardPage from './pages/doctor/DoctorDashboardPage'
-import PatientAppointmentsPage from './pages/patient/PatientAppointmentsPage'
-import ForgotPasswordPage from './pages/ForgotPasswordPage'
-import LandingPage from './pages/LandingPage'
-import LoginPage from './pages/LoginPage'
-import OtpPage from './pages/OtpPage'
-import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
-import SignupPage from './pages/SignupPage'
-import TermsPage from './pages/TermsPage'
 import ConfirmModal from './components/ui/ConfirmModal'
+import { resolveSourcePage } from './utils/appRouteState'
+
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'))
+const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage'))
+const DoctorDashboardPage = lazy(() => import('./pages/doctor/DoctorDashboardPage'))
+const PatientAppointmentsPage = lazy(() => import('./pages/patient/PatientAppointmentsPage'))
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
+const LandingPage = lazy(() => import('./pages/LandingPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const OtpPage = lazy(() => import('./pages/OtpPage'))
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'))
+const SignupPage = lazy(() => import('./pages/SignupPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
 
 type ProtectedPage = 'appointments' | 'doctor_dashboard'
+const AUTH_SOURCE_PAGES = ['login', 'doctor_login', 'admin_login'] as const
+const SIGNUP_SOURCE_PAGES = ['signup', 'doctor_signup'] as const
 
 function App() {
   const { currentPage, navigateToPage, navigateBack, isLanding, isAuthPage } = useAppRouting()
@@ -68,16 +72,19 @@ function App() {
   const showSupportAssistant = true
   const isDoctorAuthenticated = isDoctorRole(authUser?.role, authUser?.accountType)
   const isAdminAuthenticated = isAdminRole(authUser?.role, authUser?.accountType)
+  const isPatientAuthenticated =
+    Boolean(authUser) && !isDoctorAuthenticated && !isAdminAuthenticated
   const isLoginActionLoading = authUiAction === 'login' || authUiAction === 'provider'
   const isOtpActionLoading = authUiAction === 'otp'
+  const forgotPasswordSourcePage = resolveSourcePage(AUTH_SOURCE_PAGES, 'login')
+  const legalSourcePage = resolveSourcePage(SIGNUP_SOURCE_PAGES, 'signup')
 
   useEffect(() => {
-    if (!authUser) return
-    if (authUser.role !== 'user') return
+    if (!isPatientAuthenticated) return
     if (currentPage === 'appointments') return
     if (currentPage !== 'doctor_dashboard' && currentPage !== 'admin') return
     navigateToPage('appointments', { replace: true })
-  }, [authUser, currentPage, navigateToPage])
+  }, [currentPage, isPatientAuthenticated, navigateToPage])
 
   useEffect(() => {
     if (!authUser) return
@@ -119,6 +126,9 @@ function App() {
       isBiometricReady={isBiometricReady}
       onLogout={handleLogout}
       onNavigate={navigateToPage}
+      onForgotPassword={() =>
+        navigateToPage('forgot_password', { state: { sourcePage: 'login' } })
+      }
       onGoBack={() => navigateBack('landing')}
       defaultRoleTab="patient"
     />
@@ -136,6 +146,9 @@ function App() {
       isBiometricReady={isBiometricReady}
       onLogout={handleLogout}
       onNavigate={navigateToPage}
+      onForgotPassword={() =>
+        navigateToPage('forgot_password', { state: { sourcePage: 'doctor_login' } })
+      }
       onGoBack={() => navigateBack('landing')}
       defaultRoleTab="doctor"
     />
@@ -152,6 +165,9 @@ function App() {
       isBiometricReady={isBiometricReady}
       onLogout={handleLogout}
       onNavigate={navigateToPage}
+      onForgotPassword={() =>
+        navigateToPage('forgot_password', { state: { sourcePage: 'admin_login' } })
+      }
       onGoBack={() => navigateBack('landing')}
     />
   )
@@ -222,7 +238,7 @@ function App() {
       break
 
     case 'appointments':
-      if (authUser && authUser.role !== 'user') {
+      if (authUser && !isPatientAuthenticated) {
         pageContent = (
           <AuthLoadingCard
             label={isAdminAuthenticated ? 'Redirecting to admin dashboard...' : "Redirecting to doctor's dashboard..."}
@@ -255,7 +271,7 @@ function App() {
       break
 
     case 'doctor_dashboard':
-      if (authUser?.role === 'user') {
+      if (isPatientAuthenticated) {
         pageContent = <AuthLoadingCard label="Redirecting to appointments..." />
       } else if (isAdminAuthenticated) {
         pageContent = <AuthLoadingCard label="Redirecting to admin dashboard..." />
@@ -284,7 +300,7 @@ function App() {
       break
 
     case 'admin':
-      if (authUser?.role === 'user') {
+      if (isPatientAuthenticated) {
         pageContent = <AuthLoadingCard label="Redirecting to appointments..." />
       } else if (isDoctorAuthenticated) {
         pageContent = <AuthLoadingCard label="Redirecting to doctor's dashboard..." />
@@ -319,7 +335,7 @@ function App() {
       break
 
     case 'admin_login':
-      if (authUser?.role === 'user') {
+      if (isPatientAuthenticated) {
         pageContent = (
           <AccessDeniedCard
             title="Staff login only"
@@ -352,8 +368,13 @@ function App() {
         <SignupPage
           key="signup-patient"
           onNavigate={navigateToPage}
+          onOpenTerms={() => navigateToPage('terms', { state: { sourcePage: 'signup' } })}
+          onOpenPrivacy={() =>
+            navigateToPage('privacy_policy', { state: { sourcePage: 'signup' } })
+          }
           onSignupSuccess={handleSignupSuccess}
           onGoBack={() => navigateBack('login')}
+          sourcePage="signup"
           defaultRoleTab="patient"
         />
       )
@@ -363,7 +384,14 @@ function App() {
         <SignupPage
           key="signup-doctor"
           onNavigate={navigateToPage}
+          onOpenTerms={() =>
+            navigateToPage('terms', { state: { sourcePage: 'doctor_signup' } })
+          }
+          onOpenPrivacy={() =>
+            navigateToPage('privacy_policy', { state: { sourcePage: 'doctor_signup' } })
+          }
           onGoBack={() => navigateBack('doctor_login')}
+          sourcePage="doctor_signup"
           defaultRoleTab="doctor"
         />
       )
@@ -373,20 +401,27 @@ function App() {
       pageContent = (
         <ForgotPasswordPage
           onNavigate={navigateToPage}
-          onGoBack={() => navigateToPage('login', { replace: true })}
+          onGoBack={() => navigateToPage(forgotPasswordSourcePage, { replace: true })}
+          sourcePage={forgotPasswordSourcePage}
         />
       )
       break
 
     case 'terms':
       pageContent = (
-        <TermsPage onNavigate={navigateToPage} onGoBack={() => navigateBack('signup')} />
+        <TermsPage
+          onNavigate={navigateToPage}
+          onGoBack={() => navigateToPage(legalSourcePage, { replace: true })}
+        />
       )
       break
 
     case 'privacy_policy':
       pageContent = (
-        <PrivacyPolicyPage onNavigate={navigateToPage} onGoBack={() => navigateBack('signup')} />
+        <PrivacyPolicyPage
+          onNavigate={navigateToPage}
+          onGoBack={() => navigateToPage(legalSourcePage, { replace: true })}
+        />
       )
       break
 
@@ -430,7 +465,11 @@ function App() {
           />
         )}
 
-        <main>{pageContent}</main>
+        <main>
+          <Suspense fallback={<AuthLoadingCard label="Loading page..." />}>
+            {pageContent}
+          </Suspense>
+        </main>
         {showSupportAssistant && (
           <GlobalAssistantChat
             key={`global-chat-${authUser?.username ?? 'guest'}-${authUser?.role ?? 'guest'}`}
