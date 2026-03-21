@@ -18,7 +18,7 @@ const AuthShowcase = () => (
         <p className="text-xs text-[color:var(--agent-muted)]">Clinical access and appointment operations</p>
       </div>
     </div>
-    <h1 className="mt-6 max-w-[16ch] text-3xl font-semibold leading-tight text-[color:var(--agent-ink)] sm:text-4xl">
+    <h1 className="ui-display-title mt-6 max-w-[16ch] text-3xl font-semibold leading-tight text-[color:var(--agent-ink)] sm:text-4xl">
       Secure access for appointment and care workflows
     </h1>
     <p className="mt-3 max-w-[46ch] text-sm leading-7 text-[color:var(--agent-muted)]">

@@ -50,7 +50,7 @@ class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorBoundary
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--agent-danger)]">
             Protected UI Recovery
           </p>
-          <h2 className="mt-3 text-2xl font-semibold text-[color:var(--agent-ink)]">
+          <h2 className="ui-display-state-title mt-3 text-2xl font-semibold text-[color:var(--agent-ink)]">
             {this.props.section} failed safely
           </h2>
           <p className="mt-2 text-sm text-[color:var(--agent-muted)]">

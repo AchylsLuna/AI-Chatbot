@@ -3,15 +3,21 @@ import AppLogoBadge from '../branding/AppLogoBadge'
 
 export type SidebarIcon =
   | 'home'
+  | 'dashboard'
   | 'calendar'
+  | 'calendar-check'
+  | 'calendar-days'
   | 'book'
+  | 'clock'
   | 'pill'
   | 'folder'
   | 'message'
   | 'alert'
   | 'hospital'
   | 'user'
+  | 'users'
   | 'chart'
+  | 'chart-column'
   | 'report'
   | 'shield'
   | 'settings'
@@ -70,11 +76,29 @@ type SidebarProps = {
 
 const SidebarGlyph = ({ icon }: { icon?: SidebarIcon }) => {
   switch (icon) {
+    case 'dashboard':
+      return (
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="7" height="8" rx="1" />
+          <rect x="14" y="3" width="7" height="5" rx="1" />
+          <rect x="14" y="12" width="7" height="9" rx="1" />
+          <rect x="3" y="16" width="7" height="5" rx="1" />
+        </svg>
+      )
     case 'home':
       return (
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="m3 11 9-8 9 8" />
           <path d="M5 10v10h14V10" />
+        </svg>
+      )
+    case 'calendar-check':
+      return (
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M8 2v4M16 2v4" />
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+          <path d="M3 10h18" />
+          <path d="m9 16 2 2 4-4" />
         </svg>
       )
     case 'calendar':
@@ -84,11 +108,27 @@ const SidebarGlyph = ({ icon }: { icon?: SidebarIcon }) => {
           <path d="M16 2v4M8 2v4M3 10h18" />
         </svg>
       )
+    case 'calendar-days':
+      return (
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M8 2v4M16 2v4" />
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+          <path d="M3 10h18" />
+          <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
+        </svg>
+      )
     case 'book':
       return (
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M4 19a2 2 0 0 0 2 2h14" />
           <path d="M6 2h12v19H6a2 2 0 0 1 0-4h12" />
+        </svg>
+      )
+    case 'clock':
+      return (
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 7v5l3 2" />
         </svg>
       )
     case 'pill':
@@ -133,11 +173,29 @@ const SidebarGlyph = ({ icon }: { icon?: SidebarIcon }) => {
           <circle cx="12" cy="8" r="4" />
         </svg>
       )
+    case 'users':
+      return (
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+          <circle cx="9.5" cy="7" r="3" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 4.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      )
     case 'chart':
       return (
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M3 3v18h18" />
           <path d="m7 13 4-4 3 3 5-5" />
+        </svg>
+      )
+    case 'chart-column':
+      return (
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M4 20h16" />
+          <path d="M8 16v-4" />
+          <path d="M12 16V8" />
+          <path d="M16 16v-6" />
         </svg>
       )
     case 'report':

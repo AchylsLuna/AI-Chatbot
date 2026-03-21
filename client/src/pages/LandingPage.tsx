@@ -330,7 +330,7 @@ const LandingPage = ({
                   <span className="landing-ref-pulse-dot" aria-hidden="true" />
                   Clinical appointment platform
                 </span>
-                <h1 className="mt-4 max-w-[10ch] text-[clamp(2.25rem,6.4vw,4.4rem)] font-medium leading-[0.95] tracking-[-0.03em] text-[color:var(--agent-ink)]">
+                <h1 className="ui-display-hero mt-4 max-w-[10ch] text-[clamp(2.25rem,6.4vw,4.4rem)] font-semibold text-[color:var(--agent-ink)]">
                   Your trusted appointment workflow starts here.
                 </h1>
                 <p className="mt-4 max-w-[34ch] text-sm leading-7 text-[color:var(--agent-muted)] sm:text-base">

@@ -4,8 +4,23 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Manrope', 'ui-sans-serif', 'system-ui'],
-        display: ['Space Grotesk', 'Manrope', 'ui-sans-serif', 'system-ui'],
+        sans: [
+          'Plus Jakarta Sans',
+          'Segoe UI',
+          'system-ui',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'sans-serif',
+        ],
+        display: [
+          'Sora',
+          'Plus Jakarta Sans',
+          'Segoe UI',
+          'system-ui',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'sans-serif',
+        ],
       },
       colors: {
         navy: '#0f2c52',
