@@ -60,7 +60,6 @@ const SignupPage = ({
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [roleTab, setRoleTab] = useState<SignupRoleTab>(defaultRoleTab)
   const [doctorLicenseId, setDoctorLicenseId] = useState('')
   const [doctorDepartment, setDoctorDepartment] = useState('')
   const [licenseFiles, setLicenseFiles] = useState<File[]>([])
@@ -82,7 +81,7 @@ const SignupPage = ({
   const [isResendingOtp, setIsResendingOtp] = useState(false)
   const [otpResendSuccess, setOtpResendSuccess] = useState(false)
   const licenseInputRef = useRef<HTMLInputElement | null>(null)
-  const currentSignupPage: AppPage = defaultRoleTab === 'doctor' ? 'doctor_signup' : 'signup'
+  const roleTab: SignupRoleTab = defaultRoleTab === 'doctor' ? 'doctor' : 'patient'
   const resolvedSourcePage = sourcePage ?? (defaultRoleTab === 'doctor' ? 'doctor_signup' : 'signup')
 
   const resetSignupForm = () => {
@@ -101,21 +100,9 @@ const SignupPage = ({
     setDoctorLicenseId('')
     setDoctorDepartment('')
     setLicenseFiles([])
-    setRoleTab(defaultRoleTab)
     setAcceptedTerms(false)
     if (licenseInputRef.current) {
       licenseInputRef.current.value = ''
-    }
-  }
-
-  const handleRoleTabChange = (nextRole: SignupRoleTab) => {
-    setRoleTab(nextRole)
-    setSubmitError(null)
-    setEmailError(null)
-
-    const targetPage: AppPage = nextRole === 'doctor' ? 'doctor_signup' : 'signup'
-    if (onNavigate && targetPage !== currentSignupPage) {
-      onNavigate(targetPage)
     }
   }
 
@@ -305,45 +292,9 @@ const SignupPage = ({
         ) : null}
 
         <h2 className="auth-lovable-title">Create your account</h2>
-        <div className="auth-lovable-role-wrap mt-6">
-          <button
-            type="button"
-            onClick={() => handleRoleTabChange('patient')}
-            className={`auth-lovable-role-button ${roleTab === 'patient' ? 'is-active' : ''}`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 12a4 4 0 100-8 4 4 0 000 8z" />
-              <path d="M4 21a8 8 0 0116 0" />
-            </svg>
-            Patient
-          </button>
-          <button
-            type="button"
-            onClick={() => handleRoleTabChange('doctor')}
-            className={`auth-lovable-role-button ${roleTab === 'doctor' ? 'is-active' : ''}`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 3v18M3 12h18" />
-            </svg>
-            Doctor
-          </button>
-        </div>
+        <p className="auth-lovable-section-label mt-6">
+          {roleTab === 'doctor' ? 'Doctor account' : 'Patient account'}
+        </p>
 
         <form
           className="mt-5 space-y-4"
@@ -412,7 +363,11 @@ const SignupPage = ({
 
             if (roleTab !== 'doctor') {
               try {
-                otpChallenge = await api.requestOtpChallenge(cleanedEmail, cleanedPassword)
+                otpChallenge = await api.requestOtpChallenge(
+                  cleanedEmail,
+                  cleanedPassword,
+                  'login'
+                )
               } catch (error) {
                 otpSetupError =
                   error instanceof Error

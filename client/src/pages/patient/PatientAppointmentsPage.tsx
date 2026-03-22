@@ -15,8 +15,12 @@ import type { AuthSession, Reservation, ReservationDraft } from '../../types'
 import {
   pageFieldClass,
   pageGhostButtonClass,
+  pageHeadingTextClass,
+  pageMutedTextClass,
   pagePanelClass,
+  pagePanelSoftClass,
   pagePrimaryButtonClass,
+  pageSubtleTextClass,
 } from '../../styles/pageUi'
 import { maskPersonName } from '../../utils/privacy'
 import { getRoleLabel } from '../../utils/roles'
@@ -150,6 +154,8 @@ const notificationBookingItems: Array<{
 ]
 
 const patientPageCardClass = pagePanelClass
+const patientSectionCardClass = `${patientPageCardClass} patient-section-card`
+const patientSoftCardClass = `${pagePanelSoftClass} patient-soft-card p-5`
 const patientFieldClass = pageFieldClass
 const patientMutedFieldClass =
   `${pageFieldClass} bg-[color:var(--agent-surface-strong)] text-[color:var(--agent-muted)]`
@@ -161,6 +167,12 @@ const patientCompactPrimaryActionButtonClass =
   'inline-flex items-center justify-center rounded-[0.95rem] bg-[color:var(--agent-accent)] px-3.5 py-2 text-xs font-semibold text-[color:var(--agent-on-accent)] transition hover:bg-[color:var(--agent-accent-strong)]'
 const patientHistoryFilterClass =
   'px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize'
+const patientSectionEyebrowClass = `text-xs font-semibold uppercase tracking-[0.16em] ${pageSubtleTextClass}`
+const patientSectionTitleClass = `text-[1.18rem] font-semibold tracking-[-0.03em] ${pageHeadingTextClass}`
+const patientSectionDisplayTitleClass = `text-[1.34rem] font-semibold tracking-[-0.035em] ${pageHeadingTextClass}`
+const patientSectionCopyClass = `text-sm leading-6 ${pageMutedTextClass}`
+const patientFieldLabelClass = `mb-1.5 block text-sm font-medium ${pageMutedTextClass}`
+const patientMetaValueClass = `text-sm font-semibold ${pageHeadingTextClass}`
 const departmentIconMap: Record<string, string> = {
   'Internal Medicine': '🩺',
   Cardiology: '❤️',
@@ -1096,31 +1108,31 @@ const PatientAppointmentsPage = ({
           ) : null}
 
           {isProfileLoading ? (
-            <div className={`${patientPageCardClass} p-6 text-sm text-slate-500`}>
+            <div className={`${patientSectionCardClass} p-6 text-sm ${pageMutedTextClass}`}>
               Loading profile data...
             </div>
           ) : (
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_20rem]">
               <div className="space-y-6">
-                <div className={`${patientPageCardClass} p-6`}>
+                <div className={`${patientSectionCardClass} p-6`}>
                   <div className="mb-5">
-                    <h2 className="text-xl font-semibold text-slate-900">Personal Information</h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <h2 className={patientSectionTitleClass}>Personal Information</h2>
+                    <p className={`mt-1 ${patientSectionCopyClass}`}>
                       Update your primary details used for appointment intake.
                     </p>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Full Name</label>
+                      <label className={patientFieldLabelClass}>Full Name</label>
                       <input value={fullName} disabled className={patientMutedFieldClass} />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Email Address</label>
+                      <label className={patientFieldLabelClass}>Email Address</label>
                       <input value={authUser?.username ?? ''} disabled className={patientMutedFieldClass} />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Phone Number</label>
+                      <label className={patientFieldLabelClass}>Phone Number</label>
                       <input
                         value={profileForm.phoneNumber}
                         onChange={(event) =>
@@ -1131,7 +1143,7 @@ const PatientAppointmentsPage = ({
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Date of Birth</label>
+                      <label className={patientFieldLabelClass}>Date of Birth</label>
                       <input
                         type="date"
                         value={profileForm.dateOfBirth}
@@ -1142,7 +1154,7 @@ const PatientAppointmentsPage = ({
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Gender</label>
+                      <label className={patientFieldLabelClass}>Gender</label>
                       <input
                         value={profileForm.gender}
                         onChange={(event) =>
@@ -1153,7 +1165,7 @@ const PatientAppointmentsPage = ({
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Address</label>
+                      <label className={patientFieldLabelClass}>Address</label>
                       <input
                         value={profileForm.address}
                         onChange={(event) =>
@@ -1166,17 +1178,17 @@ const PatientAppointmentsPage = ({
                   </div>
                 </div>
 
-                <div className={`${patientPageCardClass} p-6`}>
+                <div className={`${patientSectionCardClass} p-6`}>
                   <div className="mb-5">
-                    <h2 className="text-xl font-semibold text-slate-900">Health Information</h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <h2 className={patientSectionTitleClass}>Health Information</h2>
+                    <p className={`mt-1 ${patientSectionCopyClass}`}>
                       Keep your intake details updated before scheduling care.
                     </p>
                   </div>
 
                   <div className="space-y-5">
                     <div className="max-w-xs">
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Blood Type</label>
+                      <label className={patientFieldLabelClass}>Blood Type</label>
                       <input
                         value={healthForm.bloodType}
                         onChange={(event) =>
@@ -1200,7 +1212,7 @@ const PatientAppointmentsPage = ({
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Notes</label>
+                      <label className={patientFieldLabelClass}>Notes</label>
                       <textarea
                         value={healthForm.notes}
                         onChange={(event) =>
@@ -1213,17 +1225,17 @@ const PatientAppointmentsPage = ({
                   </div>
                 </div>
 
-                <div className={`${patientPageCardClass} p-6`}>
+                <div className={`${patientSectionCardClass} p-6`}>
                   <div className="mb-5">
-                    <h2 className="text-xl font-semibold text-slate-900">Emergency Contact</h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <h2 className={patientSectionTitleClass}>Emergency Contact</h2>
+                    <p className={`mt-1 ${patientSectionCopyClass}`}>
                       Required so the care team can contact the right person if needed.
                     </p>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Contact Name</label>
+                      <label className={patientFieldLabelClass}>Contact Name</label>
                       <input
                         value={healthForm.emergencyContactName}
                         onChange={(event) =>
@@ -1240,7 +1252,7 @@ const PatientAppointmentsPage = ({
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Phone Number</label>
+                      <label className={patientFieldLabelClass}>Phone Number</label>
                       <input
                         value={healthForm.emergencyContactPhone}
                         onChange={(event) =>
@@ -1257,7 +1269,7 @@ const PatientAppointmentsPage = ({
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="mb-1.5 block text-sm font-medium text-slate-600">Relationship</label>
+                      <label className={patientFieldLabelClass}>Relationship</label>
                       <input
                         value={healthForm.emergencyContactRelationship}
                         onChange={(event) =>
@@ -1301,14 +1313,14 @@ const PatientAppointmentsPage = ({
               </div>
 
               <div className="space-y-6">
-                <div className={`${patientPageCardClass} p-6`}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <div className={`${patientSectionCardClass} p-6`}>
+                  <p className={patientSectionEyebrowClass}>
                     Completion Status
                   </p>
-                  <p className="mt-3 text-3xl font-bold tracking-[-0.03em] text-slate-900">
+                  <p className={`mt-3 text-[1.85rem] font-bold tracking-[-0.04em] ${pageHeadingTextClass}`}>
                     {completedProfileChecklistCount}/{profileChecklist.length}
                   </p>
-                  <p className="mt-1 text-sm text-slate-500">Required sections completed</p>
+                  <p className={`mt-1 ${patientSectionCopyClass}`}>Required sections completed</p>
 
                   <div className="mt-5 space-y-3">
                     {profileChecklist.map((item) => (
@@ -1318,8 +1330,8 @@ const PatientAppointmentsPage = ({
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-slate-800">{item.label}</p>
-                            <p className="mt-1 text-sm text-slate-500">{item.description}</p>
+                            <p className={patientMetaValueClass}>{item.label}</p>
+                            <p className={`mt-1 ${patientSectionCopyClass}`}>{item.description}</p>
                           </div>
                           <span
                             className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${item.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}
@@ -1332,14 +1344,14 @@ const PatientAppointmentsPage = ({
                   </div>
                 </div>
 
-                <div className={`${patientPageCardClass} p-6`}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <div className={`${patientSectionCardClass} p-6`}>
+                  <p className={patientSectionEyebrowClass}>
                     Preferences
                   </p>
-                  <h3 className="mt-3 text-lg font-semibold text-slate-900">
+                  <h3 className={`mt-3 ${patientSectionTitleClass}`}>
                     Settings and notifications
                   </h3>
-                  <p className="mt-2 text-sm text-slate-500">
+                  <p className={`mt-2 ${patientSectionCopyClass}`}>
                     Manage reminders, password changes, theme, and account controls from the lower menu.
                   </p>
 
@@ -1373,14 +1385,14 @@ const PatientAppointmentsPage = ({
                   </div>
                 </div>
 
-                <div className={`${patientPageCardClass} p-6`}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <div className={`${patientSectionCardClass} p-6`}>
+                  <p className={patientSectionEyebrowClass}>
                     Booking Access
                   </p>
-                  <p className="mt-3 text-lg font-semibold text-slate-900">
+                  <p className={`mt-3 ${patientSectionTitleClass}`}>
                     {isProfileComplete ? 'You can book appointments now.' : 'Booking is still locked.'}
                   </p>
-                  <p className="mt-2 text-sm text-slate-500">
+                  <p className={`mt-2 ${patientSectionCopyClass}`}>
                     {isProfileComplete
                       ? 'Your required profile and emergency details are complete.'
                       : 'Finish the required profile blocks before moving back to appointment booking.'}
@@ -1420,13 +1432,13 @@ const PatientAppointmentsPage = ({
         <div className="space-y-6">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              <p className={patientSectionEyebrowClass}>
                 Patient details
               </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-900">
+              <h2 className={`mt-2 ${patientSectionDisplayTitleClass}`}>
                 Your Information
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              <p className={`mt-2 max-w-2xl ${patientSectionCopyClass}`}>
                 Make sure your contact details are correct and tell us why you need this appointment.
               </p>
             </div>
@@ -1444,15 +1456,15 @@ const PatientAppointmentsPage = ({
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-600">Full Name</label>
+              <label className={patientFieldLabelClass}>Full Name</label>
               <input value={profileName} disabled className={patientMutedFieldClass} />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-600">Email Address</label>
+              <label className={patientFieldLabelClass}>Email Address</label>
               <input value={authUser?.username ?? ''} disabled className={patientMutedFieldClass} />
             </div>
             <div className="md:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-slate-600">Phone Number</label>
+              <label className={patientFieldLabelClass}>Phone Number</label>
               <input
                 value={profileForm.phoneNumber}
                 disabled
@@ -1462,8 +1474,8 @@ const PatientAppointmentsPage = ({
             </div>
           </div>
 
-          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5">
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Reason for Visit</label>
+          <div className={patientSoftCardClass}>
+            <label className={patientFieldLabelClass}>Reason for Visit</label>
             <textarea
               placeholder="Describe the symptoms, concern, or follow-up you need."
               value={bookingSymptoms}
@@ -1507,20 +1519,20 @@ const PatientAppointmentsPage = ({
       ) : bookingStep === 2 ? (
         <div className="space-y-6">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <p className={patientSectionEyebrowClass}>
               Specialist selection
             </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-900">
+            <h2 className={`mt-2 ${patientSectionDisplayTitleClass}`}>
               Choose Specialist
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            <p className={`mt-2 max-w-2xl ${patientSectionCopyClass}`}>
               Select a department first, then pick the doctor you want to consult with.
             </p>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5">
-              <label className="mb-3 block text-sm font-medium text-slate-700">Select Specialty</label>
+            <div className={patientSoftCardClass}>
+              <label className="mb-3 block text-sm font-medium text-[color:var(--agent-ink)]">Select Specialty</label>
               <div className="grid grid-cols-2 gap-3">
                 {departmentOptions.map((department) => (
                   <button
@@ -1632,20 +1644,20 @@ const PatientAppointmentsPage = ({
           }}
         >
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <p className={patientSectionEyebrowClass}>
               Date and time
             </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-900">
+            <h2 className={`mt-2 ${patientSectionDisplayTitleClass}`}>
               Pick a Date &amp; Time
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            <p className={`mt-2 max-w-2xl ${patientSectionCopyClass}`}>
               Review schedule availability, choose a slot, and add final notes before submitting.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5">
-              <label className="mb-2 block text-sm font-medium text-slate-700">Appointment Date</label>
+            <div className={patientSoftCardClass}>
+              <label className="mb-2 block text-sm font-medium text-[color:var(--agent-ink)]">Appointment Date</label>
               <input
                 type="date"
                 min={formatDateInput(new Date())}
@@ -1655,8 +1667,8 @@ const PatientAppointmentsPage = ({
               />
             </div>
 
-            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5">
-              <p className="mb-2 text-sm font-medium text-slate-700">Schedule Status</p>
+            <div className={patientSoftCardClass}>
+              <p className="mb-2 text-sm font-medium text-[color:var(--agent-ink)]">Schedule Status</p>
               <div className="flex flex-wrap gap-2">
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${selectedDaySessions.morning ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
                   Morning {selectedDaySessions.morning ? 'Open' : 'Closed'}
@@ -1696,8 +1708,8 @@ const PatientAppointmentsPage = ({
             </div>
           </div>
 
-          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5">
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Additional Notes</label>
+          <div className={patientSoftCardClass}>
+            <label className={patientFieldLabelClass}>Additional Notes</label>
             <textarea
               value={bookingNote}
               onChange={(event) => setBookingNote(event.target.value)}
@@ -1784,7 +1796,7 @@ const PatientAppointmentsPage = ({
           })}
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.12fr)_23rem] xl:items-start">
-            <section className={`${patientPageCardClass} overflow-hidden border-slate-200/90 p-6 shadow-[0_22px_50px_rgba(15,23,42,0.05)] md:p-8`}>
+            <section className={`${patientSectionCardClass} overflow-hidden p-6 md:p-8`}>
               <div className="mb-6 grid gap-3 lg:grid-cols-3">
                 {[
                   { step: 1, label: 'Your Details', hint: canContinueFromStepOne ? 'Ready' : 'Needs review' },
@@ -1793,11 +1805,11 @@ const PatientAppointmentsPage = ({
                 ].map((item) => (
                   <div
                     key={item.step}
-                    className={`min-w-[12rem] rounded-[1.35rem] border px-4 py-3 transition-all ${bookingStep === item.step ? 'border-blue-200 bg-[linear-gradient(140deg,#eff6ff_0%,#f8fbff_100%)] shadow-[0_12px_28px_rgba(59,130,246,0.12)]' : bookingStep > item.step ? 'border-emerald-200 bg-[linear-gradient(140deg,#ecfdf5_0%,#f8fffb_100%)]' : 'border-slate-200 bg-white'}`}
+                    className={`patient-step-card min-w-[12rem] px-4 py-3 transition-all ${bookingStep === item.step ? 'is-active' : bookingStep > item.step ? 'is-complete' : ''}`}
                   >
                     <div className="flex items-center gap-3">
                       <span
-                        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${bookingStep === item.step ? 'bg-blue-600 text-white' : bookingStep > item.step ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                        className={`patient-step-badge ${bookingStep === item.step ? 'is-active' : bookingStep > item.step ? 'is-complete' : ''}`}
                       >
                         {item.step}
                       </span>
@@ -1814,8 +1826,8 @@ const PatientAppointmentsPage = ({
             </section>
 
             <aside className="space-y-4 xl:sticky xl:top-8 xl:self-start">
-              <div className={`${patientPageCardClass} border-slate-200/90 bg-[linear-gradient(180deg,#ffffff_0%,#fbfdff_100%)] p-5 shadow-[0_16px_36px_rgba(15,23,42,0.05)]`}>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              <div className={`${patientSectionCardClass} p-5`}>
+                <p className={patientSectionEyebrowClass}>
                   Appointment Preview
                 </p>
                 <div className="mt-4 space-y-4">
@@ -1832,19 +1844,16 @@ const PatientAppointmentsPage = ({
                       { label: 'Priority', value: bookingPriority },
                       { label: 'Schedule', value: selectedSlotLabel },
                     ].map((item) => (
-                      <div
-                        key={item.label}
-                        className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3"
-                      >
-                        <span className="text-sm text-slate-500">{item.label}</span>
-                        <strong className="text-right text-sm font-semibold text-slate-900">{item.value}</strong>
+                      <div key={item.label} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                        <span className={`text-sm ${pageMutedTextClass}`}>{item.label}</span>
+                        <strong className={`text-right ${patientMetaValueClass}`}>{item.value}</strong>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-[1.7rem] border border-blue-100 bg-[radial-gradient(circle_at_top_right,rgba(191,219,254,0.45),transparent_34%),linear-gradient(160deg,#eff6ff_0%,#f8fbff_56%,#ffffff_100%)] p-5 shadow-[0_18px_36px_rgba(59,130,246,0.10)]">
+              <div className={`${patientSoftCardClass} patient-booking-checklist overflow-hidden`}>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700/70">
                   Booking Checklist
                 </p>
@@ -2173,7 +2182,7 @@ const PatientAppointmentsPage = ({
       <div className="w-full">
         <SidebarShell
           className={`page-shell--full-side patient-shell${isSidebarCollapsed ? ' page-shell--rail-collapsed' : ''}`}
-          contentClassName="patient-shell-content"
+          contentClassName="dashboard-shell-content patient-shell-content"
           mobileTitle="Patient menu"
           stickyOffsetMode="auto"
           sidebar={

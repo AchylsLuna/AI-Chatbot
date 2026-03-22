@@ -360,7 +360,11 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
         const { googleCode, googleError } = readGoogleAuthSearch()
 
         if (googleError) {
-          setAuthError('Google sign in failed. Try again.')
+          setAuthError(
+            googleError === 'account_route_mismatch'
+              ? 'This account must use its matching sign-in page.'
+              : 'Google sign in failed. Try again.'
+          )
           clearGoogleAuthSearch()
         }
 
@@ -677,7 +681,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       path: resolvedTargetPath,
     })
     try {
-      const result = await api.login(username, password)
+      const result = await api.login(username, password, sourcePage)
 
       if ((result as any)?.challengeId) {
         clearActiveSessionState()

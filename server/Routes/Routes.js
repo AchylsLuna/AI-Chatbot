@@ -68,7 +68,7 @@ import {
 import { body, validationResult } from 'express-validator';
 import passport from 'passport';
 import { isGoogleAuthConfigured } from '../Config/passport.js';
-import { normalizeRole } from '../Utils/roles.js';
+import { isAdminRole, normalizeRole } from '../Utils/roles.js';
 import { createGoogleOauthState, ensureSessionCsrfToken } from '../Utils/authSecurity.js';
 import { appConfig } from '../Config/env.js';
 
@@ -208,7 +208,11 @@ router.post('/login',
     loginLimiter,
     [
         body('email').isEmail().normalizeEmail(),
-        body('password').exists()
+        body('password').exists(),
+        body('sourcePage')
+            .exists()
+            .isIn(['login', 'doctor_login', 'admin_login'])
+            .withMessage('Invalid sign-in page')
     ],
     validate,
     login
@@ -286,6 +290,8 @@ router.get('/session', authMiddleware, async (req, res) => {
         const user = await User.findById(userId).select('email firstName lastName role googleId')
         if (!user) return res.status(404).json({ message: 'User not found' })
         const csrfToken = await ensureSessionCsrfToken(req, res, req.authSession)
+        const authMethod = user.googleId ? 'google' : 'local'
+        const mfa = authMethod === 'local' ? !isAdminRole(user.role) : true
 
         return res.json({
             username: user.email,
@@ -293,7 +299,8 @@ router.get('/session', authMiddleware, async (req, res) => {
             firstName: user.firstName,
             lastName: user.lastName,
             role: normalizeRole(user.role) || 'user',
-            authMethod: user.googleId ? 'google' : 'local',
+            authMethod,
+            mfa,
             sessionId: req.user?.sessionId || null,
             csrfToken,
         })

@@ -37,6 +37,7 @@ const FRONTEND_AUTH_PATHS = Object.freeze({
     doctor_login: '/doctor-sign-in',
     admin_login: '/admin-login',
 })
+const AUTH_SOURCE_PAGES = new Set(['login', 'doctor_login', 'admin_login']);
 
 const ALLOWED_DOCTOR_DEPARTMENTS = new Set([
     "Internal Medicine",
@@ -117,6 +118,43 @@ const cleanupDoctorRegistrationUploads = async (req) => {
 const rejectDoctorRegistration = async (req, res, status, payload) => {
     await cleanupDoctorRegistrationUploads(req);
     return res.status(status).json(payload);
+};
+
+const resolveAuthSourcePage = (value) =>
+    AUTH_SOURCE_PAGES.has(String(value || '').trim()) ? String(value).trim() : 'login';
+
+const getAuthSourceLabel = (sourcePage) => {
+    if (sourcePage === 'doctor_login') return 'doctor sign-in';
+    if (sourcePage === 'admin_login') return 'admin sign-in';
+    return 'patient sign-in';
+};
+
+const getExpectedAuthSourcePageForRole = (role) => {
+    const normalizedRole = normalizeRole(role) || 'user';
+
+    if (normalizedRole === 'doctor') {
+        return 'doctor_login';
+    }
+
+    if (normalizedRole === 'admin' || normalizedRole === 'system_admin') {
+        return 'admin_login';
+    }
+
+    return 'login';
+};
+
+const getAuthSourceMismatch = (user, sourcePage) => {
+    const expectedSourcePage = getExpectedAuthSourcePageForRole(user?.role);
+    const normalizedSourcePage = resolveAuthSourcePage(sourcePage);
+
+    if (expectedSourcePage === normalizedSourcePage) {
+        return null;
+    }
+
+    return {
+        expectedSourcePage,
+        message: `This account must sign in from the ${getAuthSourceLabel(expectedSourcePage)} page.`,
+    };
 };
 
 const buildPasswordResetUrl = (resetToken, sourcePage = "login") => {
@@ -203,14 +241,14 @@ const buildFrontendAuthUrl = (sourcePage, params = {}) => {
     return url.toString()
 }
 
-const buildAuthSessionUser = (user, session, authMethod = "local") => ({
+const buildAuthSessionUser = (user, session, authMethod = "local", { mfa = true } = {}) => ({
     id: user._id,
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
     role: normalizeRole(user.role) || 'user',
     authMethod,
-    mfa: true,
+    mfa,
     sessionId: session._id,
 })
 
@@ -256,7 +294,7 @@ export async function register(req, res) {
 
 export async function login(req, res) {
     try{
-        const {email, password} = req.body;
+        const {email, password, sourcePage} = req.body;
 
         if(!email || !password) {
             return res.status(400).json({message: "Missing Fields."});
@@ -268,6 +306,34 @@ export async function login(req, res) {
         }
         if(user.status !== "active") {
             return res.status(401).json({message: "Account is disabled. Contact an Admin."});
+        }
+
+        const authSourceMismatch = getAuthSourceMismatch(user, sourcePage);
+        if (authSourceMismatch) {
+            return res.status(403).json(authSourceMismatch);
+        }
+
+        if (isAdminRole(user.role)) {
+            clearOtpChallenge(user);
+            if (shouldRehashPassword(user.passwordHashed)) {
+                await user.setPassword(password);
+            }
+            await user.save();
+
+            const { csrfToken, session } = await issueAuthenticatedSession(res, user);
+            await AuditLog.create({
+                userId: user._id,
+                action: "LOGIN_SUCCESS",
+                details: `Admin ${user.email} logged in successfully.`,
+                ipAddress: req.ip || req.connection?.remoteAddress,
+                userAgent: req.headers['user-agent']
+            }).catch(() => {});
+
+            return res.status(200).json({
+                message: "Login successful.",
+                user: buildAuthSessionUser(user, session, "local", { mfa: false }),
+                csrfToken,
+            });
         }
 
         const now = new Date();
@@ -752,6 +818,13 @@ export async function googleCallback(req, res) {
             }));
         }
 
+        const authSourceMismatch = getAuthSourceMismatch(user, sourcePage);
+        if (authSourceMismatch) {
+            return res.redirect(buildFrontendAuthUrl(sourcePage, {
+                [GOOGLE_ERROR_QUERY_PARAM]: 'account_route_mismatch',
+            }));
+        }
+
         const exchangeCode = await createGoogleAuthExchange(user._id, sourcePage);
         return res.redirect(buildFrontendAuthUrl(sourcePage, {
             [GOOGLE_CODE_QUERY_PARAM]: exchangeCode,
@@ -780,6 +853,11 @@ export async function exchangeGoogleAuthCode(req, res) {
         const user = await User.findById(exchange.userId).select('email firstName lastName role googleId status')
         if (!user || user.status !== 'active') {
             return res.status(401).json({ message: 'Account is not available for sign in.' })
+        }
+
+        const authSourceMismatch = getAuthSourceMismatch(user, exchange.sourcePage);
+        if (authSourceMismatch) {
+            return res.status(403).json(authSourceMismatch);
         }
 
         const { csrfToken, session } = await issueAuthenticatedSession(res, user)

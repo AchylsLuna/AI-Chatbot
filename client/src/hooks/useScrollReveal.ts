@@ -8,54 +8,83 @@ const isInViewport = (element: HTMLElement) => {
 
 const useScrollReveal = (trigger?: unknown) => {
   useEffect(() => {
-    const elements = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'))
-    if (!elements.length) return
-
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
-    if (prefersReducedMotion.matches) {
-      elements.forEach((element) => element.classList.add('is-visible'))
-      return
-    }
+    const observedElements = new Set<HTMLElement>()
+    let observer: IntersectionObserver | null = null
 
-    elements.forEach((element) => {
-      if (isInViewport(element)) {
-        element.classList.add('is-visible')
+    const revealElement = (element: HTMLElement) => {
+      element.classList.add('is-visible')
+      if (observer && observedElements.has(element)) {
+        observer.unobserve(element)
+        observedElements.delete(element)
       }
-    })
-
-    if (typeof IntersectionObserver === 'undefined') {
-      elements.forEach((element) => element.classList.add('is-visible'))
-      return
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('is-visible')
-            observer.unobserve(entry.target)
+    const syncElements = () => {
+      const elements = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'))
+      if (!elements.length) return
+
+      if (prefersReducedMotion.matches || typeof IntersectionObserver === 'undefined') {
+        elements.forEach(revealElement)
+        return
+      }
+
+      elements.forEach((element) => {
+        if (element.classList.contains('is-visible')) {
+          if (observedElements.has(element) && observer) {
+            observer.unobserve(element)
+            observedElements.delete(element)
           }
-        })
-      },
-      {
-        threshold: 0.05,
-        rootMargin: '0px 0px -5% 0px',
-      }
-    )
+          return
+        }
 
-    elements.forEach((element) => {
-      if (!element.classList.contains('is-visible')) {
-        observer.observe(element)
-      }
+        if (isInViewport(element)) {
+          revealElement(element)
+          return
+        }
+
+        if (!observedElements.has(element) && observer) {
+          observer.observe(element)
+          observedElements.add(element)
+        }
+      })
+    }
+
+    if (!prefersReducedMotion.matches && typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              revealElement(entry.target as HTMLElement)
+            }
+          })
+        },
+        {
+          threshold: 0.05,
+          rootMargin: '0px 0px -5% 0px',
+        }
+      )
+    }
+
+    syncElements()
+
+    const mutationObserver = new MutationObserver(() => {
+      syncElements()
     })
+
+    if (document.body) {
+      mutationObserver.observe(document.body, { childList: true, subtree: true })
+    }
 
     const fallbackTimeout = window.setTimeout(() => {
-      elements.forEach((element) => element.classList.add('is-visible'))
+      Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]')).forEach(revealElement)
     }, 1200)
 
     return () => {
       window.clearTimeout(fallbackTimeout)
-      observer.disconnect()
+      mutationObserver.disconnect()
+      observer?.disconnect()
+      observedElements.clear()
     }
   }, [trigger])
 }

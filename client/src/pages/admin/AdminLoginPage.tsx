@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import AuthSplitLayout from '../../components/auth/AuthSplitLayout'
 import PasswordVisibilityToggle from '../../components/auth/PasswordVisibilityToggle'
-import { api } from '../../services/api'
 import type { AppPage } from '../../types/navigation'
 import type { AuthProvider, AuthSession } from '../../types'
 import { formatRoleLabel } from '../../utils/roles'
@@ -33,7 +32,6 @@ const AdminLoginPage = ({
   isBiometricReady = false,
   onLogout,
   onNavigate,
-  onForgotPassword,
   onGoBack,
 }: AdminLoginPageProps) => {
   const [username, setUsername] = useState('')
@@ -258,17 +256,6 @@ const AdminLoginPage = ({
               {isAuthLoading ? 'Signing in...' : 'Sign in as Admin'}
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = api.buildGoogleAuthUrl('admin_login')
-              }}
-              disabled={isAuthLoading}
-              className="auth-lovable-secondary-button w-full px-4 py-2.5 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Continue with Google
-            </button>
-
             {onProviderLogin ? (
               <button
                 type="button"
@@ -279,39 +266,6 @@ const AdminLoginPage = ({
                 Continue with Auth0 SSO
               </button>
             ) : null}
-
-            <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-              <button
-                type="button"
-                onClick={() => {
-                  if (onForgotPassword) {
-                    onForgotPassword()
-                    return
-                  }
-                  onNavigate?.('forgot_password')
-                }}
-                className="auth-lovable-link"
-              >
-                Forgot password?
-              </button>
-
-              <div className="flex flex-wrap items-center gap-3 text-[color:var(--auth-lovable-muted)]">
-                <button
-                  type="button"
-                  onClick={() => onNavigate?.('login')}
-                  className="auth-lovable-link"
-                >
-                  Patient login
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigate?.('doctor_login')}
-                  className="auth-lovable-link"
-                >
-                  Doctor login
-                </button>
-              </div>
-            </div>
 
             {authProvider === 'auth0' ? (
               <p className="text-center text-[11px] text-[color:var(--auth-lovable-muted)]">

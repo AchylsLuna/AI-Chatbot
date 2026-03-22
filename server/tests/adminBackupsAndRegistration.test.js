@@ -122,12 +122,18 @@ const createUser = async ({
   return user
 }
 
-const loginWithOtp = async (email, password) => {
+const loginUser = async (email, password, sourcePage = 'login') => {
   const loginResponse = await request('/login', {
     method: 'POST',
-    json: { email, password },
+    json: { email, password, sourcePage },
   })
   assert.equal(loginResponse.status, 200, loginResponse.text)
+
+  if (!loginResponse.json?.requires2FA) {
+    assert.ok(loginResponse.cookieHeader)
+    return loginResponse
+  }
+
   assert.ok(loginResponse.json?.challengeId)
   assert.ok(loginResponse.json?.otpPreview)
 
@@ -201,7 +207,7 @@ test('audit backup downloads as an authenticated AES-GCM envelope', async () => 
     userAgent: 'node-test',
   })
 
-  const verifyResponse = await loginWithOtp('admin.backup@example.com', 'User123!')
+  const verifyResponse = await loginUser('admin.backup@example.com', 'User123!', 'admin_login')
   const response = await requestBuffer('/admin/audit-logs/download', {
     cookieHeader: verifyResponse.cookieHeader,
   })

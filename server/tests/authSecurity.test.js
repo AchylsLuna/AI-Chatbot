@@ -98,10 +98,16 @@ const createUser = async ({
   return user
 }
 
-const loginWithOtp = async (email, password) => {
+const getSourcePageForRole = (role = 'user') => {
+  if (role === 'doctor') return 'doctor_login'
+  if (role === 'admin' || role === 'system_admin') return 'admin_login'
+  return 'login'
+}
+
+const loginWithOtp = async (email, password, sourcePage = 'login') => {
   const loginResponse = await request('/login', {
     method: 'POST',
-    json: { email, password },
+    json: { email, password, sourcePage },
   })
   assert.equal(loginResponse.status, 200, loginResponse.text)
   assert.ok(loginResponse.json?.challengeId)
@@ -117,6 +123,18 @@ const loginWithOtp = async (email, password) => {
   assert.equal(verifyResponse.status, 200, verifyResponse.text)
   assert.ok(verifyResponse.cookieHeader)
   return verifyResponse
+}
+
+const loginDirect = async (email, password, sourcePage = 'admin_login') => {
+  const loginResponse = await request('/login', {
+    method: 'POST',
+    json: { email, password, sourcePage },
+  })
+  assert.equal(loginResponse.status, 200, loginResponse.text)
+  assert.equal(loginResponse.json?.requires2FA, undefined)
+  assert.equal(loginResponse.json?.challengeId, undefined)
+  assert.ok(loginResponse.cookieHeader)
+  return loginResponse
 }
 
 before(async () => {
@@ -166,7 +184,11 @@ test('cookie helpers enforce strict production cookie attributes', () => {
 test('OTP login issues strict cookies and returns CSRF token via session lookup', async () => {
   await createUser({ email: 'session.user@example.com' })
 
-  const verifyResponse = await loginWithOtp('session.user@example.com', 'User123!')
+  const verifyResponse = await loginWithOtp(
+    'session.user@example.com',
+    'User123!',
+    getSourcePageForRole('user')
+  )
   const tokenCookie = verifyResponse.setCookies.find((entry) => entry.startsWith('token='))
   const csrfCookie = verifyResponse.setCookies.find((entry) => entry.startsWith('XSRF-TOKEN='))
 
@@ -188,9 +210,43 @@ test('OTP login issues strict cookies and returns CSRF token via session lookup'
   )
 })
 
+test('admin local login skips OTP and issues an authenticated session immediately', async () => {
+  await createUser({ email: 'admin.local@example.com', role: 'admin' })
+
+  const loginResponse = await loginDirect(
+    'admin.local@example.com',
+    'User123!',
+    getSourcePageForRole('admin')
+  )
+  const tokenCookie = loginResponse.setCookies.find((entry) => entry.startsWith('token='))
+  const csrfCookie = loginResponse.setCookies.find((entry) => entry.startsWith('XSRF-TOKEN='))
+
+  assert.ok(tokenCookie)
+  assert.ok(csrfCookie)
+  assert.equal(loginResponse.json?.user?.role, 'admin')
+  assert.equal(loginResponse.json?.user?.mfa, false)
+  assert.ok(typeof loginResponse.json?.csrfToken === 'string')
+
+  const sessionResponse = await request('/session', {
+    method: 'GET',
+    cookieHeader: loginResponse.cookieHeader,
+  })
+  assert.equal(sessionResponse.status, 200, sessionResponse.text)
+  assert.equal(sessionResponse.json?.role, 'admin')
+  assert.equal(sessionResponse.json?.mfa, false)
+  assert.equal(
+    sessionResponse.json?.csrfToken,
+    readCookieValue(loginResponse.cookieHeader, 'XSRF-TOKEN')
+  )
+})
+
 test('cookie-authenticated mutating requests reject missing CSRF headers', async () => {
   await createUser({ email: 'csrf.user@example.com' })
-  const verifyResponse = await loginWithOtp('csrf.user@example.com', 'User123!')
+  const verifyResponse = await loginWithOtp(
+    'csrf.user@example.com',
+    'User123!',
+    getSourcePageForRole('user')
+  )
 
   const response = await request('/users/me/profile', {
     method: 'PUT',
@@ -204,7 +260,11 @@ test('cookie-authenticated mutating requests reject missing CSRF headers', async
 
 test('cookie-authenticated mutating requests accept valid CSRF headers', async () => {
   await createUser({ email: 'csrf.ok@example.com' })
-  const verifyResponse = await loginWithOtp('csrf.ok@example.com', 'User123!')
+  const verifyResponse = await loginWithOtp(
+    'csrf.ok@example.com',
+    'User123!',
+    getSourcePageForRole('user')
+  )
   const csrfValue = readCookieValue(verifyResponse.cookieHeader, 'XSRF-TOKEN')
 
   const response = await request('/users/me/profile', {
@@ -220,7 +280,7 @@ test('cookie-authenticated mutating requests accept valid CSRF headers', async (
 
 test('Google exchange is one-time and issues a hardened session', async () => {
   const user = await createUser({ email: 'google.user@example.com' })
-  const exchangeCode = await createGoogleAuthExchange(user._id, 'admin_login')
+  const exchangeCode = await createGoogleAuthExchange(user._id, 'login')
 
   const response = await request('/auth/google/exchange', {
     method: 'POST',
@@ -240,9 +300,53 @@ test('Google exchange is one-time and issues a hardened session', async () => {
   assert.equal(replay.status, 400, replay.text)
 })
 
+test('doctor accounts are rejected on the patient sign-in page', async () => {
+  await createUser({ email: 'doctor.route@example.com', role: 'doctor' })
+
+  const loginResponse = await request('/login', {
+    method: 'POST',
+    json: {
+      email: 'doctor.route@example.com',
+      password: 'User123!',
+      sourcePage: 'login',
+    },
+  })
+
+  assert.equal(loginResponse.status, 403, loginResponse.text)
+  assert.equal(
+    loginResponse.json?.message,
+    'This account must sign in from the doctor sign-in page.'
+  )
+  assert.equal(loginResponse.json?.expectedSourcePage, 'doctor_login')
+})
+
+test('patient accounts are rejected on the doctor sign-in page', async () => {
+  await createUser({ email: 'patient.route@example.com', role: 'user' })
+
+  const loginResponse = await request('/login', {
+    method: 'POST',
+    json: {
+      email: 'patient.route@example.com',
+      password: 'User123!',
+      sourcePage: 'doctor_login',
+    },
+  })
+
+  assert.equal(loginResponse.status, 403, loginResponse.text)
+  assert.equal(
+    loginResponse.json?.message,
+    'This account must sign in from the patient sign-in page.'
+  )
+  assert.equal(loginResponse.json?.expectedSourcePage, 'login')
+})
+
 test('expired sessions are rejected and removed', async () => {
   const user = await createUser({ email: 'expired.user@example.com' })
-  const verifyResponse = await loginWithOtp('expired.user@example.com', 'User123!')
+  const verifyResponse = await loginWithOtp(
+    'expired.user@example.com',
+    'User123!',
+    getSourcePageForRole('user')
+  )
   const session = await Sessions.findOne({ userId: user._id })
   assert.ok(session)
 
@@ -261,7 +365,11 @@ test('expired sessions are rejected and removed', async () => {
 
 test('password change revokes all sessions and requires reauthentication', async () => {
   const user = await createUser({ email: 'password.user@example.com' })
-  const verifyResponse = await loginWithOtp('password.user@example.com', 'User123!')
+  const verifyResponse = await loginWithOtp(
+    'password.user@example.com',
+    'User123!',
+    getSourcePageForRole('user')
+  )
   const csrfValue = readCookieValue(verifyResponse.cookieHeader, 'XSRF-TOKEN')
 
   const response = await request('/users/me/password', {

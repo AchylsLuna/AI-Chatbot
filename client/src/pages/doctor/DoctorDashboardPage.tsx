@@ -1,5 +1,7 @@
 import {
+  Children,
   useEffect,
+  isValidElement,
   useMemo,
   useState,
   type CSSProperties,
@@ -9,6 +11,8 @@ import {
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import Sidebar, { type SidebarAuxItem, type SidebarItem } from '../../components/layout/Sidebar'
 import PageCanvas from '../../components/layout/PageCanvas'
+import PageTopShell from '../../components/layout/PageTopShell'
+import SectionCard from '../../components/layout/SectionCard'
 import SidebarShell from '../../components/layout/SidebarShell'
 import {
   pageChipButtonClass,
@@ -134,15 +138,6 @@ const ArrowRightIcon = (props: IconProps) => (
   <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
     <path {...svgStrokeProps} d="M5 12h14" />
     <path {...svgStrokeProps} d="m13 6 6 6-6 6" />
-  </svg>
-)
-
-const BellIcon = (props: IconProps) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-    <path
-      {...svgStrokeProps}
-      d="M15 18H9m8-2H7a1 1 0 0 1-.8-1.6l1.3-1.7V10a4.5 4.5 0 1 1 9 0v2.7l1.3 1.7A1 1 0 0 1 17 16Z"
-    />
   </svg>
 )
 
@@ -319,88 +314,74 @@ const compactPrimaryButtonClass = `${doctorPrimaryButtonClass} min-h-[2.65rem] p
 
 const compactFieldClass = `${doctorFieldClass} min-h-[2.65rem] px-3 py-2 text-sm`
 
-const DoctorPanel = ({
-  children,
-  className = '',
-}: {
-  children: ReactNode
-  className?: string
-}) => (
-  <section className={`doctor-panel ${pagePanelClass} p-5 lg:p-6 ${className}`}>{children}</section>
-)
-
-const DoctorPanelHeader = ({
-  eyebrow,
-  title,
-  description,
-  actions,
-}: {
+type DoctorPanelHeaderProps = {
   eyebrow?: string
   title: string
   description: string
   actions?: ReactNode
-}) => (
-  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-    <div className="min-w-0">
-      {eyebrow ? (
-        <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${pageSubtleTextClass}`}>
-          {eyebrow}
-        </p>
-      ) : null}
-      <h2 className={`mt-1 text-xl font-bold ${pageHeadingTextClass}`}>{title}</h2>
-      <p className={`mt-1 text-sm ${pageMutedTextClass}`}>{description}</p>
-    </div>
-    {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-  </div>
-)
+  toolbar?: ReactNode
+}
+
+const DoctorPanel = ({
+  children,
+  className = '',
+  bodyClassName = 'pt-0',
+  surface = 'default',
+}: {
+  children: ReactNode
+  className?: string
+  bodyClassName?: string
+  surface?: 'default' | 'soft'
+}) => {
+  const childArray = Children.toArray(children).filter(
+    (child) => !(typeof child === 'string' && child.trim() === '')
+  )
+  const firstChild = childArray[0]
+  const hasHeader = isValidElement(firstChild) && firstChild.type === DoctorPanelHeader
+
+  if (!hasHeader) {
+    return <section className={`doctor-panel ${pagePanelClass} p-5 lg:p-6 ${className}`}>{children}</section>
+  }
+
+  const { eyebrow, title, description, actions, toolbar } = firstChild.props as DoctorPanelHeaderProps
+  const bodyChildren = childArray.slice(1)
+
+  return (
+    <SectionCard
+      eyebrow={eyebrow}
+      title={title}
+      description={description}
+      actions={actions}
+      toolbar={toolbar}
+      className={`doctor-panel ${className}`.trim()}
+      bodyClassName={bodyClassName}
+      surface={surface}
+    >
+      {bodyChildren}
+    </SectionCard>
+  )
+}
+
+const DoctorPanelHeader: (props: DoctorPanelHeaderProps) => null = () => null
 
 const DoctorMetricCard = ({ label, value, subtitle, tone = 'slate' }: MetricCardData) => {
   const isLongValue = typeof value === 'string' && value.length > 14
 
   return (
     <article
-      className="doctor-metric-card rounded-[1.1rem] border p-4 shadow-[var(--card-shadow-soft)]"
+      className="doctor-metric-card rounded-[1.15rem] border p-4 shadow-[var(--card-shadow-soft)]"
       style={metricToneStyles[tone]}
     >
       <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${pageSubtleTextClass}`}>
         {label}
       </p>
       <p
-        className={`mt-2 font-bold ${isLongValue ? 'text-lg leading-tight' : 'text-[2rem]'} ${pageHeadingTextClass}`}
+        className={`mt-2 font-bold tracking-[-0.03em] ${isLongValue ? 'text-lg leading-tight' : 'text-[1.7rem] leading-tight'} ${pageHeadingTextClass}`}
         style={metricValueStyles[tone]}
       >
         {value}
       </p>
-      <p className={`mt-1 text-xs ${pageMutedTextClass}`}>{subtitle}</p>
-    </article>
-  )
-}
-
-type DoctorShellMetric = {
-  key: string
-  label: string
-  value: number | string
-  caption?: string
-}
-
-const DoctorShellMetricCard = ({
-  label,
-  value,
-  caption,
-}: Omit<DoctorShellMetric, 'key'>) => {
-  const isLongValue = typeof value === 'string' && value.length > 18
-
-  return (
-    <article className="doctor-shell-metric-card">
-      <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${pageSubtleTextClass}`}>
-        {label}
-      </p>
-      <p
-        className={`mt-4 font-bold tracking-[-0.04em] ${pageHeadingTextClass} ${isLongValue ? 'break-all text-xl leading-tight' : 'text-[2.55rem]'}`}
-      >
-        {value}
-      </p>
-      {caption ? <p className={`mt-2 text-sm ${pageMutedTextClass}`}>{caption}</p> : null}
+      <p className={`mt-1 text-sm ${pageMutedTextClass}`}>{subtitle}</p>
     </article>
   )
 }
@@ -434,8 +415,8 @@ const DoctorOverviewCard = ({
           {icon}
         </span>
         <div className="min-w-0">
-          <h3 className={`text-lg font-semibold ${pageHeadingTextClass}`}>{title}</h3>
-          <p className={`mt-1 text-sm ${pageMutedTextClass}`}>{description}</p>
+          <h3 className={`text-[1.18rem] font-semibold tracking-[-0.03em] ${pageHeadingTextClass}`}>{title}</h3>
+          <p className={`mt-1 text-sm leading-6 ${pageMutedTextClass}`}>{description}</p>
         </div>
       </div>
       <button type="button" className="doctor-overview-card-arrow" onClick={onOpen} aria-label={`Open ${title}`}>
@@ -449,7 +430,7 @@ const DoctorOverviewCard = ({
           <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${pageSubtleTextClass}`}>
             {stat.label}
           </p>
-          <p className={`mt-2 text-[1.45rem] font-bold ${pageHeadingTextClass}`}>{stat.value}</p>
+          <p className={`mt-2 text-[1.55rem] font-bold tracking-[-0.03em] ${pageHeadingTextClass}`}>{stat.value}</p>
         </div>
       ))}
     </div>
@@ -1515,8 +1496,7 @@ const DoctorDashboardPage = ({
     activeSection === 'calendar' ||
     activeSection === 'queue' ||
     activeSection === 'analytics'
-  const showSectionToolbar = activeSection !== 'dashboard'
-  const doctorTopMetrics = activeMetricCards.map<DoctorShellMetric>((card) => ({
+  const doctorTopMetrics = activeMetricCards.map((card) => ({
     key: card.key,
     label: card.label,
     value: card.value,
@@ -1553,12 +1533,42 @@ const DoctorDashboardPage = ({
       <RefreshIcon className="h-4 w-4" />
     )
 
+  const topStatusLabel =
+    activeSection === 'schedule'
+      ? isScheduleLoading
+        ? 'Refreshing weekly schedule'
+        : scheduleHasPublishedWeek
+          ? 'Published weekly schedule'
+          : 'Draft weekly schedule'
+      : activeSection === 'settings'
+        ? `Session ${sessionStatus}`
+        : doctorSyncStatus
+
+  const isSectionActionDisabled =
+    activeSection === 'schedule'
+      ? isScheduleLoading || isSavingSchedule
+      : activeSection === 'settings'
+        ? false
+        : isLoadingDoctorData
+
+  const renderTopActions = () => (
+    <button
+      type="button"
+      className={`${compactGhostButtonClass} inline-flex items-center gap-2`}
+      onClick={runSectionAction}
+      disabled={isSectionActionDisabled}
+    >
+      {sectionActionIcon}
+      {sectionActionLabel}
+    </button>
+  )
+
   return (
     <PageCanvas className="staff-theme doctor-portal">
       <div className="w-full">
         <SidebarShell
           className={`doctor-shell page-shell--full-side${isSidebarCollapsed ? ' page-shell--rail-collapsed' : ''}`}
-          contentClassName="px-4 pb-12 pt-4 sm:px-6 lg:px-8"
+          contentClassName="dashboard-shell-content"
           mobileTitle="Doctor workspace"
           stickyOffsetMode="auto"
           sidebar={
@@ -1602,98 +1612,42 @@ const DoctorDashboardPage = ({
           }
           content={
             <section className="doctor-page-stack mx-auto max-w-[1200px] space-y-6">
-              <section className="doctor-shell-header">
-                <div className="doctor-shell-header-main">
-                  <div className="min-w-0">
-                    <h1 className={`doctor-shell-title ${pageHeadingTextClass}`}>{activeMeta.title}</h1>
-                    <p className={`doctor-shell-description ${pageMutedTextClass}`}>{activeMeta.description}</p>
-                  </div>
-
-                  <div className="doctor-shell-header-actions">
-                    <span className="doctor-shell-notification" aria-hidden="true">
-                      <BellIcon className="h-5 w-5" />
-                    </span>
-                    <button
-                      type="button"
-                      className={`doctor-shell-avatar ${activeSection === 'settings' ? 'is-active' : ''}`}
-                      onClick={() => setSection('settings')}
-                      aria-label="Open doctor settings"
-                    >
-                      {doctorInitials}
-                    </button>
-                  </div>
-                </div>
-
-                {doctorTopMetrics.length > 0 ? (
-                  <div className="doctor-shell-metrics-grid">
-                    {doctorTopMetrics.map((metric) => (
-                      <DoctorShellMetricCard
-                        key={metric.key}
-                        label={metric.label}
-                        value={metric.value}
-                        caption={metric.caption}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-
-                {showSectionToolbar ? (
-                  <div className="doctor-shell-toolbar">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={doctorChipClass}>{activeMeta.eyebrow}</span>
-                      <span className={doctorChipClass}>
-                        {activeSection === 'settings' ? `Session ${sessionStatus}` : doctorSyncStatus}
-                      </span>
-                    </div>
-
-                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-                      {showSectionSearch ? (
-                        <input
-                          value={searchQuery}
-                          onChange={(event) => setSearchQuery(event.target.value)}
-                          placeholder={activeMeta.searchPlaceholder}
-                          className={`${doctorFieldClass} w-full sm:w-[20rem]`}
-                        />
-                      ) : null}
-                      <button
-                        type="button"
-                        className={compactGhostButtonClass}
-                        onClick={runSectionAction}
-                        disabled={
-                          activeSection === 'schedule'
-                            ? isScheduleLoading || isSavingSchedule
-                            : activeSection === 'settings'
-                              ? false
-                              : isLoadingDoctorData
-                        }
-                      >
-                        {sectionActionIcon}
-                        {sectionActionLabel}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </section>
-
               <div className="space-y-6">
-            <ConfirmModal
-              open={showLogoutConfirm}
-              title="Confirm logout"
-              message="Are you sure you want to logout now?"
-              confirmLabel="Logout"
-              cancelLabel="Cancel"
-              onConfirm={() => {
-                setShowLogoutConfirm(false)
-                onLogout()
-              }}
-              onCancel={() => setShowLogoutConfirm(false)}
-            />
+                <PageTopShell
+                  eyebrow={activeMeta.eyebrow}
+                  statusLabel={topStatusLabel}
+                  title={activeMeta.title}
+                  description={activeMeta.description}
+                  searchValue={searchQuery}
+                  searchPlaceholder={activeMeta.searchPlaceholder}
+                  onSearchChange={setSearchQuery}
+                  showSearch={showSectionSearch}
+                  profileName={profileName}
+                  profileCaption={doctorEmail}
+                  showNotifications={false}
+                  onSignOut={confirmAndLogout}
+                  quickActions={renderTopActions()}
+                  metrics={doctorTopMetrics}
+                />
 
-            {doctorDataError ? (
-              <DoctorPanel className="border-[color:var(--agent-danger)]">
-                <p className="text-sm font-semibold text-[color:var(--agent-danger)]">{doctorDataError}</p>
-              </DoctorPanel>
-            ) : null}
+                <ConfirmModal
+                  open={showLogoutConfirm}
+                  title="Confirm logout"
+                  message="Are you sure you want to logout now?"
+                  confirmLabel="Logout"
+                  cancelLabel="Cancel"
+                  onConfirm={() => {
+                    setShowLogoutConfirm(false)
+                    onLogout()
+                  }}
+                  onCancel={() => setShowLogoutConfirm(false)}
+                />
+
+                {doctorDataError ? (
+                  <DoctorPanel className="border-[color:var(--agent-danger)]">
+                    <p className="text-sm font-semibold text-[color:var(--agent-danger)]">{doctorDataError}</p>
+                  </DoctorPanel>
+                ) : null}
 
             {activeSection === 'dashboard' ? (
               <div className="grid gap-4 xl:grid-cols-3">
@@ -2055,51 +2009,52 @@ const DoctorDashboardPage = ({
                       </span>
                     </>
                   }
+                  toolbar={
+                    <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto_auto]">
+                      <button
+                        type="button"
+                        className={compactGhostButtonClass}
+                        onClick={() => shiftScheduleWeek(-7)}
+                        disabled={isScheduleLoading || isSavingSchedule}
+                      >
+                        <ChevronLeftIcon className="h-4 w-4" />
+                        Previous week
+                      </button>
+                      <input
+                        type="date"
+                        value={scheduleWeekStart}
+                        onChange={(event) => {
+                          setScheduleWeekStart(normalizeWeekInputValue(event.target.value))
+                          setScheduleMessage(null)
+                          if (scheduleError) setScheduleError(null)
+                        }}
+                        className={compactFieldClass}
+                        disabled={isScheduleLoading || isSavingSchedule}
+                      />
+                      <button
+                        type="button"
+                        className={compactGhostButtonClass}
+                        onClick={() => shiftScheduleWeek(7)}
+                        disabled={isScheduleLoading || isSavingSchedule}
+                      >
+                        Next week
+                        <ChevronRightIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className={compactGhostButtonClass}
+                        onClick={() => {
+                          setScheduleWeekStart(buildDefaultScheduleWeek())
+                          setScheduleMessage(null)
+                          if (scheduleError) setScheduleError(null)
+                        }}
+                        disabled={isScheduleLoading || isSavingSchedule}
+                      >
+                        This week
+                      </button>
+                    </div>
+                  }
                 />
-
-                <div className="mt-5 grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto_auto]">
-                  <button
-                    type="button"
-                    className={compactGhostButtonClass}
-                    onClick={() => shiftScheduleWeek(-7)}
-                    disabled={isScheduleLoading || isSavingSchedule}
-                  >
-                    <ChevronLeftIcon className="h-4 w-4" />
-                    Previous week
-                  </button>
-                  <input
-                    type="date"
-                    value={scheduleWeekStart}
-                    onChange={(event) => {
-                      setScheduleWeekStart(normalizeWeekInputValue(event.target.value))
-                      setScheduleMessage(null)
-                      if (scheduleError) setScheduleError(null)
-                    }}
-                    className={compactFieldClass}
-                    disabled={isScheduleLoading || isSavingSchedule}
-                  />
-                  <button
-                    type="button"
-                    className={compactGhostButtonClass}
-                    onClick={() => shiftScheduleWeek(7)}
-                    disabled={isScheduleLoading || isSavingSchedule}
-                  >
-                    Next week
-                    <ChevronRightIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    className={compactGhostButtonClass}
-                    onClick={() => {
-                      setScheduleWeekStart(buildDefaultScheduleWeek())
-                      setScheduleMessage(null)
-                      if (scheduleError) setScheduleError(null)
-                    }}
-                    disabled={isScheduleLoading || isSavingSchedule}
-                  >
-                    This week
-                  </button>
-                </div>
 
                 <p className={`mt-4 text-xs ${pageSubtleTextClass}`}>
                   Week starts on Monday. Morning session: 8:00 AM - 12:00 PM. Afternoon session:
@@ -2110,61 +2065,63 @@ const DoctorDashboardPage = ({
                   {scheduleHasEnabledSession ? 'Has open sessions' : 'All sessions closed'}
                 </p>
 
-                <div className="mt-5 overflow-x-auto">
-                  <table className="min-w-[720px] w-full border-collapse">
-                    <thead>
-                      <tr>
-                        <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
-                          Day
-                        </th>
-                        <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
-                          Morning
-                        </th>
-                        <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
-                          Afternoon
-                        </th>
-                        <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
-                          Slot preview
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {scheduleDayOrder.map((dayKey) => (
-                        <tr key={dayKey}>
-                          <td className={`border border-[color:var(--card-border)] px-3 py-3 text-sm font-semibold ${pageHeadingTextClass}`}>
-                            {scheduleDayLabels[dayKey]}
-                          </td>
-                          <td className="border border-[color:var(--card-border)] px-3 py-3">
-                            <label className={`inline-flex items-center gap-2 text-sm ${pageHeadingTextClass}`}>
-                              <input
-                                type="checkbox"
-                                checked={Boolean(scheduleDraft[dayKey]?.morning)}
-                                onChange={() => toggleScheduleSession(dayKey, 'morning')}
-                                disabled={isScheduleLoading || isSavingSchedule}
-                              />
-                              Open
-                            </label>
-                          </td>
-                          <td className="border border-[color:var(--card-border)] px-3 py-3">
-                            <label className={`inline-flex items-center gap-2 text-sm ${pageHeadingTextClass}`}>
-                              <input
-                                type="checkbox"
-                                checked={Boolean(scheduleDraft[dayKey]?.afternoon)}
-                                onChange={() => toggleScheduleSession(dayKey, 'afternoon')}
-                                disabled={isScheduleLoading || isSavingSchedule}
-                              />
-                              Open
-                            </label>
-                          </td>
-                          <td className={`border border-[color:var(--card-border)] px-3 py-3 text-xs ${pageMutedTextClass}`}>
-                            {(scheduleWeekSlots[dayKey] || []).length > 0
-                              ? scheduleWeekSlots[dayKey].map((slot) => slot.label).join(', ')
-                              : 'No slots'}
-                          </td>
+                <div className="mt-5 overflow-hidden rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)]">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[720px] w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
+                            Day
+                          </th>
+                          <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
+                            Morning
+                          </th>
+                          <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
+                            Afternoon
+                          </th>
+                          <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
+                            Slot preview
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {scheduleDayOrder.map((dayKey) => (
+                          <tr key={dayKey}>
+                            <td className={`border border-[color:var(--card-border)] px-3 py-3 text-sm font-semibold ${pageHeadingTextClass}`}>
+                              {scheduleDayLabels[dayKey]}
+                            </td>
+                            <td className="border border-[color:var(--card-border)] px-3 py-3">
+                              <label className={`inline-flex items-center gap-2 text-sm ${pageHeadingTextClass}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(scheduleDraft[dayKey]?.morning)}
+                                  onChange={() => toggleScheduleSession(dayKey, 'morning')}
+                                  disabled={isScheduleLoading || isSavingSchedule}
+                                />
+                                Open
+                              </label>
+                            </td>
+                            <td className="border border-[color:var(--card-border)] px-3 py-3">
+                              <label className={`inline-flex items-center gap-2 text-sm ${pageHeadingTextClass}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(scheduleDraft[dayKey]?.afternoon)}
+                                  onChange={() => toggleScheduleSession(dayKey, 'afternoon')}
+                                  disabled={isScheduleLoading || isSavingSchedule}
+                                />
+                                Open
+                              </label>
+                            </td>
+                            <td className={`border border-[color:var(--card-border)] px-3 py-3 text-xs ${pageMutedTextClass}`}>
+                              {(scheduleWeekSlots[dayKey] || []).length > 0
+                                ? scheduleWeekSlots[dayKey].map((slot) => slot.label).join(', ')
+                                : 'No slots'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 {scheduleError ? (

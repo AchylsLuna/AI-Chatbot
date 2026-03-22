@@ -100,7 +100,7 @@ const AuthSplitLayout = ({
                 </div>
                 <span className="auth-lovable-mobile-brand">AI Health Care</span>
               </div>
-              <div className="auth-lovable-card w-full max-w-md">
+              <div className="auth-lovable-card w-full max-w-[30rem]">
                 {children}
               </div>
             </div>

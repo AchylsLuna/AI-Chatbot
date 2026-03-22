@@ -750,7 +750,7 @@ const AdminDashboardPage = ({
       <div className="w-full">
         <SidebarShell
           className={`page-shell--full-side${isSidebarCollapsed ? ' page-shell--rail-collapsed' : ''}`}
-          contentClassName="px-4 pb-10 pt-5 sm:px-6 lg:px-8"
+          contentClassName="dashboard-shell-content"
           mobileTitle="Admin"
           stickyOffsetMode="auto"
           sidebar={
@@ -804,7 +804,7 @@ const AdminDashboardPage = ({
                 onSearchChange={setSearchQuery}
                 profileName={profileName}
                 profileCaption={getRoleLabel(authUser?.role)}
-                showNotifications
+                showNotifications={false}
                 notificationCount={Math.min(notificationItems.filter((item) => !item.read).length, 99)}
                 onSignOut={confirmAndLogout}
                 quickActions={renderTopActions()}

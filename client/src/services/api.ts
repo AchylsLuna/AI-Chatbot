@@ -616,11 +616,15 @@ export const api = {
     url.searchParams.set('sourcePage', sourcePage)
     return url.toString()
   },
-  login: async (username: string, password: string): Promise<AuthSession | LoginOtpChallenge> => {
+  login: async (
+    username: string,
+    password: string,
+    sourcePage: AuthSourcePage = 'login'
+  ): Promise<AuthSession | LoginOtpChallenge> => {
     const response = await request(`${API_BASE}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: username, password }),
+      body: JSON.stringify({ email: username, password, sourcePage }),
     })
     const payload = await handleResponse(response)
 
@@ -646,9 +650,12 @@ export const api = {
 
     // Otherwise expect a full auth session (token + user)
     // Map server user shape to client schema if necessary
+    updateCsrfTokenFromPayload(payload)
     const payloadUser = (payload as Record<string, unknown>)?.user as Record<string, unknown> | undefined
     const mapped = {
       token: typeof (payload as any).token === 'string' ? (payload as any).token : undefined,
+      csrfToken:
+        typeof (payload as any).csrfToken === 'string' ? (payload as any).csrfToken : undefined,
       user: {
         username: (payloadUser?.email as string | undefined) ?? username,
         firstName: (payloadUser?.firstName as string | undefined) ?? undefined,
@@ -665,8 +672,12 @@ export const api = {
     }
     return parseApiSchema(authSessionSchema, mapped, 'login')
   },
-  requestOtpChallenge: async (username: string, password: string): Promise<LoginOtpChallenge> => {
-    const result = await api.login(username, password)
+  requestOtpChallenge: async (
+    username: string,
+    password: string,
+    sourcePage: AuthSourcePage = 'login'
+  ): Promise<LoginOtpChallenge> => {
+    const result = await api.login(username, password, sourcePage)
     if ('challengeId' in result) {
       return result
     }

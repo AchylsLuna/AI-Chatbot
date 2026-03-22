@@ -41,11 +41,11 @@ const LoginPage = ({
   const [username, setUsername] = useState('')
   const [emailError, setEmailError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [roleTab, setRoleTab] = useState<LoginRoleTab>(defaultRoleTab)
   const [doctorLicenseId, setDoctorLicenseId] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const passwordInputRef = useRef<HTMLInputElement | null>(null)
-  const currentAuthPage: AppPage = defaultRoleTab === 'doctor' ? 'doctor_login' : 'login'
+  const roleTab: LoginRoleTab = defaultRoleTab === 'doctor' ? 'doctor' : 'patient'
+  const currentAuthPage: AppPage = roleTab === 'doctor' ? 'doctor_login' : 'login'
   const homePage: AppPage = getDefaultPageForRole(authUser?.role)
   const homeLabel =
     homePage === 'appointments'
@@ -71,18 +71,6 @@ const LoginPage = ({
     if (!authError) return
     clearPasswordInputValue()
   }, [authError])
-
-  const handleRoleTabChange = (nextRole: LoginRoleTab) => {
-    setRoleTab(nextRole)
-    setEmailError(null)
-    setPasswordError(null)
-    resetPasswordField()
-
-    const targetPage: AppPage = nextRole === 'doctor' ? 'doctor_login' : 'login'
-    if (onNavigate && targetPage !== currentAuthPage) {
-      onNavigate(targetPage)
-    }
-  }
 
   return (
     <AuthSplitLayout variant="lovable">
@@ -156,46 +144,6 @@ const LoginPage = ({
           <p className="auth-lovable-section-label">
             {roleTab === 'doctor' ? 'Doctor access' : 'Patient access'}
           </p>
-
-          <div className="auth-lovable-role-wrap">
-            <button
-              type="button"
-              onClick={() => handleRoleTabChange('patient')}
-              className={`auth-lovable-role-button ${roleTab === 'patient' ? 'is-active' : ''}`}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 12a4 4 0 100-8 4 4 0 000 8z" />
-                <path d="M4 21a8 8 0 0116 0" />
-              </svg>
-              Patient
-            </button>
-            <button
-              type="button"
-              onClick={() => handleRoleTabChange('doctor')}
-              className={`auth-lovable-role-button ${roleTab === 'doctor' ? 'is-active' : ''}`}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 3v18M3 12h18" />
-              </svg>
-              Doctor
-            </button>
-          </div>
 
           <div className="relative">
             <span className="auth-lovable-input-icon">

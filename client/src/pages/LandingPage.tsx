@@ -337,14 +337,63 @@ const LandingPage = ({
                   Coordinate booking intake, status tracking, and role-specific access with a
                   clearer clinical experience.
                 </p>
-                <div className="mt-6">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate?.(isAuthenticated ? 'appointments' : 'login')}
-                    className="landing-ref-primary-button px-5 py-2.5 text-sm"
-                  >
-                    {isAuthenticated ? 'Open patient portal' : 'Sign in to continue'}
-                  </button>
+                <div className="landing-ref-portal-dock mt-7">
+                  <div className="landing-ref-portal-label">
+                    <span className="landing-ref-pulse-dot" aria-hidden="true" />
+                    Choose your portal
+                  </div>
+                  <div className="landing-ref-portal-grid">
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.(isAuthenticated ? 'appointments' : 'login')}
+                      className="landing-ref-portal-tab"
+                    >
+                      <span className="landing-ref-portal-kicker">Patient</span>
+                      <span className="landing-ref-portal-title">
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M12 12a4 4 0 100-8 4 4 0 000 8z" />
+                          <path d="M4 21a8 8 0 0116 0" />
+                        </svg>
+                        {isAuthenticated ? 'Open patient portal' : 'Patient sign in'}
+                      </span>
+                      <span className="landing-ref-portal-detail">
+                        Book care, check appointment history, and manage reminders.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.('doctor_login')}
+                      className="landing-ref-portal-tab is-doctor"
+                    >
+                      <span className="landing-ref-portal-kicker">Clinical Staff</span>
+                      <span className="landing-ref-portal-title">
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M12 3v18M3 12h18" />
+                        </svg>
+                        Doctor sign in
+                      </span>
+                      <span className="landing-ref-portal-detail">
+                        Open the doctor workspace for schedules, queue review, and follow-up.
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
