@@ -88,6 +88,16 @@ const resolveAuthPageForProtectedPage = (page?: AppPage | null): OtpSourcePage =
 
 const GOOGLE_CODE_QUERY_PARAM = 'google_code'
 const GOOGLE_ERROR_QUERY_PARAM = 'google_error'
+const LOCAL_DEV_TOKEN_STORAGE_KEY = 'pulse-ledger-token'
+
+const canUseLocalDevTokenStorage = () =>
+  import.meta.env.DEV && getAuthProvider() === 'local'
+
+const readLocalDevTokenStorage = () => {
+  if (!canUseLocalDevTokenStorage() || typeof window === 'undefined') return null
+  const value = window.sessionStorage.getItem(LOCAL_DEV_TOKEN_STORAGE_KEY)
+  return value && value.trim() ? value.trim() : null
+}
 
 const readGoogleAuthSearch = () => {
   if (typeof window === 'undefined') {
@@ -117,7 +127,7 @@ const clearGoogleAuthSearch = () => {
 const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const authProvider = getAuthProvider()
   const auth0Enabled = isAuth0Enabled()
-  const initialStoredToken = null
+  const initialStoredToken = readLocalDevTokenStorage()
   const reservations = useSecureHealthStore((state) => state.reservations)
   const ledgerEntries = useSecureHealthStore((state) => state.ledgerEntries)
   const latestReservationId = useSecureHealthStore((state) => state.latestReservationId)
@@ -133,6 +143,9 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const [authUser, setAuthUser] = useState<AuthSession['user'] | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const [isAuthLoading, setIsAuthLoading] = useState(Boolean(initialStoredToken))
+  const [isBootstrappingSession, setIsBootstrappingSession] = useState(() =>
+    auth0Enabled ? true : authProvider === 'local'
+  )
   const [authUiAction, setAuthUiAction] = useState<AuthUiAction>(null)
   const [postLoginPage, setPostLoginPage] = useState<AppPage | null>(null)
   const [postLoginPath, setPostLoginPath] = useState<string | null>(null)
@@ -144,10 +157,18 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   const hasBootstrappedLocalSessionRef = useRef(false)
 
   const clearLocalTokenStorage = useCallback(() => {
-    if (authProvider === 'local') {
-      localStorage.removeItem('pulse-ledger-token')
-    }
+    if (!canUseLocalDevTokenStorage() || typeof window === 'undefined') return
+    window.sessionStorage.removeItem(LOCAL_DEV_TOKEN_STORAGE_KEY)
   }, [authProvider])
+
+  const persistLocalTokenStorage = useCallback((token: string | null) => {
+    if (!canUseLocalDevTokenStorage() || typeof window === 'undefined') return
+    if (token && token.trim()) {
+      window.sessionStorage.setItem(LOCAL_DEV_TOKEN_STORAGE_KEY, token)
+      return
+    }
+    window.sessionStorage.removeItem(LOCAL_DEV_TOKEN_STORAGE_KEY)
+  }, [])
 
   const clearUnauthorizedSession = useCallback(() => {
     setAuthTokenState(null)
@@ -293,15 +314,11 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
   }, [])
 
   useEffect(() => {
-    if (authProvider !== 'local') return
-    clearLocalTokenStorage()
-  }, [authProvider, clearLocalTokenStorage])
-
-  useEffect(() => {
     if (!auth0Enabled) return
     let isMounted = true
 
     const bootstrapAuth0Session = async () => {
+      setIsBootstrappingSession(true)
       const hasRedirect = hasAuth0RedirectParams()
       if (hasRedirect) {
         setAuthUiAction('provider')
@@ -332,10 +349,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       } catch (error) {
         if (!isMounted) return
         setAuthError(error instanceof Error ? error.message : 'Auth0 login failed')
+        console.error('Auth0 session bootstrap failed.', error)
       } finally {
         if (isMounted) {
           setAuthUiAction(null)
           setIsAuthLoading(false)
+          setIsBootstrappingSession(false)
         }
       }
     }
@@ -356,6 +375,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     let isMounted = true
     ;(async () => {
       try {
+        setIsBootstrappingSession(true)
         setIsAuthLoading(true)
         const { googleCode, googleError } = readGoogleAuthSearch()
 
@@ -385,9 +405,12 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
       } catch (error) {
         if (!isMounted) return
         const message = error instanceof Error ? error.message : ''
+        console.error('Local session bootstrap failed.', error)
         if (readGoogleAuthSearch().googleCode) {
           clearGoogleAuthSearch()
         }
+        clearLocalTokenStorage()
+        clearActiveSessionState()
         if (message) {
           setAuthError(message)
         }
@@ -395,6 +418,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
         if (isMounted) {
           setAuthUiAction(null)
           setIsAuthLoading(false)
+          setIsBootstrappingSession(false)
         }
       }
     })()
@@ -402,7 +426,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     return () => {
       isMounted = false
     }
-  }, [auth0Enabled, authProvider, clearActiveSessionState])
+  }, [auth0Enabled, authProvider, clearActiveSessionState, clearLocalTokenStorage])
 
   useEffect(() => {
     const needsAuth = Boolean(requiresAuth[currentPage])
@@ -410,6 +434,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     if (!isOtpTargetPage(currentPage)) return
     if (authUser) return
     if (authToken) return
+    if (isBootstrappingSession) return
     if (auth0Enabled && isAuthLoading) return
     if (authProvider === 'local' && isAuthLoading) return
 
@@ -602,8 +627,14 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     preferredTargetPath?: string | null
   ) => {
     const storedTarget = getStoredTarget()
-    const resolvedToken = authProvider === 'local' ? null : session.token ?? null
+    const resolvedToken =
+      authProvider === 'local'
+        ? canUseLocalDevTokenStorage()
+          ? session.token ?? null
+          : null
+        : session.token ?? null
     setAuthTokenState(resolvedToken)
+    persistLocalTokenStorage(resolvedToken)
     setCsrfToken(session.csrfToken ?? null)
     setAuthUser(session.user)
     setApiReady(true)
@@ -835,6 +866,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
     }
 
     setAuthTokenState(null)
+    persistLocalTokenStorage(null)
     setCsrfToken(null)
     setAuthUser(null)
     setAuthError(null)
@@ -864,9 +896,7 @@ const useAuthData = ({ currentPage, navigateToPage }: UseAuthDataArgs) => {
 
   const isCheckingSession = Boolean(
     !authUser &&
-      (((authToken && (isAuthLoading || !apiReady)) ||
-        (authProvider === 'local' && isAuthLoading) ||
-        (auth0Enabled && isAuthLoading)))
+      (isBootstrappingSession || (authToken && (isAuthLoading || !apiReady)))
   )
   const sessionStatus = authUser
     ? isAuthLoading

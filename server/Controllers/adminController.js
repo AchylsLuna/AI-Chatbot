@@ -101,6 +101,7 @@ const streamEncryptedBackupArchive = async (res, { filename, appendEntries }) =>
 };
 
 const STAFF_ROLE_FILTER = { $in: DOCTOR_ROLE_ALIASES };
+const AUDIT_ARCHIVE_BATCH_SIZE = Number(process.env.AUDIT_ARCHIVE_BATCH_SIZE) || 1000;
 
 const toIsoString = (value, fallback = new Date(0).toISOString()) => {
     if (!value) return fallback;
@@ -123,17 +124,30 @@ const resolveAppointmentBaseTimestamp = (appointment) => {
     return toIsoString(appointment?.scheduledDate);
 };
 
-const toStaffApplicationDto = (user) => ({
-    id: String(user._id),
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    role: normalizeRole(user.role) || 'user',
-    status: user.status,
-    department: user.department || '',
-    hasLicenseFile: Boolean(user.licenseUrl) || (Array.isArray(user.licenseUrls) && user.licenseUrls.length > 0),
-    licenseCount: Array.isArray(user.licenseUrls) && user.licenseUrls.length > 0 ? user.licenseUrls.length : (user.licenseUrl ? 1 : 0),
-});
+const collectLicensePaths = (user) =>
+    Array.from(new Set([
+        ...(Array.isArray(user?.licenseUrls) ? user.licenseUrls : []),
+        ...(user?.licenseUrl ? [user.licenseUrl] : []),
+    ].map((item) => String(item || '').trim()).filter(Boolean)));
+
+const toStaffApplicationDto = (user) => {
+    const licensePaths = collectLicensePaths(user);
+    return {
+        id: String(user._id),
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: normalizeRole(user.role) || 'user',
+        status: user.status,
+        department: user.department || '',
+        hasLicenseFile: licensePaths.length > 0,
+        licenseCount: licensePaths.length,
+        licenseFiles: licensePaths.map((value, index) => ({
+            index,
+            name: path.basename(value),
+        })),
+    };
+};
 
 export async function getPendingStaffApplications(req, res) {
     try {
@@ -217,10 +231,7 @@ export async function rejectStaffApplication(req, res) {
 
         const removedEmail = target.email;
         const removedRole = target.role;
-        const licensePaths = Array.from(new Set([
-            ...(Array.isArray(target.licenseUrls) ? target.licenseUrls : []),
-            ...(target.licenseUrl ? [target.licenseUrl] : []),
-        ].map((item) => String(item || '').trim()).filter(Boolean)));
+        const licensePaths = collectLicensePaths(target);
         await User.deleteOne({ _id: target._id });
 
         if (licensePaths.length > 0) {
@@ -261,10 +272,7 @@ export async function viewStaffApplicationLicense(req, res) {
         if (!isDoctorRole(target.role)) {
             return res.status(400).json({ message: "License is only available for doctor accounts." });
         }
-        const licensePaths = Array.from(new Set([
-            ...(Array.isArray(target.licenseUrls) ? target.licenseUrls : []),
-            ...(target.licenseUrl ? [target.licenseUrl] : []),
-        ].map((item) => String(item || '').trim()).filter(Boolean)));
+        const licensePaths = collectLicensePaths(target);
         if (licensePaths.length === 0) {
             return res.status(404).json({ message: "License file not found." });
         }
@@ -408,6 +416,69 @@ export async function getAuditLogs(req, res) {
     } catch (error) {
         console.error("Failed to get audit logs:", error);
         return res.status(500).json({ message: "Failed to retrieve audit logs." });
+    }
+}
+
+export async function archiveAuditLogs(req, res) {
+    try {
+        const actorId = req.user?.id || req.user?._id;
+        const olderThanDaysRaw = req.body?.olderThanDays;
+        const dryRun = Boolean(req.body?.dryRun);
+        const parsedOlderThanDays = Number(olderThanDaysRaw ?? 0);
+
+        if (!Number.isFinite(parsedOlderThanDays) || parsedOlderThanDays < 0) {
+            return res.status(400).json({ message: "olderThanDays must be a non-negative number." });
+        }
+
+        const olderThanDays = Math.floor(parsedOlderThanDays);
+        const cutoff =
+            olderThanDays > 0
+                ? new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000)
+                : null;
+
+        const query = cutoff ? { timestamp: { $lt: cutoff } } : {};
+        const archiveCollection = AuditLog.db.collection('audit_logs_archive');
+        let archivedCount = 0;
+
+        while (true) {
+            const batch = await AuditLog.find(query)
+                .sort({ timestamp: -1 })
+                .limit(AUDIT_ARCHIVE_BATCH_SIZE)
+                .lean();
+
+            if (!batch.length) break;
+
+            if (dryRun) {
+                archivedCount += batch.length;
+                break;
+            }
+
+            const archiveDocs = batch.map((entry) => ({ ...entry, archivedAt: new Date() }));
+            try {
+                await archiveCollection.insertMany(archiveDocs, { ordered: false });
+            } catch (error) {
+                console.warn('Audit archive insert warning:', error);
+            }
+
+            const ids = batch.map((entry) => entry._id);
+            await AuditLog.deleteMany({ _id: { $in: ids } });
+            archivedCount += batch.length;
+        }
+
+        const adminEmail = await resolveActorEmail(req);
+        await AuditLog.create({
+            userId: actorId,
+            action: "AUDIT_LOG_ARCHIVED",
+            details: `Admin ${adminEmail} archived ${archivedCount} audit log(s)` +
+                `${olderThanDays > 0 ? ` older than ${olderThanDays} days` : ''}. dryRun=${dryRun}`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        });
+
+        return res.status(200).json({ archived: archivedCount, dryRun });
+    } catch (error) {
+        console.error("Failed to archive audit logs:", error);
+        return res.status(500).json({ message: "Failed to archive audit logs." });
     }
 }
 

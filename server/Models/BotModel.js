@@ -16,15 +16,16 @@ const TRIAGE_TREE_CANDIDATE_PATHS = [
     path.join(REPO_ROOT, 'server', 'dataset', 'triage_tree.json'),
 ]
 
-const GEMINI_API_KEY =
-    process.env.GEMINI_API_KEY ||
-    process.env.GENERATIVE_AI_API_KEY ||
-    ''
+const FASTAPI_BASE_URL = String(
+    process.env.FASTAPI_BASE_URL || process.env.FASTAPI_URL || 'http://127.0.0.1:8000'
+).trim()
 
-const GEMINI_MODEL =
-    process.env.GEMINI_MODEL ||
-    process.env.GEMINI_MODEL_FAST ||
-    'gemini-2.5-flash-lite'
+const FASTAPI_CHAT_PATH = String(process.env.FASTAPI_CHAT_PATH || '/chat').trim() || '/chat'
+
+const FASTAPI_TIMEOUT_MS = (() => {
+    const parsed = Number(process.env.FASTAPI_TIMEOUT_MS || 15000)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 15000
+})()
 
 const STOP_WORDS = new Set([
     'the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'on', 'for', 'with', 'from',
@@ -277,81 +278,82 @@ const formatFallbackReply = (userMessage, context) => {
     ].join(' ')
 }
 
-const callGemini = async ({ userMessage, context, grounding }) => {
-    if (!GEMINI_API_KEY) {
-        throw new Error('Gemini API key is not configured.')
+const extractFastApiReply = (payload) => {
+    if (!payload) return ''
+    if (typeof payload === 'string') return payload.trim()
+
+    const direct =
+        payload.reply ||
+        payload.response ||
+        payload.message ||
+        payload.text ||
+        payload.answer ||
+        payload.output ||
+        payload.result ||
+        payload?.data?.reply ||
+        payload?.data?.response
+
+    if (typeof direct === 'string') return direct.trim()
+
+    const nested =
+        payload?.choices?.[0]?.message?.content ||
+        payload?.choices?.[0]?.text ||
+        payload?.candidates?.[0]?.content?.parts?.map((part) => part?.text || '').join('')
+
+    return typeof nested === 'string' ? nested.trim() : ''
+}
+
+const callFastApi = async ({ userMessage, context, grounding }) => {
+    if (!FASTAPI_BASE_URL) {
+        throw new Error('FastAPI base URL is not configured.')
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-        GEMINI_MODEL
-    )}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`
+    let endpoint
+    try {
+        endpoint = new URL(FASTAPI_CHAT_PATH, FASTAPI_BASE_URL).toString()
+    } catch (error) {
+        throw new Error(`FastAPI URL is invalid: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
 
-    const datasetContext = grounding.datasetMatches.length
-        ? grounding.datasetMatches
-                .map((entry) => `- ${entry.disease} | matched symptoms: ${entry.matchedSymptoms.join(', ')}`)
-                .join('\n')
-        : '- No close disease match found from dataset.'
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FASTAPI_TIMEOUT_MS)
 
-    const triageContext = grounding.urgencyOutcome
-        ? `${grounding.urgencyOutcome.title}: ${grounding.urgencyOutcome.text}`
-        : 'General guidance: gather symptoms, duration, and severity.'
-
-    const systemInstruction = [
-        'You are AI Health Care Assistant for appointment and symptom triage guidance.',
-        'Use the provided dataset grounding and triage guidance as the primary source of truth.',
-        'Do not present outputs as a definitive diagnosis.',
-        'Be concise, structured, and action-oriented.',
-        'Always include a safety note when symptoms appear severe.',
-    ].join(' ')
-
-    const userPrompt = [
-        `User role: ${context?.userRole || 'guest'}`,
-        `Signed in: ${Boolean(context?.isIdentified)}`,
-        `User message: ${userMessage}`,
-        'Grounding from symptoms dataset:',
-        datasetContext,
-        `Triage guidance: ${triageContext}`,
-        'Respond with: summary, possible conditions (if any), suggested next step, and safety note.',
-    ].join('\n\n')
-
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            contents: [
-                {
-                    role: 'user',
-                    parts: [{ text: userPrompt }],
-                },
-            ],
-            systemInstruction: {
-                role: 'system',
-                parts: [{ text: systemInstruction }],
+    let response
+    try {
+        response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
             },
-            generationConfig: {
-                temperature: 0.35,
-                topP: 0.9,
-                maxOutputTokens: 420,
-            },
-        }),
-    })
+            body: JSON.stringify({
+                message: userMessage,
+                context,
+                grounding,
+            }),
+            signal: controller.signal,
+        })
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            throw new Error('FastAPI request timed out.')
+        }
+        throw error
+    } finally {
+        clearTimeout(timeout)
+    }
 
     if (!response.ok) {
         const errorText = await response.text().catch(() => '')
-        throw new Error(`Gemini API error (${response.status}): ${errorText || 'Unknown error'}`)
+        throw new Error(`FastAPI error (${response.status}): ${errorText || 'Unknown error'}`)
     }
 
-    const payload = await response.json()
-    const text =
-        payload?.candidates?.[0]?.content?.parts
-            ?.map((part) => part?.text || '')
-            .join('')
-            .trim() || ''
+    const contentType = response.headers.get('content-type') || ''
+    const payload = contentType.includes('application/json')
+        ? await response.json()
+        : await response.text()
 
+    const text = extractFastApiReply(payload)
     if (!text) {
-        throw new Error('Gemini returned an empty response.')
+        throw new Error('FastAPI returned an empty response.')
     }
 
     return text
@@ -366,7 +368,7 @@ export const fetchBotResponse = async (userMessage, context = {}) => {
     const grounding = buildGrounding(safeMessage)
 
     try {
-        const reply = await callGemini({
+        const reply = await callFastApi({
             userMessage: safeMessage,
             context,
             grounding,
@@ -375,7 +377,7 @@ export const fetchBotResponse = async (userMessage, context = {}) => {
         return {
             reply,
             meta: {
-                model: GEMINI_MODEL,
+                model: 'fastapi-local',
                 dataSources: {
                     symptomsDataset: grounding.datasetSource,
                     triageTree: grounding.triageSource,
@@ -393,7 +395,7 @@ export const fetchBotResponse = async (userMessage, context = {}) => {
         return {
             reply: fallbackReply,
             meta: {
-                model: GEMINI_MODEL,
+                model: 'fastapi-local',
                 dataSources: {
                     symptomsDataset: grounding.datasetSource,
                     triageTree: grounding.triageSource,
@@ -404,7 +406,7 @@ export const fetchBotResponse = async (userMessage, context = {}) => {
                 },
                 matches: grounding.datasetMatches,
                 usedFallback: true,
-                fallbackReason: error instanceof Error ? error.message : 'Unknown Gemini error',
+                fallbackReason: error instanceof Error ? error.message : 'Unknown FastAPI error',
             },
         }
     }

@@ -88,6 +88,20 @@ function App() {
 
   useEffect(() => {
     if (!authUser) return
+    if (currentPage !== 'landing') return
+    if (isAdminAuthenticated) {
+      navigateToPage('admin', { replace: true })
+      return
+    }
+    if (isDoctorAuthenticated) {
+      navigateToPage('doctor_dashboard', { replace: true })
+      return
+    }
+    navigateToPage('appointments', { replace: true })
+  }, [authUser, currentPage, isAdminAuthenticated, isDoctorAuthenticated, navigateToPage])
+
+  useEffect(() => {
+    if (!authUser) return
     if (currentPage !== 'appointments') return
     if (isDoctorAuthenticated) {
       navigateToPage('doctor_dashboard', { replace: true })
@@ -194,7 +208,7 @@ function App() {
     }
   ) => {
     if (isCheckingSession) {
-      return <AuthLoadingCard label={options.loadingLabel} />
+      return <AuthLoadingCard label={options.loadingLabel} error={authError} />
     }
 
     if (!authUser) {
@@ -305,7 +319,7 @@ function App() {
       } else if (isDoctorAuthenticated) {
         pageContent = <AuthLoadingCard label="Redirecting to doctor's dashboard..." />
       } else if (isCheckingSession) {
-        pageContent = <AuthLoadingCard label="Checking admin access..." />
+        pageContent = <AuthLoadingCard label="Checking admin access..." error={authError} />
       } else if (!authUser) {
         pageContent = adminLoginPage
       } else if (!canAccessPage('admin', authUser.role)) {

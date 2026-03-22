@@ -9,6 +9,7 @@ import passport from 'passport';
 import './Config/passport.js';
 import { appConfig } from './Config/env.js';
 import ErrorLog from './Models/ErrorLogModel.js';
+import Sessions from './Models/SessionModel.js';
 import User from './Models/UserModel.js';
 import router from './Routes/Routes.js';
 import { seedCoreUsers, shouldAutoSeedCoreUsers } from './Utils/coreUserSeeding.js';
@@ -103,10 +104,19 @@ export const createApp = () => {
             console.warn(`Request warning: ${err?.message || safeMessage}`);
         }
 
-        if (statusCode >= 500) {
+        const requestPath = String(req.originalUrl || '').toLowerCase()
+        const shouldLogRoute =
+            requestPath.startsWith('/api/appointments') ||
+            requestPath.startsWith('/api/doctor') ||
+            requestPath.startsWith('/api/admin') ||
+            requestPath.startsWith('/api/ledger') ||
+            requestPath.startsWith('/api/symptoms') ||
+            requestPath.includes('blockchain')
+
+        if (shouldLogRoute && statusCode >= 400) {
             ErrorLog.create({
-                message: err?.message || 'Unknown server error',
-                stack: err?.stack,
+                message: safeMessage,
+                stack: undefined,
                 route: req.originalUrl,
                 method: req.method,
                 userId: req.user?.id || req.user?._id,
@@ -185,11 +195,40 @@ export const stopInMemoryMongo = async () => {
     }
 };
 
+const ensureSessionIndexes = async () => {
+    try {
+        const indexes = await Sessions.collection.indexes();
+        const legacyIndex = indexes.find((index) => index.name === 'token_1');
+        if (legacyIndex) {
+            await Sessions.collection.dropIndex('token_1');
+            console.warn('[DB] Dropped legacy Sessions token_1 index.');
+        }
+
+        const syncResult = await Sessions.syncIndexes();
+        const syncedIndexes = Object.keys(syncResult || {});
+        if (syncedIndexes.length > 0) {
+            console.log(`[DB] Sessions indexes synced: ${syncedIndexes.join(', ')}`);
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error || '');
+        if (/ns not found/i.test(message)) {
+            try {
+                await Sessions.syncIndexes();
+            } catch (syncError) {
+                console.warn('[DB] Failed to sync Sessions indexes.', syncError);
+            }
+            return;
+        }
+        console.warn('[DB] Failed to inspect Sessions indexes.', error);
+    }
+};
+
 export const startServer = async () => {
     const app = createApp()
 
     try {
         await connectToDatabase();
+        await ensureSessionIndexes();
 
         const migrationResult = await User.updateMany(
             { role: 'nurse' },

@@ -47,7 +47,7 @@ type DoctorSidebarSection =
   | 'reports_log'
   | 'settings'
 
-type ReservationFilterStatus = 'all' | Reservation['status']
+type AppointmentPane = 'Booked' | 'Recorded'
 
 type NotificationPreferences = {
   emailAlerts: boolean
@@ -155,7 +155,7 @@ const DoctorDashboardPage = ({
   const [activeSection, setActiveSection] = useState<DoctorSidebarSection>('dashboard')
   const [searchQuery, setSearchQuery] = useState('')
   const [appointmentsPage, setAppointmentsPage] = useState(1)
-  const [statusFilter, setStatusFilter] = useState<ReservationFilterStatus>('all')
+  const [appointmentPane, setAppointmentPane] = useState<AppointmentPane>('Booked')
   const [reportSourceFilter, setReportSourceFilter] = useState<ReportLogSourceFilter>('all')
   const [reportSeverityFilter, setReportSeverityFilter] = useState<ReportLogSeverityFilter>('all')
   const [reportActionFilter, setReportActionFilter] = useState<ReportLogActionFilter>('all')
@@ -217,9 +217,8 @@ const DoctorDashboardPage = ({
   }, [reservations, searchQuery])
 
   const filteredReservations = useMemo(() => {
-    if (statusFilter === 'all') return searchableReservations
-    return searchableReservations.filter((item) => item.status === statusFilter)
-  }, [searchableReservations, statusFilter])
+    return searchableReservations.filter((item) => item.status === appointmentPane)
+  }, [appointmentPane, searchableReservations])
 
   const pagedReservations = useMemo(
     () => getPageSlice(filteredReservations, appointmentsPage),
@@ -237,7 +236,7 @@ const DoctorDashboardPage = ({
 
   useEffect(() => {
     setAppointmentsPage(1)
-  }, [statusFilter])
+  }, [appointmentPane])
 
   const dashboardMetrics = useMemo(() => {
     const booked = searchableReservations.filter((item) => item.status === 'Booked').length
@@ -467,11 +466,10 @@ const DoctorDashboardPage = ({
               <DoctorAppointmentSection
                 pagedReservations={pagedReservations}
                 filteredReservations={filteredReservations}
-                searchableReservationCount={searchableReservations.length}
-                statusFilter={statusFilter}
-                onStatusFilterChange={setStatusFilter}
+                searchableReservations={searchableReservations}
+                appointmentPane={appointmentPane}
+                onAppointmentPaneChange={setAppointmentPane}
                 onResetFilters={() => {
-                  setStatusFilter('all')
                   setSearchQuery('')
                   setAppointmentsPage(1)
                 }}

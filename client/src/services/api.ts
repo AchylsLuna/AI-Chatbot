@@ -25,18 +25,22 @@ const resolveApiBase = () => {
   const configured = String(import.meta.env.VITE_API_URL ?? '/api').trim()
   if (!configured) return '/api'
 
-  // In dev, if API URL points back to frontend origin (ex: localhost:5173),
-  // redirect API calls straight to backend origin.
   if (typeof window !== 'undefined') {
     try {
       const absolute = new URL(configured, window.location.origin)
+      const pathOnly = absolute.pathname.replace(/\/$/, '') || '/api'
+      const isLocalFrontendDev =
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+        window.location.port === '5173'
+      const isLocalApiHost =
+        absolute.hostname === 'localhost' || absolute.hostname === '127.0.0.1'
+
+      // In local Vite dev, prefer the same-origin proxy for cookie-backed auth.
+      if (isLocalFrontendDev && isLocalApiHost) {
+        return pathOnly
+      }
+
       if (absolute.origin === window.location.origin) {
-        const pathOnly = absolute.pathname.replace(/\/$/, '') || '/api'
-        // In local Vite dev, default directly to backend origin to avoid proxy mismatch.
-        const isLocalDev = window.location.hostname === 'localhost' && window.location.port === '5173'
-        if (isLocalDev) {
-          return `http://localhost:5001${pathOnly}`
-        }
         return pathOnly
       }
     } catch {
@@ -178,7 +182,7 @@ const request = async (url: string, init?: RequestInit) => {
     const headers = new Headers(init?.headers)
     const method = String(init?.method || 'GET').toUpperCase()
     const isMutating = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
-    if (isMutating && !headers.has('Authorization')) {
+    if (isMutating) {
       const effectiveCsrfToken = getEffectiveCsrfToken()
       if (effectiveCsrfToken) {
         headers.set('X-CSRF-Token', effectiveCsrfToken)
@@ -474,6 +478,11 @@ export type AdminStaffApplicationRecord = {
   status: 'active' | 'disabled'
   department?: string
   hasLicenseFile: boolean
+  licenseCount: number
+  licenseFiles: Array<{
+    index: number
+    name: string
+  }>
 }
 
 export type AdminAuditLogRecord = {
@@ -496,6 +505,11 @@ export type AdminErrorLogRecord = {
   ipAddress?: string
   userAgent?: string
   timestamp: string
+}
+
+export type AdminAuditArchiveResult = {
+  archived: number
+  dryRun: boolean
 }
 
 export type DoctorQueueStatus = 'Waiting' | 'Arrived' | 'In-Consultation' | 'Checked-Out' | 'No-Show'
@@ -1103,6 +1117,30 @@ export const api = {
     const applications = Array.isArray(payload.applications) ? payload.applications : []
     return applications.map((item) => {
       const raw = (item ?? {}) as Record<string, unknown>
+      const rawLicenseFiles = Array.isArray(raw.licenseFiles) ? raw.licenseFiles : []
+      const normalizedLicenseFiles = rawLicenseFiles
+        .map((file, fallbackIndex) => {
+          const license = (file ?? {}) as Record<string, unknown>
+          return {
+            index:
+              typeof license.index === 'number' && Number.isFinite(license.index)
+                ? Math.max(0, Math.trunc(license.index))
+                : fallbackIndex,
+            name: String(license.name || `License ${fallbackIndex + 1}`),
+          }
+        })
+        .sort((a, b) => a.index - b.index)
+      const normalizedLicenseCount =
+        typeof raw.licenseCount === 'number' && Number.isFinite(raw.licenseCount)
+          ? Math.max(0, Math.trunc(raw.licenseCount))
+          : normalizedLicenseFiles.length
+      const fallbackLicenseFiles =
+        normalizedLicenseFiles.length > 0
+          ? normalizedLicenseFiles
+          : Array.from({ length: normalizedLicenseCount }, (_, index) => ({
+              index,
+              name: `License ${index + 1}`,
+            }))
       return {
         id: String(raw.id || raw._id || ''),
         email: String(raw.email || ''),
@@ -1111,7 +1149,9 @@ export const api = {
         role: 'doctor',
         status: raw.status === 'active' ? 'active' : 'disabled',
         department: raw.department ? String(raw.department) : undefined,
-        hasLicenseFile: Boolean(raw.hasLicenseFile),
+        hasLicenseFile: Boolean(raw.hasLicenseFile) || normalizedLicenseCount > 0,
+        licenseCount: normalizedLicenseCount,
+        licenseFiles: fallbackLicenseFiles,
       }
     })
   },
@@ -1141,8 +1181,10 @@ export const api = {
       )
     )
   },
-  getStaffApplicationLicenseUrl: (userId: string): string =>
-    `${API_BASE}/admin/staff-applications/${encodeURIComponent(userId)}/license`,
+  getStaffApplicationLicenseUrl: (userId: string, index = 0): string =>
+    `${API_BASE}/admin/staff-applications/${encodeURIComponent(userId)}/license?index=${encodeURIComponent(
+      String(Math.max(0, Math.trunc(index)))
+    )}`,
   updateAdminUser: async (
     userId: string,
     updates: { role?: AdminUserRecord['role']; status?: AdminUserRecord['status']; department?: string }
@@ -1231,6 +1273,25 @@ export const api = {
   },
   downloadAdminErrorBackup: async (): Promise<void> => {
     await downloadEncryptedFile(`${API_BASE}/admin/error-logs/download`, 'error_logs_backup.zip.enc')
+  },
+  archiveAdminAuditLogs: async (options?: {
+    olderThanDays?: number
+    dryRun?: boolean
+  }): Promise<AdminAuditArchiveResult> => {
+    const response = await request(`${API_BASE}/admin/audit-logs/archive`, withAuth({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        olderThanDays: options?.olderThanDays,
+        dryRun: options?.dryRun,
+      }),
+    }))
+    const payload = await handleResponse(response)
+    const record = payload as Record<string, unknown>
+    return {
+      archived: Number(record?.archived ?? 0),
+      dryRun: Boolean(record?.dryRun),
+    }
   },
   getLedger: async (): Promise<LedgerEntry[]> => {
     const payload = await handleResponse(await request(`${API_BASE}/ledger`, withAuth()))

@@ -2,6 +2,7 @@ import { stateCardClass } from '../../styles/uiClassNames'
 
 type AuthLoadingCardProps = {
   label: string
+  error?: string | null
 }
 
 type AccessDeniedCardProps = {
@@ -11,7 +12,7 @@ type AccessDeniedCardProps = {
   onBackToOverview: () => void
 }
 
-export const AuthLoadingCard = ({ label }: AuthLoadingCardProps) => (
+export const AuthLoadingCard = ({ label, error }: AuthLoadingCardProps) => (
   <div className="min-h-screen pb-20">
     <div className="mx-auto w-full max-w-6xl px-6 py-10">
       <div className={`${stateCardClass} p-7`}>
@@ -20,6 +21,9 @@ export const AuthLoadingCard = ({ label }: AuthLoadingCardProps) => (
           Checking access
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--agent-muted)]">{label}</p>
+        {error ? (
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--agent-danger)]">{error}</p>
+        ) : null}
       </div>
     </div>
   </div>

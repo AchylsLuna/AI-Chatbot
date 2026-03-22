@@ -8,14 +8,14 @@ import type { Reservation } from '../../../../types'
 import { formatPhilippineDateTime } from '../../../../utils/dateTime'
 import { maskIdentifier, maskPersonName } from '../../../../utils/privacy'
 
-type ReservationFilterStatus = 'all' | Reservation['status']
+type AppointmentPane = 'Booked' | 'Recorded'
 
 type DoctorAppointmentSectionProps = {
   pagedReservations: Reservation[]
   filteredReservations: Reservation[]
-  searchableReservationCount: number
-  statusFilter: ReservationFilterStatus
-  onStatusFilterChange: (next: ReservationFilterStatus) => void
+  searchableReservations: Reservation[]
+  appointmentPane: AppointmentPane
+  onAppointmentPaneChange: (next: AppointmentPane) => void
   onResetFilters: () => void
   dataMaskingEnabled: boolean
   editingId: string | null
@@ -46,9 +46,9 @@ const statusBadgeClass = (status: Reservation['status']) => {
 const DoctorAppointmentSection = ({
   pagedReservations,
   filteredReservations,
-  searchableReservationCount,
-  statusFilter,
-  onStatusFilterChange,
+  searchableReservations,
+  appointmentPane,
+  onAppointmentPaneChange,
   onResetFilters,
   dataMaskingEnabled,
   editingId,
@@ -69,9 +69,8 @@ const DoctorAppointmentSection = ({
   pageSize,
   maxPageButtons,
 }: DoctorAppointmentSectionProps) => {
-  const bookedCount = filteredReservations.filter((item) => item.status === 'Booked').length
-  const recordedCount = filteredReservations.filter((item) => item.status === 'Recorded').length
-  const failedCount = filteredReservations.filter((item) => item.status === 'Failed').length
+  const bookedCount = searchableReservations.filter((item) => item.status === 'Booked').length
+  const recordedCount = searchableReservations.filter((item) => item.status === 'Recorded').length
 
   return (
     <section className="space-y-3">
@@ -84,47 +83,36 @@ const DoctorAppointmentSection = ({
             </p>
           </div>
           <p className="text-xs font-semibold text-[color:var(--agent-muted-soft)]">
-            Showing {filteredReservations.length} of {searchableReservationCount} appointments.
+            Showing {filteredReservations.length} {appointmentPane.toLowerCase()} appointments.
           </p>
         </div>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="reference-card-soft p-3">
-            <p className="text-xs uppercase tracking-[0.13em] text-[color:var(--agent-muted-soft)]">Visible</p>
-            <p className="mt-1 text-xl font-semibold text-[color:var(--agent-ink)]">{filteredReservations.length}</p>
-          </div>
-          <div className="reference-card-soft p-3">
-            <p className="text-xs uppercase tracking-[0.13em] text-[color:var(--agent-muted-soft)]">Booked</p>
-            <p className="mt-1 text-xl font-semibold text-sky-600">{bookedCount}</p>
-          </div>
-          <div className="reference-card-soft p-3">
-            <p className="text-xs uppercase tracking-[0.13em] text-[color:var(--agent-muted-soft)]">Recorded</p>
-            <p className="mt-1 text-xl font-semibold text-emerald-600">{recordedCount}</p>
-          </div>
-          <div className="reference-card-soft p-3">
-            <p className="text-xs uppercase tracking-[0.13em] text-[color:var(--agent-muted-soft)]">Failed</p>
-            <p className="mt-1 text-xl font-semibold text-rose-600">{failedCount}</p>
-          </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => onAppointmentPaneChange('Booked')}
+            className={`${appointmentPane === 'Booked' ? pagePrimaryButtonClass : pageGhostButtonClass} w-full justify-between`}
+          >
+            <span>Booked appointments</span>
+            <span>{bookedCount}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onAppointmentPaneChange('Recorded')}
+            className={`${appointmentPane === 'Recorded' ? pagePrimaryButtonClass : pageGhostButtonClass} w-full justify-between`}
+          >
+            <span>Recorded appointments</span>
+            <span>{recordedCount}</span>
+          </button>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-[220px_160px_1fr] md:items-center">
-          <select
-            value={statusFilter}
-            onChange={(event) => onStatusFilterChange(event.target.value as ReservationFilterStatus)}
-            className={pageFieldClass}
-          >
-            <option value="all">All statuses</option>
-            <option value="Booked">Booked</option>
-            <option value="Recorded">Recorded</option>
-            <option value="Failed">Failed</option>
-          </select>
-
+        <div className="mt-4 grid gap-3 md:grid-cols-[160px_1fr] md:items-center">
           <button type="button" className={pageGhostButtonClass} onClick={onResetFilters}>
-            Reset filters
+            Clear search
           </button>
 
           <p className="text-xs text-[color:var(--agent-muted-soft)]">
-            Use the search field above to match by patient, id, department, or summary.
+            Use the search field above to match by patient, id, department, or summary within this section.
           </p>
         </div>
 
@@ -136,7 +124,7 @@ const DoctorAppointmentSection = ({
         <article className="reference-card p-5">
           <h2 className="reference-section-title">No appointments found</h2>
           <p className="reference-widget-subtle mt-2">
-            Adjust your search query or status filter to view matching records.
+            Adjust your search query or switch sections to view matching records.
           </p>
         </article>
       ) : (

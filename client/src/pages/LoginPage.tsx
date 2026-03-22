@@ -41,7 +41,6 @@ const LoginPage = ({
   const [username, setUsername] = useState('')
   const [emailError, setEmailError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [doctorLicenseId, setDoctorLicenseId] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const passwordInputRef = useRef<HTMLInputElement | null>(null)
   const roleTab: LoginRoleTab = defaultRoleTab === 'doctor' ? 'doctor' : 'patient'
@@ -178,34 +177,6 @@ const LoginPage = ({
             />
           </div>
           {emailError ? <p className="auth-lovable-field-error" role="alert">{emailError}</p> : null}
-
-          {roleTab === 'doctor' ? (
-            <div className="relative">
-              <span className="auth-lovable-input-icon">
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="4" y="3" width="16" height="18" rx="2" />
-                  <path d="M8 7h8M8 11h8M8 15h5" />
-                </svg>
-              </span>
-              <input
-                type="text"
-                value={doctorLicenseId}
-                onChange={(event) => {
-                  setDoctorLicenseId(event.target.value)
-                }}
-                placeholder="Medical License ID (optional)"
-                className="auth-lovable-input pl-10"
-              />
-            </div>
-          ) : null}
 
           <div className="relative">
             <span className="auth-lovable-input-icon">

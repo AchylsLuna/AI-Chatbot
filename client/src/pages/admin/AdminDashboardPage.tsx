@@ -217,6 +217,7 @@ const AdminDashboardPage = ({
   const [actionError, setActionError] = useState<string | null>(null)
   const [isDownloadingAuditBackup, setIsDownloadingAuditBackup] = useState(false)
   const [isDownloadingErrorBackup, setIsDownloadingErrorBackup] = useState(false)
+  const [isArchivingAuditLogs, setIsArchivingAuditLogs] = useState(false)
 
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
   const [expandedStaffId, setExpandedStaffId] = useState<string | null>(null)
@@ -225,6 +226,7 @@ const AdminDashboardPage = ({
   const [isReviewActionPending, setIsReviewActionPending] = useState(false)
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [showArchiveAuditConfirm, setShowArchiveAuditConfirm] = useState(false)
 
   const fetchAdminData = async () => {
     setLoadingData(true)
@@ -604,6 +606,14 @@ const AdminDashboardPage = ({
           <button
             type="button"
             className={pageGhostButtonClass}
+            onClick={() => setShowArchiveAuditConfirm(true)}
+            disabled={isArchivingAuditLogs}
+          >
+            {isArchivingAuditLogs ? 'Archiving...' : 'Archive log'}
+          </button>
+          <button
+            type="button"
+            className={pageGhostButtonClass}
             onClick={() => void handleDownloadAuditBackup()}
             disabled={isDownloadingAuditBackup}
           >
@@ -661,13 +671,13 @@ const AdminDashboardPage = ({
     }
   }
 
-  const handleOpenStaffLicense = (application: AdminStaffApplicationRecord) => {
+  const handleOpenStaffLicense = (application: AdminStaffApplicationRecord, index = 0) => {
     if (typeof window === 'undefined') return
     if (!application.hasLicenseFile) {
       setActionError('No license file is available for this application.')
       return
     }
-    const licenseUrl = api.getStaffApplicationLicenseUrl(application.id)
+    const licenseUrl = api.getStaffApplicationLicenseUrl(application.id, index)
     window.open(licenseUrl, '_blank', 'noopener,noreferrer')
   }
 
@@ -738,6 +748,22 @@ const AdminDashboardPage = ({
       setActionError(message)
     } finally {
       setIsDownloadingErrorBackup(false)
+    }
+  }
+
+  const handleArchiveAuditLogs = async () => {
+    setActionMessage(null)
+    setActionError(null)
+    setIsArchivingAuditLogs(true)
+    try {
+      const result = await api.archiveAdminAuditLogs()
+      setActionMessage(`Archived ${result.archived} audit log(s).`)
+      await fetchAdminData()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to archive audit logs.'
+      setActionError(message)
+    } finally {
+      setIsArchivingAuditLogs(false)
     }
   }
 
@@ -824,6 +850,19 @@ const AdminDashboardPage = ({
                 onCancel={() => setShowLogoutConfirm(false)}
               />
 
+              <ConfirmModal
+                open={showArchiveAuditConfirm}
+                title="Archive audit logs"
+                message="This will move all audit log records to an archive collection and remove them from the live audit log. Continue?"
+                confirmLabel={isArchivingAuditLogs ? 'Archiving...' : 'Archive logs'}
+                cancelLabel="Cancel"
+                onConfirm={() => {
+                  setShowArchiveAuditConfirm(false)
+                  void handleArchiveAuditLogs()
+                }}
+                onCancel={() => setShowArchiveAuditConfirm(false)}
+              />
+
               {selectedStaffApplication ? (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
                   <div className={`${pagePanelClass} w-full max-w-2xl p-5`}>
@@ -876,13 +915,26 @@ const AdminDashboardPage = ({
                     </div>
 
                     <div className="mt-5 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        className={pageGhostButtonClass}
-                        onClick={() => handleOpenStaffLicense(selectedStaffApplication)}
-                      >
-                        Open uploaded license
-                      </button>
+                      {selectedStaffApplication.licenseFiles.length > 0 ? (
+                        selectedStaffApplication.licenseFiles.map((file) => (
+                          <button
+                            key={`${selectedStaffApplication.id}-license-${file.index}`}
+                            type="button"
+                            className={pageGhostButtonClass}
+                            onClick={() => handleOpenStaffLicense(selectedStaffApplication, file.index)}
+                          >
+                            Open {file.name}
+                          </button>
+                        ))
+                      ) : (
+                        <button
+                          type="button"
+                          className={pageGhostButtonClass}
+                          onClick={() => handleOpenStaffLicense(selectedStaffApplication, 0)}
+                        >
+                          Open uploaded license
+                        </button>
+                      )}
                       <button
                         type="button"
                         className={pageGhostButtonClass}
@@ -1131,7 +1183,9 @@ const AdminDashboardPage = ({
                                     <p>Status: Pending review</p>
                                   </td>
                                   <td className={`px-3 py-3 ${pageMutedTextClass}`}>
-                                    {application.hasLicenseFile ? 'Uploaded' : 'Missing'}
+                                    {application.hasLicenseFile
+                                      ? `${application.licenseCount} file${application.licenseCount === 1 ? '' : 's'} uploaded`
+                                      : 'Missing'}
                                   </td>
                                   <td className="px-3 py-3">
                                     <button

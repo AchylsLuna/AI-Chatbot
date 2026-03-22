@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AuthSplitLayout from '../components/auth/AuthSplitLayout'
 import { api } from '../services/api'
 import type { AppPage } from '../types/navigation'
@@ -60,9 +60,9 @@ const SignupPage = ({
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [doctorLicenseId, setDoctorLicenseId] = useState('')
   const [doctorDepartment, setDoctorDepartment] = useState('')
   const [licenseFiles, setLicenseFiles] = useState<File[]>([])
+  const [licensePreviewUrls, setLicensePreviewUrls] = useState<string[]>([])
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
@@ -97,7 +97,6 @@ const SignupPage = ({
     setEmail('')
     setPassword('')
     setConfirmPassword('')
-    setDoctorLicenseId('')
     setDoctorDepartment('')
     setLicenseFiles([])
     setAcceptedTerms(false)
@@ -105,6 +104,15 @@ const SignupPage = ({
       licenseInputRef.current.value = ''
     }
   }
+
+  useEffect(() => {
+    const nextPreviewUrls = licenseFiles.map((file) => URL.createObjectURL(file))
+    setLicensePreviewUrls(nextPreviewUrls)
+
+    return () => {
+      nextPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [licenseFiles])
 
   if (signupResult) {
     const isDoctorSignup = signupResult.role === 'doctor'
@@ -459,30 +467,6 @@ const SignupPage = ({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <rect x="4" y="3" width="16" height="18" rx="2" />
-                  <path d="M8 7h8M8 11h8M8 15h5" />
-                </svg>
-              </span>
-              <input
-                type="text"
-                value={doctorLicenseId}
-                onChange={(event) => setDoctorLicenseId(event.target.value)}
-                placeholder="Medical License ID (optional)"
-                className="auth-lovable-input pl-10"
-              />
-            </div>
-
-            <div className="relative">
-              <span className="auth-lovable-input-icon">
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
                   <path d="M12 3v18M3 12h18" />
                 </svg>
               </span>
@@ -528,13 +512,17 @@ const SignupPage = ({
                 multiple
                 onChange={(event) => {
                   const nextFiles = Array.from(event.target.files ?? [])
-                  if (nextFiles.length > 5) {
+                  const mergedFiles = [...licenseFiles, ...nextFiles].slice(0, 5)
+                  if (licenseInputRef.current) {
+                    licenseInputRef.current.value = ''
+                  }
+                  if (licenseFiles.length + nextFiles.length > 5) {
                     setSubmitError('Upload up to 5 medical license files.')
-                    setLicenseFiles(nextFiles.slice(0, 5))
+                    setLicenseFiles(mergedFiles)
                     return
                   }
                   if (submitError) setSubmitError(null)
-                  setLicenseFiles(nextFiles)
+                  setLicenseFiles(mergedFiles)
                 }}
                 className="block w-full text-sm text-[color:var(--auth-lovable-ink)] file:mr-3 file:rounded-lg file:border-0 file:bg-[color:var(--auth-lovable-primary)] file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
               />
@@ -542,9 +530,55 @@ const SignupPage = ({
                 Upload 1 to 5 JPG, PNG, or PDF files for admin review.
               </p>
               {licenseFiles.length > 0 ? (
-                <p className="text-xs text-[color:var(--auth-lovable-muted)]">
-                  Selected: {licenseFiles.map((file) => file.name).join(', ')}
-                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {licenseFiles.map((file, index) => {
+                    const previewUrl = licensePreviewUrls[index]
+                    const isImage = file.type.startsWith('image/')
+                    const isPdf = file.type === 'application/pdf'
+                    return (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="rounded-lg border border-[color:var(--auth-lovable-border)] bg-white p-2"
+                      >
+                        <div className="mb-2 h-24 overflow-hidden rounded-md border border-[color:var(--auth-lovable-border)] bg-[color:var(--auth-lovable-surface-soft)]">
+                          {isImage && previewUrl ? (
+                            <img
+                              src={previewUrl}
+                              alt={file.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : isPdf && previewUrl ? (
+                            <object
+                              data={previewUrl}
+                              type="application/pdf"
+                              className="h-full w-full"
+                              aria-label={`PDF preview for ${file.name}`}
+                            >
+                              <div className="flex h-full items-center justify-center text-xs text-[color:var(--auth-lovable-muted)]">
+                                PDF preview unavailable
+                              </div>
+                            </object>
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-xs text-[color:var(--auth-lovable-muted)]">
+                              Preview unavailable
+                            </div>
+                          )}
+                        </div>
+                        <p className="truncate text-xs text-[color:var(--auth-lovable-muted)]">{file.name}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLicenseFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index))
+                            if (submitError) setSubmitError(null)
+                          }}
+                          className="mt-2 text-xs font-semibold text-rose-600 hover:text-rose-700"
+                        >
+                          Remove file
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
               ) : null}
             </div>
           </>

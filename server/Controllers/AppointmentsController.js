@@ -28,6 +28,20 @@ const getActorId = (req) => {
 
 const getActorRole = (req) => normalizeRole(req.user?.role) || 'user'
 
+const logAppointmentAudit = async ({ action, userId, details, req }) => {
+    try {
+        await AuditLog.create({
+            userId,
+            action,
+            details,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        })
+    } catch (error) {
+        console.warn('Failed to write appointment audit log', error)
+    }
+}
+
 const formatDateKeyFromUtcDate = (value) => {
     const date = value instanceof Date ? value : new Date(value)
     if (Number.isNaN(date.getTime())) return ''
@@ -260,14 +274,12 @@ export async function createAppointment(req, res) {
                 }
             });
 
-        //Audit Log
-        await AuditLog.create({
+        await logAppointmentAudit({
             action: "CREATED_APPOINTMENT",
             userId: patientId,
-            details: `User ${patient.email} created appointment with Doctor ${doctorId || 'TBD'} on ${scheduledDate}.`,
-            ipAddress: req.ip,
-            userAgent: req.headers['user-agent']
-        });
+            details: `User ${patient.email} created appointment ${appointment._id} with Doctor ${doctorId} on ${appointment.scheduledDate.toISOString()} (${normalizedDepartment}).`,
+            req,
+        })
 
         return res.status(201).json({ message: "Appointment created successfully.", appointment });
 
@@ -628,12 +640,11 @@ export async function updateAppointmentStatus(req, res) {
         //Sync to Blockchain
         blockchainService.updateStatusOnChain(appointment._id, status);
 
-        await AuditLog.create({
-            userId,
+        await logAppointmentAudit({
             action: 'UPDATED_APPOINTMENT_STATUS',
+            userId,
             details: `Appointment ${appointment._id}: ${previousStatus} -> ${status}`,
-            ipAddress: req.ip,
-            userAgent: req.headers['user-agent']
+            req,
         })
 
         return res.status(200).json({

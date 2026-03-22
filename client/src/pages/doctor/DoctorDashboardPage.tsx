@@ -43,7 +43,7 @@ import {
   formatPhilippineMonthYear,
   formatPhilippineTime,
 } from '../../utils/dateTime'
-import { maskIdentifier, maskPersonName } from '../../utils/privacy'
+import { maskPersonName } from '../../utils/privacy'
 import { getRoleLabel } from '../../utils/roles'
 import {
   dangerStatusChipClass,
@@ -467,15 +467,11 @@ const parseDateForCalendar = (value: string) => {
 }
 
 const formatDateTime = (value: string) => {
-  const timestamp = parseDate(value)
-  if (!timestamp) return 'Unknown'
-  return formatPhilippineDateTime(timestamp)
+  return formatPhilippineDateTime(value, 'Not scheduled')
 }
 
 const formatTime = (value: string) => {
-  const timestamp = parseDate(value)
-  if (!timestamp) return 'Unknown'
-  return formatPhilippineTime(timestamp)
+  return formatPhilippineTime(value, 'Not scheduled')
 }
 
 const formatMonthInputValue = (date: Date) => {
@@ -597,6 +593,7 @@ const DoctorDashboardPage = ({
   })
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [appointmentFilter, setAppointmentFilter] = useState<'All' | 'Pending' | 'Completed' | 'Cancelled'>('All')
   const [calendarViewDate, setCalendarViewDate] = useState(() => {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), 1)
@@ -1032,6 +1029,7 @@ const DoctorDashboardPage = ({
 
     return orderedReservations.map((reservation) => ({
       id: reservation.id,
+      patientId: reservation.patientId,
       patientName: reservation.patientName,
       department: reservation.department,
       priority: reservation.priority,
@@ -1052,9 +1050,18 @@ const DoctorDashboardPage = ({
   const normalizedQuery = searchQuery.trim().toLowerCase()
 
   const filteredAppointments = useMemo(() => {
-    if (!normalizedQuery) return appointmentItems
-    return appointmentItems.filter((item) => matchesAppointmentQuery(item, normalizedQuery))
-  }, [appointmentItems, normalizedQuery])
+    let filtered = appointmentItems
+    if (appointmentFilter === 'Pending') {
+      filtered = filtered.filter((item) => item.status === 'Booked')
+    } else if (appointmentFilter === 'Completed') {
+      filtered = filtered.filter((item) => item.status === 'Recorded')
+    } else if (appointmentFilter === 'Cancelled') {
+      filtered = filtered.filter((item) => item.status === 'Failed')
+    }
+
+    if (!normalizedQuery) return filtered
+    return filtered.filter((item) => matchesAppointmentQuery(item, normalizedQuery))
+  }, [appointmentItems, normalizedQuery, appointmentFilter])
 
   const pendingCalendarReservations = useMemo(() => {
     const sourceReservations = doctorAppointments.length > 0 ? doctorAppointments : reservations
@@ -1180,10 +1187,10 @@ const DoctorDashboardPage = ({
   const completionRate =
     appointmentItems.length > 0
       ? Math.round(
-          (appointmentItems.filter((item) => item.status === 'Recorded').length /
-            appointmentItems.length) *
-            100
-        )
+        (appointmentItems.filter((item) => item.status === 'Recorded').length /
+          appointmentItems.length) *
+        100
+      )
       : 0
 
   const openDays = useMemo(
@@ -1434,7 +1441,7 @@ const DoctorDashboardPage = ({
       title: 'Dashboard',
       description: 'Overview of your clinic operations, appointments, and patient queue.',
       eyebrow: 'Doctor workspace',
-      searchPlaceholder: 'Search patients, IDs, or departments...',
+      searchPlaceholder: 'Search patients or departments...',
     },
     appointments: {
       title: 'Appointments',
@@ -1649,939 +1656,945 @@ const DoctorDashboardPage = ({
                   </DoctorPanel>
                 ) : null}
 
-            {activeSection === 'dashboard' ? (
-              <div className="grid gap-4 xl:grid-cols-3">
-                  <DoctorOverviewCard
-                    tone="blue"
-                    icon={<AppointmentsCardIcon className="h-5 w-5" />}
-                    title="Appointments"
-                    description="Today's appointment queue with priority flags"
-                    stats={[
-                      { label: 'Total today', value: doctorOverview?.counter.total ?? appointmentItems.length },
-                      { label: 'Pending', value: doctorOverview?.counter.pending ?? activeQueueItems.length },
-                      {
-                        label: 'Completed',
-                        value:
-                          doctorOverview?.counter.completed ??
-                          appointmentItems.filter((item) => item.status === 'Recorded').length,
-                      },
-                      {
-                        label: 'No-shows',
-                        value:
-                          doctorOverview?.counter.noShows ??
-                          appointmentItems.filter((item) => item.status === 'Failed').length,
-                      },
-                    ]}
-                    onOpen={() => setSection('appointments')}
-                  />
+                {activeSection === 'dashboard' ? (
+                  <div className="grid gap-4 xl:grid-cols-3">
+                    <DoctorOverviewCard
+                      tone="blue"
+                      icon={<AppointmentsCardIcon className="h-5 w-5" />}
+                      title="Appointments"
+                      description="Today's appointment queue with priority flags"
+                      stats={[
+                        { label: 'Total today', value: doctorOverview?.counter.total ?? appointmentItems.length },
+                        { label: 'Pending', value: doctorOverview?.counter.pending ?? activeQueueItems.length },
+                        {
+                          label: 'Completed',
+                          value:
+                            doctorOverview?.counter.completed ??
+                            appointmentItems.filter((item) => item.status === 'Recorded').length,
+                        },
+                        {
+                          label: 'No-shows',
+                          value:
+                            doctorOverview?.counter.noShows ??
+                            appointmentItems.filter((item) => item.status === 'Failed').length,
+                        },
+                      ]}
+                      onOpen={() => setSection('appointments')}
+                    />
 
-                  <DoctorOverviewCard
-                    tone="green"
-                    icon={<CalendarCardIcon className="h-5 w-5" />}
-                    title="Calendar"
-                    description="Monthly view of upcoming appointments"
-                    stats={[
-                      { label: 'This month', value: calendarView.appointmentsThisMonth },
-                      { label: 'Upcoming', value: monthAgendaItems.length },
-                    ]}
-                    onOpen={() => setSection('calendar')}
-                  />
+                    <DoctorOverviewCard
+                      tone="green"
+                      icon={<CalendarCardIcon className="h-5 w-5" />}
+                      title="Calendar"
+                      description="Monthly view of upcoming appointments"
+                      stats={[
+                        { label: 'This month', value: calendarView.appointmentsThisMonth },
+                        { label: 'Upcoming', value: monthAgendaItems.length },
+                      ]}
+                      onOpen={() => setSection('calendar')}
+                    />
 
-                  <DoctorOverviewCard
-                    tone="slate"
-                    icon={<ScheduleCardIcon className="h-5 w-5" />}
-                    title="Schedule"
-                    description="Weekly availability and session configuration"
-                    stats={[
-                      { label: 'Open sessions', value: openSessions > 0 ? openSessions : '—' },
-                      { label: 'Slot count', value: slotCount > 0 ? slotCount : '—' },
-                    ]}
-                    onOpen={() => setSection('schedule')}
-                  />
+                    <DoctorOverviewCard
+                      tone="slate"
+                      icon={<ScheduleCardIcon className="h-5 w-5" />}
+                      title="Schedule"
+                      description="Weekly availability and session configuration"
+                      stats={[
+                        { label: 'Open sessions', value: openSessions > 0 ? openSessions : '—' },
+                        { label: 'Slot count', value: slotCount > 0 ? slotCount : '—' },
+                      ]}
+                      onOpen={() => setSection('schedule')}
+                    />
 
-                  <DoctorOverviewCard
-                    tone="amber"
-                    icon={<QueueCardIcon className="h-5 w-5" />}
-                    title="Queue Management"
-                    description="Active patient queue pending review"
-                    stats={[
-                      { label: 'Waiting', value: activeQueueItems.length },
-                      {
-                        label: 'Arrived',
-                        value: activeQueueItems.filter((item) => item.queueStatus === 'Arrived').length,
-                      },
-                      {
-                        label: 'High priority',
-                        value:
-                          doctorOverview?.urgencyFlags?.length ??
-                          activeQueueItems.filter((item) => item.priority === 'High').length,
-                      },
-                    ]}
-                    onOpen={() => setSection('queue')}
-                  />
+                    <DoctorOverviewCard
+                      tone="amber"
+                      icon={<QueueCardIcon className="h-5 w-5" />}
+                      title="Queue Management"
+                      description="Active patient queue pending review"
+                      stats={[
+                        { label: 'Waiting', value: activeQueueItems.length },
+                        {
+                          label: 'Arrived',
+                          value: activeQueueItems.filter((item) => item.queueStatus === 'Arrived').length,
+                        },
+                        {
+                          label: 'High priority',
+                          value:
+                            doctorOverview?.urgencyFlags?.length ??
+                            activeQueueItems.filter((item) => item.priority === 'High').length,
+                        },
+                      ]}
+                      onOpen={() => setSection('queue')}
+                    />
 
-                  <DoctorOverviewCard
-                    tone="red"
-                    icon={<AnalyticsCardIcon className="h-5 w-5" />}
-                    title="Analytics"
-                    description="Department load and completion metrics"
-                    stats={[
-                      { label: 'Departments', value: departmentBreakdown.length },
-                      { label: 'Completion', value: `${completionRate}%` },
-                    ]}
-                    onOpen={() => setSection('analytics')}
-                  />
-              </div>
-            ) : null}
-
-            {activeSection === 'appointments' ? (
-              <DoctorPanel>
-                <DoctorPanelHeader
-                  eyebrow="Bookings"
-                  title="Appointments"
-                  description="Review current bookings, priority levels, and patient details."
-                  actions={
-                    <>
-                      <span className={doctorChipClass}>
-                        {filteredAppointments.length} visible
-                      </span>
-                      <span className={doctorChipClass}>
-                        {appointmentItems.filter((item) => item.priority === 'High').length} high priority
-                      </span>
-                    </>
-                  }
-                />
-
-                {filteredAppointments.length === 0 ? (
-                  <p className={`mt-5 text-sm ${pageMutedTextClass}`}>
-                    No appointments match your search query.
-                  </p>
-                ) : (
-                  <div className="mt-5 space-y-3">
-                    {filteredAppointments.map((appointment) => {
-                      const displayName = dataMaskingEnabled
-                        ? maskPersonName(appointment.patientName)
-                        : appointment.patientName
-                      const displayId = dataMaskingEnabled
-                        ? maskIdentifier(appointment.id)
-                        : appointment.id
-
-                      return (
-                        <div
-                          key={appointment.id}
-                          className="rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-4 transition hover:shadow-[var(--card-shadow-soft)]"
-                        >
-                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className={`truncate text-base font-semibold ${pageHeadingTextClass}`}>
-                                  {displayName}
-                                </p>
-                                {appointment.flagged ? (
-                                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" />
-                                ) : null}
-                              </div>
-                              <p className={`mt-1 text-xs ${pageMutedTextClass}`}>{displayId}</p>
-                              <p className={`mt-3 text-sm ${pageMutedTextClass}`}>{appointment.symptoms}</p>
-                              <div className={`mt-3 flex flex-wrap items-center gap-2 text-xs ${pageMutedTextClass}`}>
-                                <span>{appointment.department}</span>
-                                <span>•</span>
-                                <span>{formatDateTime(appointment.requestedTime)}</span>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span
-                                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(appointment.priority)}`}
-                              >
-                                {appointment.priority}
-                              </span>
-                              <span
-                                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${reservationStatusChipClass(appointment.status)}`}
-                              >
-                                {appointment.status}
-                              </span>
-                              <span
-                                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${queueStatusChipClass(appointment.queueStatus)}`}
-                              >
-                                {appointment.queueStatus}
-                              </span>
-                              <button
-                                type="button"
-                                className={compactPrimaryButtonClass}
-                                onClick={() => handleOpenAppointment(appointment)}
-                              >
-                                Open chart
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
+                    <DoctorOverviewCard
+                      tone="red"
+                      icon={<AnalyticsCardIcon className="h-5 w-5" />}
+                      title="Analytics"
+                      description="Department load and completion metrics"
+                      stats={[
+                        { label: 'Departments', value: departmentBreakdown.length },
+                        { label: 'Completion', value: `${completionRate}%` },
+                      ]}
+                      onOpen={() => setSection('analytics')}
+                    />
                   </div>
-                )}
-              </DoctorPanel>
-            ) : null}
+                ) : null}
 
-            {activeSection === 'calendar' ? (
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-                <DoctorPanel>
-                  <DoctorPanelHeader
-                    eyebrow="Calendar"
-                    title="Monthly calendar"
-                    description="Pending appointments grouped by weekday and date."
-                    actions={
-                      <>
-                        <button
-                          type="button"
-                          className={compactGhostButtonClass}
-                          onClick={() =>
-                            setCalendarViewDate(
-                              (previous) =>
-                                new Date(previous.getFullYear(), previous.getMonth() - 1, 1)
-                            )
-                          }
-                        >
-                          <ChevronLeftIcon className="h-4 w-4" />
-                          Prev
-                        </button>
-                        <input
-                          type="month"
-                          value={formatMonthInputValue(calendarViewDate)}
-                          onChange={(event) => {
-                            const [year, month] = event.target.value.split('-').map(Number)
-                            if (!year || !month) return
-                            setCalendarViewDate(new Date(year, month - 1, 1))
-                          }}
-                          className={compactFieldClass}
-                        />
-                        <button
-                          type="button"
-                          className={compactGhostButtonClass}
-                          onClick={() =>
-                            setCalendarViewDate(
-                              (previous) =>
-                                new Date(previous.getFullYear(), previous.getMonth() + 1, 1)
-                            )
-                          }
-                        >
-                          Next
-                          <ChevronRightIcon className="h-4 w-4" />
-                        </button>
-                      </>
-                    }
-                  />
+                {activeSection === 'appointments' ? (
+                  <DoctorPanel>
+                    <DoctorPanelHeader
+                      eyebrow="Bookings"
+                      title="Appointments"
+                      description="Review current bookings, priority levels, and patient details."
+                      actions={
+                        <>
+                          <span className={doctorChipClass}>
+                            {filteredAppointments.length} visible
+                          </span>
+                          <span className={doctorChipClass}>
+                            {appointmentItems.filter((item) => item.priority === 'High').length} high priority
+                          </span>
+                        </>
+                      }
+                    />
 
-                  <div className="mt-5 overflow-x-auto">
-                    <table className="min-w-full border-collapse text-sm">
-                      <thead>
-                        <tr>
-                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
-                            <th
-                              key={label}
-                              className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-2 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      {(['All', 'Pending', 'Completed', 'Cancelled'] as const).map(filter => (
+                        <button
+                          key={filter}
+                          type="button"
+                          onClick={() => setAppointmentFilter(filter)}
+                          className={appointmentFilter === filter ? doctorPrimaryButtonClass : doctorGhostButtonClass}
+                        >
+                          {filter}
+                        </button>
+                      ))}
+                    </div>
+
+                    {filteredAppointments.length === 0 ? (
+                      <p className={`mt-5 text-sm ${pageMutedTextClass}`}>
+                        No appointments match your search query or filter.
+                      </p>
+                    ) : (
+                      <div className="mt-5 space-y-3">
+                        {filteredAppointments.map((appointment) => {
+                          const displayName = dataMaskingEnabled
+                            ? maskPersonName(appointment.patientName)
+                            : appointment.patientName
+
+                          return (
+                            <div
+                              key={appointment.id}
+                              className="rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-4 transition hover:shadow-[var(--card-shadow-soft)]"
                             >
-                              {label}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Array.from({ length: calendarView.cells.length / 7 }, (_, rowIndex) => (
-                          <tr key={`week-${rowIndex}`}>
-                            {calendarView.cells
-                              .slice(rowIndex * 7, rowIndex * 7 + 7)
-                              .map((cell, columnIndex) => (
-                                <td
-                                  key={`cell-${rowIndex}-${columnIndex}`}
-                                  className="h-32 align-top border border-[color:var(--card-border)] p-2"
+                              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className={`truncate text-base font-semibold ${pageHeadingTextClass}`}>
+                                      {displayName}
+                                    </p>
+                                    {appointment.flagged ? (
+                                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" />
+                                    ) : null}
+                                  </div>
+                                  <p className={`mt-3 text-sm ${pageMutedTextClass}`}>{appointment.symptoms}</p>
+                                  <div className={`mt-3 flex flex-wrap items-center gap-2 text-xs ${pageMutedTextClass}`}>
+                                    <span>{appointment.department}</span>
+                                    <span>•</span>
+                                    <span>{formatDateTime(appointment.requestedTime)}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityChipClass(appointment.priority)}`}
+                                  >
+                                    {appointment.priority}
+                                  </span>
+                                  <span
+                                    className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${reservationStatusChipClass(appointment.status)}`}
+                                  >
+                                    {appointment.status}
+                                  </span>
+                                  <span
+                                    className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${queueStatusChipClass(appointment.queueStatus)}`}
+                                  >
+                                    {appointment.queueStatus}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className={compactPrimaryButtonClass}
+                                    onClick={() => handleOpenAppointment(appointment)}
+                                  >
+                                    Open chart
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </DoctorPanel>
+                ) : null}
+
+                {activeSection === 'calendar' ? (
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                    <DoctorPanel>
+                      <DoctorPanelHeader
+                        eyebrow="Calendar"
+                        title="Monthly calendar"
+                        description="Pending appointments grouped by weekday and date."
+                        actions={
+                          <>
+                            <button
+                              type="button"
+                              className={compactGhostButtonClass}
+                              onClick={() =>
+                                setCalendarViewDate(
+                                  (previous) =>
+                                    new Date(previous.getFullYear(), previous.getMonth() - 1, 1)
+                                )
+                              }
+                            >
+                              <ChevronLeftIcon className="h-4 w-4" />
+                              Prev
+                            </button>
+                            <input
+                              type="month"
+                              value={formatMonthInputValue(calendarViewDate)}
+                              onChange={(event) => {
+                                const [year, month] = event.target.value.split('-').map(Number)
+                                if (!year || !month) return
+                                setCalendarViewDate(new Date(year, month - 1, 1))
+                              }}
+                              className={compactFieldClass}
+                            />
+                            <button
+                              type="button"
+                              className={compactGhostButtonClass}
+                              onClick={() =>
+                                setCalendarViewDate(
+                                  (previous) =>
+                                    new Date(previous.getFullYear(), previous.getMonth() + 1, 1)
+                                )
+                              }
+                            >
+                              Next
+                              <ChevronRightIcon className="h-4 w-4" />
+                            </button>
+                          </>
+                        }
+                      />
+
+                      <div className="mt-5 overflow-x-auto">
+                        <table className="min-w-full border-collapse text-sm">
+                          <thead>
+                            <tr>
+                              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
+                                <th
+                                  key={label}
+                                  className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-2 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}
                                 >
-                                  {cell ? (
-                                    <div className="flex h-full min-h-0 flex-col">
-                                      <p className={`text-sm font-semibold ${pageHeadingTextClass}`}>
-                                        {cell.day}
-                                      </p>
-                                      {cell.appointments.length > 0 ? (
-                                        <div className="mt-2 max-h-20 space-y-1.5 overflow-y-auto pr-1">
-                                          {cell.appointments.slice(0, 3).map((appointment) => (
-                                            <button
-                                              key={appointment.id}
-                                              type="button"
-                                              className="block w-full rounded-md border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-2 py-1 text-left transition hover:bg-[color:var(--agent-overlay)]"
-                                              onClick={() => {
-                                                const matched = appointmentItems.find(
-                                                  (item) => item.id === appointment.id
-                                                )
-                                                if (matched) handleOpenAppointment(matched)
-                                              }}
-                                            >
-                                              <p className={`text-[11px] font-semibold ${pageHeadingTextClass}`}>
-                                                {formatTime(appointment.requestedTime)}
-                                              </p>
-                                              <p className={`text-[11px] ${pageMutedTextClass}`}>
-                                                {dataMaskingEnabled
-                                                  ? maskPersonName(appointment.patientName)
-                                                  : appointment.patientName}
-                                              </p>
-                                            </button>
-                                          ))}
-                                          {cell.appointments.length > 3 ? (
-                                            <p className={`text-[11px] font-semibold ${pageSubtleTextClass}`}>
-                                              +{cell.appointments.length - 3} more
-                                            </p>
+                                  {label}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from({ length: calendarView.cells.length / 7 }, (_, rowIndex) => (
+                              <tr key={`week-${rowIndex}`}>
+                                {calendarView.cells
+                                  .slice(rowIndex * 7, rowIndex * 7 + 7)
+                                  .map((cell, columnIndex) => (
+                                    <td
+                                      key={`cell-${rowIndex}-${columnIndex}`}
+                                      className="h-32 align-top border border-[color:var(--card-border)] p-2"
+                                    >
+                                      {cell ? (
+                                        <div className="flex h-full min-h-0 flex-col">
+                                          <p className={`text-sm font-semibold ${pageHeadingTextClass}`}>
+                                            {cell.day}
+                                          </p>
+                                          {cell.appointments.length > 0 ? (
+                                            <div className="mt-2 max-h-20 space-y-1.5 overflow-y-auto pr-1">
+                                              {cell.appointments.slice(0, 3).map((appointment) => (
+                                                <button
+                                                  key={appointment.id}
+                                                  type="button"
+                                                  className="block w-full rounded-md border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-2 py-1 text-left transition hover:bg-[color:var(--agent-overlay)]"
+                                                  onClick={() => {
+                                                    const matched = appointmentItems.find(
+                                                      (item) => item.id === appointment.id
+                                                    )
+                                                    if (matched) handleOpenAppointment(matched)
+                                                  }}
+                                                >
+                                                  <p className={`text-[11px] font-semibold ${pageHeadingTextClass}`}>
+                                                    {formatTime(appointment.requestedTime)}
+                                                  </p>
+                                                  <p className={`text-[11px] ${pageMutedTextClass}`}>
+                                                    {dataMaskingEnabled
+                                                      ? maskPersonName(appointment.patientName)
+                                                      : appointment.patientName}
+                                                  </p>
+                                                </button>
+                                              ))}
+                                              {cell.appointments.length > 3 ? (
+                                                <p className={`text-[11px] font-semibold ${pageSubtleTextClass}`}>
+                                                  +{cell.appointments.length - 3} more
+                                                </p>
+                                              ) : null}
+                                            </div>
                                           ) : null}
                                         </div>
                                       ) : null}
-                                    </div>
-                                  ) : null}
-                                </td>
-                              ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </DoctorPanel>
-
-                <DoctorPanel>
-                  <DoctorPanelHeader
-                    eyebrow="Agenda"
-                    title={calendarView.monthLabel}
-                    description="Upcoming appointments in the currently selected month."
-                    actions={
-                      <span className={doctorChipClass}>
-                        {calendarView.appointmentsThisMonth} this month
-                      </span>
-                    }
-                  />
-
-                  {monthAgendaItems.length === 0 ? (
-                    <p className={`mt-5 text-sm ${pageMutedTextClass}`}>
-                      No pending appointments for this month.
-                    </p>
-                  ) : (
-                    <div className="mt-5 space-y-3">
-                      {monthAgendaItems.map((appointment) => {
-                        const matched = appointmentItems.find((item) => item.id === appointment.id)
-
-                        return (
-                          <button
-                            key={appointment.id}
-                            type="button"
-                            className="block w-full rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-4 text-left transition hover:shadow-[var(--card-shadow-soft)]"
-                            onClick={() => {
-                              if (matched) handleOpenAppointment(matched)
-                            }}
-                          >
-                            <p className={`text-sm font-semibold ${pageHeadingTextClass}`}>
-                              {dataMaskingEnabled
-                                ? maskPersonName(appointment.patientName)
-                                : appointment.patientName}
-                            </p>
-                            <p className={`mt-1 text-xs ${pageMutedTextClass}`}>
-                              {appointment.department}
-                            </p>
-                            <p className={`mt-3 text-sm ${pageMutedTextClass}`}>
-                              {formatDateTime(appointment.requestedTime)}
-                            </p>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </DoctorPanel>
-              </div>
-            ) : null}
-
-            {activeSection === 'schedule' ? (
-              <DoctorPanel>
-                <DoctorPanelHeader
-                  eyebrow="Publishing"
-                  title="Weekly availability schedule"
-                  description="Publish your morning and afternoon sessions by week. Patients can only book available one-hour slots from this schedule."
-                  actions={
-                    <>
-                      <span className={doctorChipClass}>
-                        {scheduleHasPublishedWeek ? 'Published' : 'Draft'}
-                      </span>
-                      <span className={doctorChipClass}>
-                        {scheduleHasEnabledSession ? 'Open sessions active' : 'All sessions closed'}
-                      </span>
-                    </>
-                  }
-                  toolbar={
-                    <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto_auto]">
-                      <button
-                        type="button"
-                        className={compactGhostButtonClass}
-                        onClick={() => shiftScheduleWeek(-7)}
-                        disabled={isScheduleLoading || isSavingSchedule}
-                      >
-                        <ChevronLeftIcon className="h-4 w-4" />
-                        Previous week
-                      </button>
-                      <input
-                        type="date"
-                        value={scheduleWeekStart}
-                        onChange={(event) => {
-                          setScheduleWeekStart(normalizeWeekInputValue(event.target.value))
-                          setScheduleMessage(null)
-                          if (scheduleError) setScheduleError(null)
-                        }}
-                        className={compactFieldClass}
-                        disabled={isScheduleLoading || isSavingSchedule}
-                      />
-                      <button
-                        type="button"
-                        className={compactGhostButtonClass}
-                        onClick={() => shiftScheduleWeek(7)}
-                        disabled={isScheduleLoading || isSavingSchedule}
-                      >
-                        Next week
-                        <ChevronRightIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        className={compactGhostButtonClass}
-                        onClick={() => {
-                          setScheduleWeekStart(buildDefaultScheduleWeek())
-                          setScheduleMessage(null)
-                          if (scheduleError) setScheduleError(null)
-                        }}
-                        disabled={isScheduleLoading || isSavingSchedule}
-                      >
-                        This week
-                      </button>
-                    </div>
-                  }
-                />
-
-                <p className={`mt-4 text-xs ${pageSubtleTextClass}`}>
-                  Week starts on Monday. Morning session: 8:00 AM - 12:00 PM. Afternoon session:
-                  1:30 PM - 5:00 PM.
-                </p>
-                <p className={`mt-1 text-xs ${pageSubtleTextClass}`}>
-                  Schedule status: {scheduleHasPublishedWeek ? 'Published' : 'Not published'} ·{' '}
-                  {scheduleHasEnabledSession ? 'Has open sessions' : 'All sessions closed'}
-                </p>
-
-                <div className="mt-5 overflow-hidden rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)]">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-[720px] w-full border-collapse">
-                      <thead>
-                        <tr>
-                          <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
-                            Day
-                          </th>
-                          <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
-                            Morning
-                          </th>
-                          <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
-                            Afternoon
-                          </th>
-                          <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
-                            Slot preview
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {scheduleDayOrder.map((dayKey) => (
-                          <tr key={dayKey}>
-                            <td className={`border border-[color:var(--card-border)] px-3 py-3 text-sm font-semibold ${pageHeadingTextClass}`}>
-                              {scheduleDayLabels[dayKey]}
-                            </td>
-                            <td className="border border-[color:var(--card-border)] px-3 py-3">
-                              <label className={`inline-flex items-center gap-2 text-sm ${pageHeadingTextClass}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(scheduleDraft[dayKey]?.morning)}
-                                  onChange={() => toggleScheduleSession(dayKey, 'morning')}
-                                  disabled={isScheduleLoading || isSavingSchedule}
-                                />
-                                Open
-                              </label>
-                            </td>
-                            <td className="border border-[color:var(--card-border)] px-3 py-3">
-                              <label className={`inline-flex items-center gap-2 text-sm ${pageHeadingTextClass}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(scheduleDraft[dayKey]?.afternoon)}
-                                  onChange={() => toggleScheduleSession(dayKey, 'afternoon')}
-                                  disabled={isScheduleLoading || isSavingSchedule}
-                                />
-                                Open
-                              </label>
-                            </td>
-                            <td className={`border border-[color:var(--card-border)] px-3 py-3 text-xs ${pageMutedTextClass}`}>
-                              {(scheduleWeekSlots[dayKey] || []).length > 0
-                                ? scheduleWeekSlots[dayKey].map((slot) => slot.label).join(', ')
-                                : 'No slots'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {scheduleError ? (
-                  <p className="mt-4 text-xs font-semibold text-rose-500">{scheduleError}</p>
-                ) : null}
-                {scheduleMessage ? (
-                  <p className="mt-4 text-xs font-semibold text-emerald-600">{scheduleMessage}</p>
-                ) : null}
-
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    className={doctorPrimaryButtonClass}
-                    onClick={() => {
-                      void handleSaveWeeklySchedule()
-                    }}
-                    disabled={isScheduleLoading || isSavingSchedule}
-                  >
-                    {isSavingSchedule ? 'Saving...' : 'Publish schedule'}
-                  </button>
-                  <button
-                    type="button"
-                    className={doctorGhostButtonClass}
-                    onClick={() => {
-                      void loadDoctorScheduleForWeek(scheduleWeekStart)
-                      setScheduleMessage(null)
-                    }}
-                    disabled={isScheduleLoading || isSavingSchedule}
-                  >
-                    {isScheduleLoading ? 'Refreshing...' : 'Reload week'}
-                  </button>
-                </div>
-              </DoctorPanel>
-            ) : null}
-
-            {activeSection === 'queue' ? (
-              <DoctorPanel>
-                <DoctorPanelHeader
-                  eyebrow="Queue"
-                  title="Patient queue timeline"
-                  description="Dynamic timeline of today’s slots with triage flags, status toggles, and quick checkup history."
-                  actions={
-                    <>
-                      <span className={doctorChipClass}>
-                        {activeQueueItems.length} patients
-                      </span>
-                      <span className={doctorChipClass}>
-                        Arrived {activeQueueItems.filter((item) => item.queueStatus === 'Arrived').length}
-                      </span>
-                    </>
-                  }
-                />
-
-                <div className="mt-5">
-                  {filteredQueueItems.length === 0 ? (
-                    <p className={`text-sm ${pageMutedTextClass}`}>
-                      No pending patients in the queue.
-                    </p>
-                  ) : (
-                    <div className="divide-y divide-[color:var(--card-border)] overflow-hidden rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)]">
-                      {filteredQueueItems.map((item) => {
-                        const displayName = dataMaskingEnabled
-                          ? maskPersonName(item.patientName)
-                          : item.patientName
-
-                        return (
-                          <div
-                            key={item.id}
-                            className="flex flex-col gap-4 px-5 py-4 transition hover:bg-[color:var(--agent-overlay)] sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div className="group relative min-w-0 flex-1">
-                              <div className="flex items-center gap-4">
-                                <div
-                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                                    item.priority === 'High'
-                                      ? 'bg-rose-500'
-                                      : item.priority === 'Routine'
-                                        ? 'bg-amber-400'
-                                        : 'bg-emerald-500'
-                                  }`}
-                                />
-                                <div className="min-w-0">
-                                  <p className={`truncate text-sm font-medium ${pageHeadingTextClass}`}>
-                                    {displayName}
-                                  </p>
-                                  <p className={`mt-1 truncate text-xs ${pageMutedTextClass}`}>
-                                    {dataMaskingEnabled ? maskIdentifier(item.id) : item.id} · {item.department} ·{' '}
-                                    {formatTime(item.requestedTime)}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 hidden w-72 rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-3 shadow-[var(--card-shadow-soft)] group-hover:block">
-                                <p className={`text-[11px] font-semibold uppercase tracking-[0.15em] ${pageSubtleTextClass}`}>
-                                  Last checkups
-                                </p>
-                                <div className="mt-2 space-y-1">
-                                  {item.checkupHistory.length > 0 ? (
-                                    item.checkupHistory.slice(0, 3).map((history) => (
-                                      <p
-                                        key={`${item.id}-${history.visitDate}`}
-                                        className={`text-xs ${pageMutedTextClass}`}
-                                      >
-                                        {formatDateTime(history.visitDate)} · {history.primaryDiagnosis}
-                                      </p>
-                                    ))
-                                  ) : (
-                                    <p className={`text-xs ${pageMutedTextClass}`}>
-                                      No prior visit record.
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-3">
-                              <span
-                                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${queueStatusChipClass(item.queueStatus)}`}
-                              >
-                                {item.queueStatus}
-                              </span>
-                              <select
-                                value={item.queueStatus}
-                                onChange={(event) => {
-                                  void handleQueueStatusChange(
-                                    item.id,
-                                    event.target.value as DoctorQueueStatus
-                                  )
-                                }}
-                                disabled={statusSavingId === item.id}
-                                className={`${compactFieldClass} w-40 text-xs`}
-                              >
-                                {queueStatusOptions.map((status) => (
-                                  <option key={status} value={status}>
-                                    {status}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                className={compactPrimaryButtonClass}
-                                onClick={() => handleOpenAppointment(item)}
-                              >
-                                Open chart
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </DoctorPanel>
-            ) : null}
-
-            {activeSection === 'analytics' ? (
-              <DoctorPanel>
-                <DoctorPanelHeader
-                  eyebrow="Insights"
-                  title="Analytics overview"
-                  description="Department load, completion rates, and current appointment distribution."
-                  actions={
-                    <span className={doctorChipClass}>
-                      {appointmentItems.length} total appointments
-                    </span>
-                  }
-                />
-
-                <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                  <div className="rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] p-5">
-                    <h3 className={`text-sm font-semibold ${pageHeadingTextClass}`}>
-                      Department breakdown
-                    </h3>
-                    <p className={`mt-1 text-xs ${pageMutedTextClass}`}>
-                      Appointment distribution across departments.
-                    </p>
-
-                    {departmentBreakdown.length > 0 ? (
-                      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                        {departmentBreakdown.map((item) => (
-                          <div key={item.department} className="flex flex-col items-center gap-3">
-                            <div className="flex h-44 items-end">
-                              <div
-                                className="w-14 rounded-t-xl bg-[color:var(--agent-accent)]"
-                                style={{
-                                  height: `${Math.max((item.count / maxDepartmentCount) * 176, 28)}px`,
-                                }}
-                              />
-                            </div>
-                            <div className="text-center">
-                              <p className={`text-xs font-semibold ${pageHeadingTextClass}`}>
-                                {item.department}
-                              </p>
-                              <p className={`mt-1 text-xs ${pageMutedTextClass}`}>
-                                {item.count} appointments
-                              </p>
-                            </div>
-                          </div>
-                        ))}
+                                    </td>
+                                  ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                    ) : (
-                      <p className={`mt-8 text-sm ${pageMutedTextClass}`}>
-                        No department data available.
-                      </p>
-                    )}
-                  </div>
+                    </DoctorPanel>
 
-                  <div className="rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] p-5">
-                    <h3 className={`text-sm font-semibold ${pageHeadingTextClass}`}>
-                      Status distribution
-                    </h3>
-                    <p className={`mt-1 text-xs ${pageMutedTextClass}`}>
-                      Current appointment status breakdown.
+                    <DoctorPanel>
+                      <DoctorPanelHeader
+                        eyebrow="Agenda"
+                        title={calendarView.monthLabel}
+                        description="Upcoming appointments in the currently selected month."
+                        actions={
+                          <span className={doctorChipClass}>
+                            {calendarView.appointmentsThisMonth} this month
+                          </span>
+                        }
+                      />
+
+                      {monthAgendaItems.length === 0 ? (
+                        <p className={`mt-5 text-sm ${pageMutedTextClass}`}>
+                          No pending appointments for this month.
+                        </p>
+                      ) : (
+                        <div className="mt-5 space-y-3">
+                          {monthAgendaItems.map((appointment) => {
+                            const matched = appointmentItems.find((item) => item.id === appointment.id)
+
+                            return (
+                              <button
+                                key={appointment.id}
+                                type="button"
+                                className="block w-full rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] px-4 py-4 text-left transition hover:shadow-[var(--card-shadow-soft)]"
+                                onClick={() => {
+                                  if (matched) handleOpenAppointment(matched)
+                                }}
+                              >
+                                <p className={`text-sm font-semibold ${pageHeadingTextClass}`}>
+                                  {dataMaskingEnabled
+                                    ? maskPersonName(appointment.patientName)
+                                    : appointment.patientName}
+                                </p>
+                                <p className={`mt-1 text-xs ${pageMutedTextClass}`}>
+                                  {appointment.department}
+                                </p>
+                                <p className={`mt-3 text-sm ${pageMutedTextClass}`}>
+                                  {formatDateTime(appointment.requestedTime)}
+                                </p>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </DoctorPanel>
+                  </div>
+                ) : null}
+
+                {activeSection === 'schedule' ? (
+                  <DoctorPanel>
+                    <DoctorPanelHeader
+                      eyebrow="Publishing"
+                      title="Weekly availability schedule"
+                      description="Publish your morning and afternoon sessions by week. Patients can only book available one-hour slots from this schedule."
+                      actions={
+                        <>
+                          <span className={doctorChipClass}>
+                            {scheduleHasPublishedWeek ? 'Published' : 'Draft'}
+                          </span>
+                          <span className={doctorChipClass}>
+                            {scheduleHasEnabledSession ? 'Open sessions active' : 'All sessions closed'}
+                          </span>
+                        </>
+                      }
+                      toolbar={
+                        <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto_auto]">
+                          <button
+                            type="button"
+                            className={compactGhostButtonClass}
+                            onClick={() => shiftScheduleWeek(-7)}
+                            disabled={isScheduleLoading || isSavingSchedule}
+                          >
+                            <ChevronLeftIcon className="h-4 w-4" />
+                            Previous week
+                          </button>
+                          <input
+                            type="date"
+                            value={scheduleWeekStart}
+                            onChange={(event) => {
+                              setScheduleWeekStart(normalizeWeekInputValue(event.target.value))
+                              setScheduleMessage(null)
+                              if (scheduleError) setScheduleError(null)
+                            }}
+                            className={compactFieldClass}
+                            disabled={isScheduleLoading || isSavingSchedule}
+                          />
+                          <button
+                            type="button"
+                            className={compactGhostButtonClass}
+                            onClick={() => shiftScheduleWeek(7)}
+                            disabled={isScheduleLoading || isSavingSchedule}
+                          >
+                            Next week
+                            <ChevronRightIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className={compactGhostButtonClass}
+                            onClick={() => {
+                              setScheduleWeekStart(buildDefaultScheduleWeek())
+                              setScheduleMessage(null)
+                              if (scheduleError) setScheduleError(null)
+                            }}
+                            disabled={isScheduleLoading || isSavingSchedule}
+                          >
+                            This week
+                          </button>
+                        </div>
+                      }
+                    />
+
+                    <p className={`mt-4 text-xs ${pageSubtleTextClass}`}>
+                      Week starts on Monday. Morning session: 8:00 AM - 12:00 PM. Afternoon session:
+                      1:30 PM - 5:00 PM.
+                    </p>
+                    <p className={`mt-1 text-xs ${pageSubtleTextClass}`}>
+                      Schedule status: {scheduleHasPublishedWeek ? 'Published' : 'Not published'} ·{' '}
+                      {scheduleHasEnabledSession ? 'Has open sessions' : 'All sessions closed'}
                     </p>
 
-                    <div className="mt-6 space-y-4">
-                      {statusBreakdown.map((status) => (
-                        <div key={status.label}>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className={`text-sm ${pageHeadingTextClass}`}>{status.label}</span>
-                            <span className={`text-sm font-semibold ${pageHeadingTextClass}`}>
-                              {status.count}
-                            </span>
-                          </div>
-                          <div className="mt-2 flex items-center gap-3">
-                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-[color:var(--agent-overlay)]">
+                    <div className="mt-5 overflow-hidden rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)]">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-[720px] w-full border-collapse">
+                          <thead>
+                            <tr>
+                              <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
+                                Day
+                              </th>
+                              <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
+                                Morning
+                              </th>
+                              <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
+                                Afternoon
+                              </th>
+                              <th className={`border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] ${pageSubtleTextClass}`}>
+                                Slot preview
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {scheduleDayOrder.map((dayKey) => (
+                              <tr key={dayKey}>
+                                <td className={`border border-[color:var(--card-border)] px-3 py-3 text-sm font-semibold ${pageHeadingTextClass}`}>
+                                  {scheduleDayLabels[dayKey]}
+                                </td>
+                                <td className="border border-[color:var(--card-border)] px-3 py-3">
+                                  <label className={`inline-flex items-center gap-2 text-sm ${pageHeadingTextClass}`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(scheduleDraft[dayKey]?.morning)}
+                                      onChange={() => toggleScheduleSession(dayKey, 'morning')}
+                                      disabled={isScheduleLoading || isSavingSchedule}
+                                    />
+                                    Open
+                                  </label>
+                                </td>
+                                <td className="border border-[color:var(--card-border)] px-3 py-3">
+                                  <label className={`inline-flex items-center gap-2 text-sm ${pageHeadingTextClass}`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(scheduleDraft[dayKey]?.afternoon)}
+                                      onChange={() => toggleScheduleSession(dayKey, 'afternoon')}
+                                      disabled={isScheduleLoading || isSavingSchedule}
+                                    />
+                                    Open
+                                  </label>
+                                </td>
+                                <td className={`border border-[color:var(--card-border)] px-3 py-3 text-xs ${pageMutedTextClass}`}>
+                                  {(scheduleWeekSlots[dayKey] || []).length > 0
+                                    ? scheduleWeekSlots[dayKey].map((slot) => slot.label).join(', ')
+                                    : 'No slots'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {scheduleError ? (
+                      <p className="mt-4 text-xs font-semibold text-rose-500">{scheduleError}</p>
+                    ) : null}
+                    {scheduleMessage ? (
+                      <p className="mt-4 text-xs font-semibold text-emerald-600">{scheduleMessage}</p>
+                    ) : null}
+
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        className={doctorPrimaryButtonClass}
+                        onClick={() => {
+                          void handleSaveWeeklySchedule()
+                        }}
+                        disabled={isScheduleLoading || isSavingSchedule}
+                      >
+                        {isSavingSchedule ? 'Saving...' : 'Publish schedule'}
+                      </button>
+                      <button
+                        type="button"
+                        className={doctorGhostButtonClass}
+                        onClick={() => {
+                          void loadDoctorScheduleForWeek(scheduleWeekStart)
+                          setScheduleMessage(null)
+                        }}
+                        disabled={isScheduleLoading || isSavingSchedule}
+                      >
+                        {isScheduleLoading ? 'Refreshing...' : 'Reload week'}
+                      </button>
+                    </div>
+                  </DoctorPanel>
+                ) : null}
+
+                {activeSection === 'queue' ? (
+                  <DoctorPanel>
+                    <DoctorPanelHeader
+                      eyebrow="Queue"
+                      title="Patient queue timeline"
+                      description="Dynamic timeline of today’s slots with triage flags, status toggles, and quick checkup history."
+                      actions={
+                        <>
+                          <span className={doctorChipClass}>
+                            {activeQueueItems.length} patients
+                          </span>
+                          <span className={doctorChipClass}>
+                            Arrived {activeQueueItems.filter((item) => item.queueStatus === 'Arrived').length}
+                          </span>
+                        </>
+                      }
+                    />
+
+                    <div className="mt-5">
+                      {filteredQueueItems.length === 0 ? (
+                        <p className={`text-sm ${pageMutedTextClass}`}>
+                          No pending patients in the queue.
+                        </p>
+                      ) : (
+                        <div className="divide-y divide-[color:var(--card-border)] overflow-hidden rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)]">
+                          {filteredQueueItems.map((item) => {
+                            const displayName = dataMaskingEnabled
+                              ? maskPersonName(item.patientName)
+                              : item.patientName
+
+                            return (
                               <div
-                                className="h-full rounded-full transition-all"
-                                style={{
-                                  width: `${
-                                    appointmentItems.length > 0
-                                      ? (status.count / appointmentItems.length) * 100
-                                      : 0
-                                  }%`,
-                                  background:
-                                    status.tone === 'green'
-                                      ? 'var(--agent-success)'
-                                      : status.tone === 'red'
-                                        ? 'var(--agent-danger)'
-                                        : 'var(--agent-accent)',
-                                }}
-                              />
+                                key={item.id}
+                                className="flex flex-col gap-4 px-5 py-4 transition hover:bg-[color:var(--agent-overlay)] sm:flex-row sm:items-center sm:justify-between"
+                              >
+                                <div className="group relative min-w-0 flex-1">
+                                  <div className="flex items-center gap-4">
+                                    <div
+                                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.priority === 'High'
+                                          ? 'bg-rose-500'
+                                          : item.priority === 'Routine'
+                                            ? 'bg-amber-400'
+                                            : 'bg-emerald-500'
+                                        }`}
+                                    />
+                                    <div className="min-w-0">
+                                      <p className={`truncate text-sm font-medium ${pageHeadingTextClass}`}>
+                                        {displayName}
+                                      </p>
+                                      <p className={`mt-1 truncate text-xs ${pageMutedTextClass}`}>
+                                        {item.department} · {formatTime(item.requestedTime)}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 hidden w-72 rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-surface)] p-3 shadow-[var(--card-shadow-soft)] group-hover:block">
+                                    <p className={`text-[11px] font-semibold uppercase tracking-[0.15em] ${pageSubtleTextClass}`}>
+                                      Last checkups
+                                    </p>
+                                    <div className="mt-2 space-y-1">
+                                      {item.checkupHistory.length > 0 ? (
+                                        item.checkupHistory.slice(0, 3).map((history) => (
+                                          <p
+                                            key={`${item.id}-${history.visitDate}`}
+                                            className={`text-xs ${pageMutedTextClass}`}
+                                          >
+                                            {formatDateTime(history.visitDate)} · {history.primaryDiagnosis}
+                                          </p>
+                                        ))
+                                      ) : (
+                                        <p className={`text-xs ${pageMutedTextClass}`}>
+                                          No prior visit record.
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <span
+                                    className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${queueStatusChipClass(item.queueStatus)}`}
+                                  >
+                                    {item.queueStatus}
+                                  </span>
+                                  <select
+                                    value={item.queueStatus}
+                                    onChange={(event) => {
+                                      void handleQueueStatusChange(
+                                        item.id,
+                                        event.target.value as DoctorQueueStatus
+                                      )
+                                    }}
+                                    disabled={statusSavingId === item.id}
+                                    className={`${compactFieldClass} w-40 text-xs`}
+                                  >
+                                    {queueStatusOptions.map((status) => (
+                                      <option key={status} value={status}>
+                                        {status}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    className={compactPrimaryButtonClass}
+                                    onClick={() => handleOpenAppointment(item)}
+                                  >
+                                    Open chart
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </DoctorPanel>
+                ) : null}
+
+                {activeSection === 'analytics' ? (
+                  <DoctorPanel>
+                    <DoctorPanelHeader
+                      eyebrow="Insights"
+                      title="Analytics overview"
+                      description="Department load, completion rates, and current appointment distribution."
+                      actions={
+                        <span className={doctorChipClass}>
+                          {appointmentItems.length} total appointments
+                        </span>
+                      }
+                    />
+
+                    <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                      <div className="rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] p-5">
+                        <h3 className={`text-sm font-semibold ${pageHeadingTextClass}`}>
+                          Department breakdown
+                        </h3>
+                        <p className={`mt-1 text-xs ${pageMutedTextClass}`}>
+                          Appointment distribution across departments.
+                        </p>
+
+                        {departmentBreakdown.length > 0 ? (
+                          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                            {departmentBreakdown.map((item) => (
+                              <div key={item.department} className="flex flex-col items-center gap-3">
+                                <div className="flex h-44 items-end">
+                                  <div
+                                    className="w-14 rounded-t-xl bg-[color:var(--agent-accent)]"
+                                    style={{
+                                      height: `${Math.max((item.count / maxDepartmentCount) * 176, 28)}px`,
+                                    }}
+                                  />
+                                </div>
+                                <div className="text-center">
+                                  <p className={`text-xs font-semibold ${pageHeadingTextClass}`}>
+                                    {item.department}
+                                  </p>
+                                  <p className={`mt-1 text-xs ${pageMutedTextClass}`}>
+                                    {item.count} appointments
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className={`mt-8 text-sm ${pageMutedTextClass}`}>
+                            No department data available.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] p-5">
+                        <h3 className={`text-sm font-semibold ${pageHeadingTextClass}`}>
+                          Status distribution
+                        </h3>
+                        <p className={`mt-1 text-xs ${pageMutedTextClass}`}>
+                          Current appointment status breakdown.
+                        </p>
+
+                        <div className="mt-6 space-y-4">
+                          {statusBreakdown.map((status) => (
+                            <div key={status.label}>
+                              <div className="flex items-center justify-between gap-3">
+                                <span className={`text-sm ${pageHeadingTextClass}`}>{status.label}</span>
+                                <span className={`text-sm font-semibold ${pageHeadingTextClass}`}>
+                                  {status.count}
+                                </span>
+                              </div>
+                              <div className="mt-2 flex items-center gap-3">
+                                <div className="h-2 flex-1 overflow-hidden rounded-full bg-[color:var(--agent-overlay)]">
+                                  <div
+                                    className="h-full rounded-full transition-all"
+                                    style={{
+                                      width: `${appointmentItems.length > 0
+                                          ? (status.count / appointmentItems.length) * 100
+                                          : 0
+                                        }%`,
+                                      background:
+                                        status.tone === 'green'
+                                          ? 'var(--agent-success)'
+                                          : status.tone === 'red'
+                                            ? 'var(--agent-danger)'
+                                            : 'var(--agent-accent)',
+                                    }}
+                                  />
+                                </div>
+                                <span className={`w-8 text-right text-sm font-semibold ${pageHeadingTextClass}`}>
+                                  {status.count}
+                                </span>
+                              </div>
                             </div>
-                            <span className={`w-8 text-right text-sm font-semibold ${pageHeadingTextClass}`}>
-                              {status.count}
-                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </DoctorPanel>
+                ) : null}
+
+                {activeSection === 'settings' ? (
+                  <div className="space-y-4">
+                    <DoctorPanel>
+                      <DoctorPanelHeader
+                        eyebrow="Profile"
+                        title="Profile details"
+                        description="Update your display name for this account."
+                        actions={<span className={doctorChipClass}>{profileName}</span>}
+                      />
+
+                      <form
+                        className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.38fr)_minmax(0,0.62fr)]"
+                        onSubmit={(event) => {
+                          event.preventDefault()
+                          void handleSaveProfileName()
+                        }}
+                      >
+                        <div className="rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] p-4">
+                          <p className={`text-[11px] font-semibold uppercase tracking-[0.15em] ${pageSubtleTextClass}`}>
+                            Account
+                          </p>
+                          <p className={`mt-2 text-sm font-semibold ${pageHeadingTextClass}`}>
+                            {authUser?.username ?? 'Unknown'}
+                          </p>
+                          <p className={`mt-4 text-[11px] font-semibold uppercase tracking-[0.15em] ${pageSubtleTextClass}`}>
+                            Role
+                          </p>
+                          <p className={`mt-2 text-sm font-semibold ${pageHeadingTextClass}`}>
+                            {getRoleLabel(authUser?.role)}
+                          </p>
+                        </div>
+
+                        <div className="rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] p-4">
+                          <label
+                            htmlFor="doctor-profile-name"
+                            className={`text-[11px] font-semibold uppercase tracking-[0.15em] ${pageSubtleTextClass}`}
+                          >
+                            Display name
+                          </label>
+                          <input
+                            id="doctor-profile-name"
+                            value={profileNameDraft}
+                            onChange={(event) => {
+                              setProfileNameDraft(event.target.value)
+                              if (profileError) setProfileError(null)
+                              if (profileMessage) setProfileMessage(null)
+                            }}
+                            placeholder="Enter your full name"
+                            className={`mt-3 ${doctorFieldClass}`}
+                          />
+                          {profileError ? (
+                            <p className="mt-3 text-xs font-semibold text-rose-500">{profileError}</p>
+                          ) : null}
+                          {profileMessage ? (
+                            <p className="mt-3 text-xs font-semibold text-emerald-600">{profileMessage}</p>
+                          ) : null}
+                          <div className="mt-4 flex flex-wrap gap-3">
+                            <button
+                              type="submit"
+                              className={doctorPrimaryButtonClass}
+                              disabled={isSavingProfile}
+                            >
+                              {isSavingProfile ? 'Saving...' : 'Save name'}
+                            </button>
+                            <button
+                              type="button"
+                              className={doctorGhostButtonClass}
+                              onClick={() => {
+                                setProfileNameDraft(profileName)
+                                setProfileError(null)
+                                setProfileMessage(null)
+                              }}
+                              disabled={isSavingProfile}
+                            >
+                              Reset
+                            </button>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </DoctorPanel>
-            ) : null}
+                      </form>
+                    </DoctorPanel>
 
-            {activeSection === 'settings' ? (
-              <div className="space-y-4">
-                <DoctorPanel>
-                  <DoctorPanelHeader
-                    eyebrow="Profile"
-                    title="Profile details"
-                    description="Update your display name for this account."
-                    actions={<span className={doctorChipClass}>{profileName}</span>}
-                  />
-
-                  <form
-                    className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.38fr)_minmax(0,0.62fr)]"
-                    onSubmit={(event) => {
-                      event.preventDefault()
-                      void handleSaveProfileName()
-                    }}
-                  >
-                    <div className="rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] p-4">
-                      <p className={`text-[11px] font-semibold uppercase tracking-[0.15em] ${pageSubtleTextClass}`}>
-                        Account
-                      </p>
-                      <p className={`mt-2 text-sm font-semibold ${pageHeadingTextClass}`}>
-                        {authUser?.username ?? 'Unknown'}
-                      </p>
-                      <p className={`mt-4 text-[11px] font-semibold uppercase tracking-[0.15em] ${pageSubtleTextClass}`}>
-                        Role
-                      </p>
-                      <p className={`mt-2 text-sm font-semibold ${pageHeadingTextClass}`}>
-                        {getRoleLabel(authUser?.role)}
-                      </p>
-                    </div>
-
-                    <div className="rounded-[1rem] border border-[color:var(--card-border)] bg-[color:var(--agent-bg)] p-4">
-                      <label
-                        htmlFor="doctor-profile-name"
-                        className={`text-[11px] font-semibold uppercase tracking-[0.15em] ${pageSubtleTextClass}`}
-                      >
-                        Display name
-                      </label>
-                      <input
-                        id="doctor-profile-name"
-                        value={profileNameDraft}
-                        onChange={(event) => {
-                          setProfileNameDraft(event.target.value)
-                          if (profileError) setProfileError(null)
-                          if (profileMessage) setProfileMessage(null)
-                        }}
-                        placeholder="Enter your full name"
-                        className={`mt-3 ${doctorFieldClass}`}
+                    <DoctorPanel>
+                      <DoctorPanelHeader
+                        eyebrow="Security"
+                        title="Change password"
+                        description="Use a strong password to keep your account secure."
+                        actions={<span className={doctorChipClass}>Protected session</span>}
                       />
-                      {profileError ? (
-                        <p className="mt-3 text-xs font-semibold text-rose-500">{profileError}</p>
+
+                      <form
+                        className="mt-5 grid gap-3 lg:grid-cols-3"
+                        onSubmit={(event) => {
+                          event.preventDefault()
+                          void handleSavePassword()
+                        }}
+                      >
+                        <input
+                          type="password"
+                          value={currentPassword}
+                          onChange={(event) => {
+                            setCurrentPassword(event.target.value)
+                            if (passwordError) setPasswordError(null)
+                            if (passwordMessage) setPasswordMessage(null)
+                          }}
+                          placeholder="Current password"
+                          className={doctorFieldClass}
+                        />
+                        <input
+                          type="password"
+                          value={newPassword}
+                          onChange={(event) => {
+                            setNewPassword(event.target.value)
+                            if (passwordError) setPasswordError(null)
+                            if (passwordMessage) setPasswordMessage(null)
+                          }}
+                          placeholder="New password"
+                          className={doctorFieldClass}
+                        />
+                        <input
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(event) => {
+                            setConfirmPassword(event.target.value)
+                            if (passwordError) setPasswordError(null)
+                            if (passwordMessage) setPasswordMessage(null)
+                          }}
+                          placeholder="Confirm password"
+                          className={doctorFieldClass}
+                        />
+                      </form>
+
+                      {passwordError ? (
+                        <p className="mt-4 text-xs font-semibold text-rose-500">{passwordError}</p>
                       ) : null}
-                      {profileMessage ? (
-                        <p className="mt-3 text-xs font-semibold text-emerald-600">{profileMessage}</p>
+                      {passwordMessage ? (
+                        <p className="mt-4 text-xs font-semibold text-emerald-600">{passwordMessage}</p>
                       ) : null}
-                      <div className="mt-4 flex flex-wrap gap-3">
-                        <button
-                          type="submit"
-                          className={doctorPrimaryButtonClass}
-                          disabled={isSavingProfile}
-                        >
-                          {isSavingProfile ? 'Saving...' : 'Save name'}
-                        </button>
+
+                      <div className="mt-5 flex flex-wrap items-center gap-3">
                         <button
                           type="button"
-                          className={doctorGhostButtonClass}
+                          className={doctorPrimaryButtonClass}
                           onClick={() => {
-                            setProfileNameDraft(profileName)
-                            setProfileError(null)
-                            setProfileMessage(null)
+                            void handleSavePassword()
                           }}
-                          disabled={isSavingProfile}
+                          disabled={isSavingPassword}
                         >
-                          Reset
+                          {isSavingPassword ? 'Updating...' : 'Update password'}
+                        </button>
+                        <p className={`text-xs ${pageSubtleTextClass}`}>
+                          Minimum 8 characters with uppercase, lowercase, number, and symbol.
+                        </p>
+                      </div>
+                    </DoctorPanel>
+
+                    <DoctorPanel>
+                      <DoctorPanelHeader
+                        eyebrow="Preferences"
+                        title="Session preferences"
+                        description="Adjust your theme and review the current doctor session status."
+                        actions={<span className={doctorChipClass}>Session {sessionStatus}</span>}
+                      />
+
+                      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <DoctorMetricCard
+                          key="settings-theme-card"
+                          label="Theme"
+                          value={theme === 'dark' ? 'Dark' : 'Light'}
+                          subtitle="Current theme"
+                          tone="blue"
+                        />
+                        <DoctorMetricCard
+                          key="settings-session-card"
+                          label="Session"
+                          value={sessionStatus}
+                          subtitle="Current status"
+                          tone="green"
+                        />
+                        <DoctorMetricCard
+                          key="settings-queue-card"
+                          label="Active queue"
+                          value={activeQueueItems.length}
+                          subtitle="Patients in queue"
+                          tone="amber"
+                        />
+                        <DoctorMetricCard
+                          key="settings-completion-card"
+                          label="Completion"
+                          value={`${completionRate}%`}
+                          subtitle="Recorded vs total"
+                          tone="slate"
+                        />
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap gap-3">
+                        <button type="button" className={doctorGhostButtonClass} onClick={onToggleTheme}>
+                          Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
+                        </button>
+                        <button type="button" className={doctorGhostButtonClass} onClick={confirmAndLogout}>
+                          Sign out
                         </button>
                       </div>
-                    </div>
-                  </form>
-                </DoctorPanel>
-
-                <DoctorPanel>
-                  <DoctorPanelHeader
-                    eyebrow="Security"
-                    title="Change password"
-                    description="Use a strong password to keep your account secure."
-                    actions={<span className={doctorChipClass}>Protected session</span>}
-                  />
-
-                  <form
-                    className="mt-5 grid gap-3 lg:grid-cols-3"
-                    onSubmit={(event) => {
-                      event.preventDefault()
-                      void handleSavePassword()
-                    }}
-                  >
-                    <input
-                      type="password"
-                      value={currentPassword}
-                      onChange={(event) => {
-                        setCurrentPassword(event.target.value)
-                        if (passwordError) setPasswordError(null)
-                        if (passwordMessage) setPasswordMessage(null)
-                      }}
-                      placeholder="Current password"
-                      className={doctorFieldClass}
-                    />
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(event) => {
-                        setNewPassword(event.target.value)
-                        if (passwordError) setPasswordError(null)
-                        if (passwordMessage) setPasswordMessage(null)
-                      }}
-                      placeholder="New password"
-                      className={doctorFieldClass}
-                    />
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(event) => {
-                        setConfirmPassword(event.target.value)
-                        if (passwordError) setPasswordError(null)
-                        if (passwordMessage) setPasswordMessage(null)
-                      }}
-                      placeholder="Confirm password"
-                      className={doctorFieldClass}
-                    />
-                  </form>
-
-                  {passwordError ? (
-                    <p className="mt-4 text-xs font-semibold text-rose-500">{passwordError}</p>
-                  ) : null}
-                  {passwordMessage ? (
-                    <p className="mt-4 text-xs font-semibold text-emerald-600">{passwordMessage}</p>
-                  ) : null}
-
-                  <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      className={doctorPrimaryButtonClass}
-                      onClick={() => {
-                        void handleSavePassword()
-                      }}
-                      disabled={isSavingPassword}
-                    >
-                      {isSavingPassword ? 'Updating...' : 'Update password'}
-                    </button>
-                    <p className={`text-xs ${pageSubtleTextClass}`}>
-                      Minimum 8 characters with uppercase, lowercase, number, and symbol.
-                    </p>
+                    </DoctorPanel>
                   </div>
-                </DoctorPanel>
-
-                <DoctorPanel>
-                  <DoctorPanelHeader
-                    eyebrow="Preferences"
-                    title="Session preferences"
-                    description="Adjust your theme and review the current doctor session status."
-                    actions={<span className={doctorChipClass}>Session {sessionStatus}</span>}
-                  />
-
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <DoctorMetricCard
-                      key="settings-theme-card"
-                      label="Theme"
-                      value={theme === 'dark' ? 'Dark' : 'Light'}
-                      subtitle="Current theme"
-                      tone="blue"
-                    />
-                    <DoctorMetricCard
-                      key="settings-session-card"
-                      label="Session"
-                      value={sessionStatus}
-                      subtitle="Current status"
-                      tone="green"
-                    />
-                    <DoctorMetricCard
-                      key="settings-queue-card"
-                      label="Active queue"
-                      value={activeQueueItems.length}
-                      subtitle="Patients in queue"
-                      tone="amber"
-                    />
-                    <DoctorMetricCard
-                      key="settings-completion-card"
-                      label="Completion"
-                      value={`${completionRate}%`}
-                      subtitle="Recorded vs total"
-                      tone="slate"
-                    />
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <button type="button" className={doctorGhostButtonClass} onClick={onToggleTheme}>
-                      Switch to {theme === 'dark' ? 'Light' : 'Dark'} theme
-                    </button>
-                    <button type="button" className={doctorGhostButtonClass} onClick={confirmAndLogout}>
-                      Sign out
-                    </button>
-                  </div>
-                </DoctorPanel>
-              </div>
-            ) : null}
+                ) : null}
               </div>
             </section>
           }
@@ -2684,6 +2697,32 @@ const DoctorDashboardPage = ({
                     <p>Phone: {patientProfile.patient.phoneNumber || 'N/A'}</p>
                     <p>Gender: {patientProfile.patient.gender || 'N/A'}</p>
                     <p>Blood type: {patientProfile.personalHealthInfo.bloodType || 'N/A'}</p>
+                  </div>
+                  <div className={`mt-3 space-y-2 text-xs ${pageMutedTextClass}`}>
+                    <p>
+                      <strong className={pageHeadingTextClass}>Emergency Contact:</strong>{' '}
+                      {patientProfile.personalHealthInfo.emergencyContact && (patientProfile.personalHealthInfo.emergencyContact.name || patientProfile.personalHealthInfo.emergencyContact.phone || patientProfile.personalHealthInfo.emergencyContact.relationship) ? (
+                        `${patientProfile.personalHealthInfo.emergencyContact.name || 'Unknown'} (${patientProfile.personalHealthInfo.emergencyContact.relationship || 'Unknown'}) - ${patientProfile.personalHealthInfo.emergencyContact.phone || 'Unknown'}`
+                      ) : (
+                        'None'
+                      )}
+                    </p>
+                    <p>
+                      <strong className={pageHeadingTextClass}>Allergies:</strong>{' '}
+                      {patientProfile.personalHealthInfo.allergies?.length > 0 ? patientProfile.personalHealthInfo.allergies.join(', ') : 'None'}
+                    </p>
+                    <p>
+                      <strong className={pageHeadingTextClass}>Chronic Conditions:</strong>{' '}
+                      {patientProfile.personalHealthInfo.chronicConditions?.length > 0 ? patientProfile.personalHealthInfo.chronicConditions.join(', ') : 'None'}
+                    </p>
+                    <p>
+                      <strong className={pageHeadingTextClass}>Medications:</strong>{' '}
+                      {patientProfile.personalHealthInfo.medications?.length > 0 ? patientProfile.personalHealthInfo.medications.join(', ') : 'None'}
+                    </p>
+                    <p>
+                      <strong className={pageHeadingTextClass}>Surgeries:</strong>{' '}
+                      {patientProfile.personalHealthInfo.surgeries?.length > 0 ? patientProfile.personalHealthInfo.surgeries.join(', ') : 'None'}
+                    </p>
                   </div>
                 </section>
               ) : null}

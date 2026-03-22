@@ -87,6 +87,7 @@ type HistoryFilter = 'all' | 'upcoming' | 'completed' | 'cancelled'
 
 const sidebarItems: SidebarItem[] = [
   { key: 'booking_appointments', label: 'Book Appointment', icon: 'calendar' },
+  { key: 'profile', label: 'Profile', icon: 'user' },
   { key: 'history', label: 'History', icon: 'report' },
 ]
 
@@ -1952,12 +1953,8 @@ const PatientAppointmentsPage = ({
             <div className="space-y-3">
               {visibleReservations.map((item) => {
                 const statusMeta = getReservationStatusMeta(item.status)
-                const prescriptionSummary =
-                  item.prescriptions && item.prescriptions.length > 0
-                    ? item.prescriptions
-                        .map((prescription) => `${prescription.medication} ${prescription.dosage}`)
-                        .join(', ')
-                    : null
+                const prescriptionEntries =
+                  item.prescriptions && item.prescriptions.length > 0 ? item.prescriptions : null
 
                 return (
                   <div
@@ -1986,11 +1983,39 @@ const PatientAppointmentsPage = ({
                         <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-500">
                           <span>{formatPatientDate(item.requestedTime)}</span>
                           <span>{formatPatientTime(item.requestedTime)}</span>
-                          <span>{item.id}</span>
                         </div>
                         {item.summary ? <p className="mt-2 text-sm text-slate-400">📝 {item.summary}</p> : null}
-                        {prescriptionSummary ? (
-                          <p className="mt-2 text-sm text-slate-400">💊 {prescriptionSummary}</p>
+                        {prescriptionEntries ? (
+                          <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-sm text-slate-600">
+                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                              Medication Plan
+                            </p>
+                            <div className="mt-2 space-y-2">
+                              {prescriptionEntries.map((prescription, index) => (
+                                <div
+                                  key={`${item.id}-prescription-${index}`}
+                                  className="rounded-lg border border-slate-100 bg-white p-2.5"
+                                >
+                                  <p>
+                                    <span className="font-semibold text-slate-700">Medication:</span>{' '}
+                                    {prescription.medication}
+                                  </p>
+                                  <p>
+                                    <span className="font-semibold text-slate-700">Dosage:</span>{' '}
+                                    {prescription.dosage}
+                                  </p>
+                                  <p>
+                                    <span className="font-semibold text-slate-700">Frequency:</span>{' '}
+                                    {prescription.frequency || 'Not specified'}
+                                  </p>
+                                  <p>
+                                    <span className="font-semibold text-slate-700">Instruction:</span>{' '}
+                                    {prescription.instructions || 'Not specified'}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         ) : null}
                       </div>
                     </div>

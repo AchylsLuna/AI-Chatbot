@@ -1,0 +1,8 @@
+2026-02-13 09:44:13,853 - ERROR - Failed to load CSV from path 'data/symptoms_cleaned.csv'. Raw Error: [Errno 2] No such file or directory: 'data/symptoms_cleaned.csv'
+2026-02-13 09:47:44,253 - ERROR - Failed to load CSV from path 'data/symptoms_cleaned.csv'. Raw Error: [Errno 2] No such file or directory: 'data/symptoms_cleaned.csv'
+2026-02-13 09:48:34,307 - ERROR - Failed to load CSV from path 'data/symptoms_cleaned.csv'. Raw Error: [Errno 2] No such file or directory: 'data/symptoms_cleaned.csv'
+2026-02-17 23:53:31,910 - CRITICAL - Data integrity mismatch. Aborting load.
+2026-02-26 09:26:01,564 - ERROR - Integrity Check Error: [Errno 2] No such file or directory: 'data/symptoms_cleaned.csv'
+2026-02-26 09:26:01,568 - CRITICAL - Security Alert: CSV hash mismatch. File may be tampered.
+2026-02-26 09:27:15,207 - ERROR - Integrity Check Error: [Errno 2] No such file or directory: 'data/symptoms_cleaned.csv'
+2026-02-26 09:27:15,207 - CRITICAL - Security Alert: CSV hash mismatch. File may be tampered.

@@ -21,6 +21,7 @@ import {
 import {
     getAllUsers,
     getAuditLogs,
+    archiveAuditLogs,
     getErrorLogs,
     getLedger,
     getPendingStaffApplications,
@@ -571,6 +572,21 @@ router.get('/admin/audit-logs',
     authMiddleware,
     authorizeRoles('admin', 'system_admin'),
     getAuditLogs
+);
+router.post('/admin/audit-logs/archive',
+    authMiddleware,
+    requireCsrf,
+    authorizeRoles('admin', 'system_admin'),
+    [
+        body('olderThanDays')
+            .optional()
+            .isNumeric()
+            .withMessage('olderThanDays must be a number.')
+            .customSanitizer((value) => Number(value)),
+        body('dryRun').optional().isBoolean().withMessage('dryRun must be a boolean.'),
+    ],
+    validate,
+    archiveAuditLogs
 );
 router.get('/admin/error-logs',
     authMiddleware,

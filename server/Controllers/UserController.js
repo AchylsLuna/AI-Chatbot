@@ -260,7 +260,7 @@ export async function register(req, res) {
             return res.status(400).json({ message: "Missing Fields." });
         }
 
-        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com|yahoo\.com|outlook\.com)$/i;
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com|yahoo\.com|outlook\.com|phinmaed\.com)$/i;
         if (!emailRegex.test(email)) {
             return res.status(400).json({ 
                 message: "Email is invalid" 
@@ -320,7 +320,7 @@ export async function login(req, res) {
             }
             await user.save();
 
-            const { csrfToken, session } = await issueAuthenticatedSession(res, user);
+            const { token, csrfToken, session } = await issueAuthenticatedSession(res, user);
             await AuditLog.create({
                 userId: user._id,
                 action: "LOGIN_SUCCESS",
@@ -331,6 +331,7 @@ export async function login(req, res) {
 
             return res.status(200).json({
                 message: "Login successful.",
+                ...(appConfig.isProduction ? {} : { token }),
                 user: buildAuthSessionUser(user, session, "local", { mfa: false }),
                 csrfToken,
             });
@@ -491,7 +492,7 @@ export async function verifyOTP(req, res) {
         clearOtpChallenge(user);
         await user.save();
         const normalizedRole = normalizeRole(user.role) || 'user';
-        const { csrfToken, session } = await issueAuthenticatedSession(res, user);
+        const { token, csrfToken, session } = await issueAuthenticatedSession(res, user);
         await AuditLog.create({
             userId: user._id,
             action: "LOGIN_SUCCESS",
@@ -502,6 +503,7 @@ export async function verifyOTP(req, res) {
 
         return res.status(200).json({
             message: "Login successful.",
+            ...(appConfig.isProduction ? {} : { token }),
             user: buildAuthSessionUser(user, session, user.googleId ? "google" : "local"),
             csrfToken,
         });
@@ -860,7 +862,7 @@ export async function exchangeGoogleAuthCode(req, res) {
             return res.status(403).json(authSourceMismatch);
         }
 
-        const { csrfToken, session } = await issueAuthenticatedSession(res, user)
+        const { token, csrfToken, session } = await issueAuthenticatedSession(res, user)
 
         await AuditLog.create({
             userId: user._id,
@@ -872,6 +874,7 @@ export async function exchangeGoogleAuthCode(req, res) {
 
         return res.status(200).json({
             message: 'Google sign in successful.',
+            ...(appConfig.isProduction ? {} : { token }),
             user: buildAuthSessionUser(user, session, 'google'),
             csrfToken,
         })

@@ -12,7 +12,7 @@ export const checkSymptoms = async (req, res) => {
             return res.status(400).json({ error: "Message is required" });
         }
 
-        // Call Gemini + dataset-grounded model flow.
+        // Call FastAPI chatbot + dataset-grounded model flow.
         const result = await fetchBotResponse(userMessage, context);
 
         // Send the bot's reply and metadata back to React.
